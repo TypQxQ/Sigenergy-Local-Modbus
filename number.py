@@ -1,6 +1,5 @@
 """Number platform for Sigenergy ESS integration."""
-# pylint: disable=import-error
-# pyright: reportMissingImports=false
+
 from __future__ import annotations
 
 import logging
@@ -17,10 +16,9 @@ from homeassistant.const import (
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .base import SigenergyEntity, setup_entities
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
@@ -28,7 +26,6 @@ from .const import (
     DEVICE_TYPE_PLANT,
     DOMAIN,
 )
-from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
 
 _LOGGER = logging.getLogger(__name__)
@@ -257,85 +254,68 @@ async def async_setup_entry(
     entities = []
 
     # Add plant numbers
-    plant_name = config_entry.data[CONF_NAME]
-    for description in PLANT_NUMBERS:
-        entities.append(
-            SigenergyNumber(
-                coordinator=coordinator,
-                hub=hub,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-            )
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            PLANT_NUMBERS,
+            SigenergyNumber,
+            DEVICE_TYPE_PLANT,
+            additional_args={"hub": hub}
         )
+    )
 
     # Add inverter numbers
-    inverter_no = 0
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
-        for description in INVERTER_NUMBERS:
-            entities.append(
-                SigenergyNumber(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{plant_name} Inverter {inverter_id} {description.name}",
-                    device_type=DEVICE_TYPE_INVERTER,
-                    device_id=inverter_id,
-                    device_name=inverter_name,
-                )
-            )
-        inverter_no += 1
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            INVERTER_NUMBERS,
+            SigenergyNumber,
+            DEVICE_TYPE_INVERTER,
+            coordinator.hub.inverter_slave_ids,
+            additional_args={"hub": hub}
+        )
+    )
 
     # Add AC charger numbers
-    ac_charger_no = 0
-    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
-        for description in AC_CHARGER_NUMBERS:
-            entities.append(
-                SigenergyNumber(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{ac_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=ac_charger_id,
-                    device_name=ac_charger_name,
-                )
-            )
-        ac_charger_no += 1
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            AC_CHARGER_NUMBERS,
+            SigenergyNumber,
+            DEVICE_TYPE_AC_CHARGER,
+            coordinator.hub.ac_charger_slave_ids,
+            additional_args={"hub": hub}
+        )
+    )
 
-    # Add DC charger numbers
-    dc_charger_no = 0
-    for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
-        dc_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
-        for description in DC_CHARGER_NUMBERS:
-            entities.append(
-                SigenergyNumber(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{dc_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_DC_CHARGER,
-                    device_id=dc_charger_id,
-                    device_name=dc_charger_name,
-                )
+    # Add DC charger numbers if any in the future
+    if DC_CHARGER_NUMBERS and coordinator.hub.dc_charger_slave_ids:
+        entities.extend(
+            setup_entities(
+                config_entry,
+                coordinator,
+                DC_CHARGER_NUMBERS,
+                SigenergyNumber,
+                DEVICE_TYPE_DC_CHARGER,
+                coordinator.hub.dc_charger_slave_ids,
+                additional_args={"hub": hub}
             )
-        dc_charger_no += 1
+        )
 
     async_add_entities(entities)
 
 
-class SigenergyNumber(CoordinatorEntity, NumberEntity):
+class SigenergyNumber(SigenergyEntity, NumberEntity):
     """Representation of a Sigenergy number."""
 
     entity_description: SigenergyNumberEntityDescription
 
     def __init__(
         self,
-        coordinator: SigenergyDataUpdateCoordinator,
+        coordinator,
         hub: Any,
         description: SigenergyNumberEntityDescription,
         name: str,
@@ -344,68 +324,11 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
         device_name: Optional[str] = "",
     ) -> None:
         """Initialize the number."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, name, device_type, device_id, device_name)
         self.entity_description = description
         self.hub = hub
-        self._attr_name = name
-        self._device_type = device_type
-        self._device_id = device_id
-        
-        # Get the device number if any as a string for use in names
-        device_number_str = device_name.split()[-1]
-        device_number_str = f" {device_number_str}" if device_number_str.isdigit() else ""
-
-        # Set unique ID
-        if device_type == DEVICE_TYPE_PLANT:
-            # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{description.key}"
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{description.key}"
-        else:
-            # self._attr_unique_id = f"{coordinator.hub.host}_{device_type}_{device_id}_{description.key}"
-            # Used for testing in development to allow multiple sensors with the same unique ID
-            self._attr_unique_id = f"{coordinator.hub.config_entry.entry_id}_{device_type}_{device_number_str}_{description.key}"
-        
-        # Set device info
-        if device_type == DEVICE_TYPE_PLANT:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="Energy Storage System",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_INVERTER:
-            # Get model and serial number if available
-            model = None
-            serial_number = None
-            if coordinator.data and "inverters" in coordinator.data:
-                inverter_data = coordinator.data["inverters"].get(device_id, {})
-                model = inverter_data.get("model_type")
-                serial_number = inverter_data.get("serial_number")
-
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model=model,
-                serial_number=serial_number,
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_AC_CHARGER:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="AC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
-        elif device_type == DEVICE_TYPE_DC_CHARGER:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_{str(device_name).lower().replace(' ', '_')}")},
-                name=device_name,
-                manufacturer="Sigenergy",
-                model="DC Charger",
-                via_device=(DOMAIN, f"{coordinator.hub.config_entry.entry_id}_plant"),
-            )
+        # Complete unique ID with description key
+        self._attr_unique_id = f"{self._attr_unique_id}_{description.key}"
 
     @property
     def native_value(self) -> float:
@@ -418,31 +341,14 @@ class SigenergyNumber(CoordinatorEntity, NumberEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        if not self.coordinator.last_update_success:
+        if not super().available:
             return False
             
-        if self._device_type == DEVICE_TYPE_PLANT:
-            return self.coordinator.data is not None and "plant" in self.coordinator.data
-        elif self._device_type == DEVICE_TYPE_INVERTER:
-            return (
-                self.coordinator.data is not None
-                and "inverters" in self.coordinator.data
-                and self._device_id in self.coordinator.data["inverters"]
-            )
-        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            return (
-                self.coordinator.data is not None
-                and "ac_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["ac_chargers"]
-            )
-        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-            return (
-                self.coordinator.data is not None
-                and "dc_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["dc_chargers"]
-            )
-            
-        return False
+        # Check if the entity has a specific availability function
+        if hasattr(self.entity_description, "available_fn"):
+            return self.entity_description.available_fn(self.coordinator.data, self._device_id)
+                
+        return True
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the value of the number."""
