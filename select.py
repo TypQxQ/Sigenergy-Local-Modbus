@@ -146,7 +146,7 @@ async def async_setup_entry(
             PLANT_SELECTS,
             SigenergySelect,
             DEVICE_TYPE_PLANT,
-            additional_args={"hub": hub}
+            hub=hub
         )
     )
 
@@ -159,7 +159,7 @@ async def async_setup_entry(
             SigenergySelect,
             DEVICE_TYPE_AC_CHARGER,
             coordinator.hub.ac_charger_slave_ids,
-            additional_args={"hub": hub}
+            hub=hub
         )
     )
 

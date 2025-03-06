@@ -166,6 +166,7 @@ def setup_entities(
     entity_class, 
     device_type, 
     device_ids=None, 
+    hub=None,
     additional_args=None
 ):
     """Set up entities for a specific device type."""
@@ -176,11 +177,19 @@ def setup_entities(
         # Handle plant entities
         device_name = plant_name
         for description in descriptions_list:
+            entity_kwargs = {"coordinator": coordinator, "description": description}
+            
+            # Add hub if provided
+            if hub is not None:
+                entity_kwargs["hub"] = hub
+                
+            # Add additional args if provided
+            if additional_args:
+                entity_kwargs.update(additional_args)
+                
             entities.append(
                 entity_class(
-                    coordinator=coordinator,
-                    **(additional_args or {}),
-                    description=description,
+                    **entity_kwargs,
                     name=f"{plant_name} {description.name}",
                     device_type=device_type,
                     device_id=None,
@@ -193,11 +202,19 @@ def setup_entities(
         for device_id in device_ids:
             device_name = create_device_name(plant_name, device_type, device_no)
             for description in descriptions_list:
+                entity_kwargs = {"coordinator": coordinator, "description": description}
+                
+                # Add hub if provided
+                if hub is not None:
+                    entity_kwargs["hub"] = hub
+                    
+                # Add additional args if provided
+                if additional_args:
+                    entity_kwargs.update(additional_args)
+                    
                 entities.append(
                     entity_class(
-                        coordinator=coordinator,
-                        **(additional_args or {}),
-                        description=description,
+                        **entity_kwargs,
                         name=f"{device_name} {description.name}",
                         device_type=device_type,
                         device_id=device_id,

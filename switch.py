@@ -134,7 +134,7 @@ async def async_setup_entry(
             PLANT_SWITCHES,
             SigenergySwitch,
             DEVICE_TYPE_PLANT,
-            additional_args={"hub": hub}
+            hub=hub
         )
     )
 
@@ -147,7 +147,7 @@ async def async_setup_entry(
             SigenergySwitch,
             DEVICE_TYPE_INVERTER,
             coordinator.hub.inverter_slave_ids,
-            additional_args={"hub": hub}
+            hub=hub
         )
     )
 
@@ -160,7 +160,7 @@ async def async_setup_entry(
             SigenergySwitch,
             DEVICE_TYPE_AC_CHARGER,
             coordinator.hub.ac_charger_slave_ids,
-            additional_args={"hub": hub}
+            hub=hub
         )
     )
 
@@ -173,7 +173,7 @@ async def async_setup_entry(
             SigenergySwitch,
             DEVICE_TYPE_DC_CHARGER,
             coordinator.hub.dc_charger_slave_ids,
-            additional_args={"hub": hub}
+            hub=hub
         )
     )
 
