@@ -10,10 +10,9 @@ from homeassistant.components.select import SelectEntity, SelectEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .base import SigenergyEntity, setup_entities
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_INVERTER,
@@ -22,7 +21,6 @@ from .const import (
     EMSWorkMode,
     RemoteEMSControlMode,
 )
-from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusError
 
 _LOGGER = logging.getLogger(__name__)
@@ -118,51 +116,42 @@ async def async_setup_entry(
     hub = hass.data[DOMAIN][config_entry.entry_id]["hub"]
     entities = []
 
-    # Add plant selects
-    plant_name = config_entry.data[CONF_NAME]
-    for description in PLANT_SELECTS:
-        entities.append(
-            SigenergySelect(
-                coordinator=coordinator,
-                hub=hub,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-            )
+    # Create plant selects
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            PLANT_SELECTS,
+            SigenergySelect,
+            DEVICE_TYPE_PLANT,
+            additional_args={"hub": hub}
         )
+    )
 
-    # Add DC charger selects
-    ac_charger_no = 0
-    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
-        _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
-        for description in AC_CHARGER_SELECTS:
-            entities.append(
-                SigenergySelect(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{ac_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=ac_charger_id,
-                    device_name=ac_charger_name,
-                )
-            )
-        ac_charger_no += 1
+    # Create AC charger selects
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            AC_CHARGER_SELECTS,
+            SigenergySelect,
+            DEVICE_TYPE_AC_CHARGER,
+            coordinator.hub.ac_charger_slave_ids,
+            additional_args={"hub": hub}
+        )
+    )
 
     async_add_entities(entities)
 
 
-class SigenergySelect(CoordinatorEntity, SelectEntity):
+class SigenergySelect(SigenergyEntity, SelectEntity):
     """Representation of a Sigenergy select."""
 
     entity_description: SigenergySelectEntityDescription
 
     def __init__(
         self,
-        coordinator: SigenergyDataUpdateCoordinator,
+        coordinator,
         hub: Any,
         description: SigenergySelectEntityDescription,
         name: str,
@@ -171,12 +160,9 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
         device_name: Optional[str] = "",
     ) -> None:
         """Initialize the select."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, name, device_type, device_id, device_name)
         self.entity_description = description
         self.hub = hub
-        self._attr_name = name
-        self._device_type = device_type
-        self._device_id = device_id
         self._attr_options = description.options
         
         # Get the device number if any as a string for use in names
@@ -241,46 +227,14 @@ class SigenergySelect(CoordinatorEntity, SelectEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        if not self.coordinator.last_update_success:
+        if not super().available:
             return False
             
-        if self._device_type == DEVICE_TYPE_PLANT:
-            if not (self.coordinator.data is not None and "plant" in self.coordinator.data):
-                return False
+        # Check if the entity has a specific availability function
+        if hasattr(self.entity_description, "available_fn"):
+            return self.entity_description.available_fn(self.coordinator.data, self._device_id)
                 
-            # Check if the entity has a specific availability function
-            if hasattr(self.entity_description, "available_fn"):
-                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
-                
-            return True
-        elif self._device_type == DEVICE_TYPE_INVERTER:
-            if not (
-                self.coordinator.data is not None
-                and "inverters" in self.coordinator.data
-                and self._device_id in self.coordinator.data["inverters"]
-            ):
-                return False
-                
-            # Check if the entity has a specific availability function
-            if hasattr(self.entity_description, "available_fn"):
-                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
-                
-            return True
-        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            if not (
-                self.coordinator.data is not None
-                and "ac_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["ac_chargers"]
-            ):
-                return False
-                
-            # Check if the entity has a specific availability function
-            if hasattr(self.entity_description, "available_fn"):
-                return self.entity_description.available_fn(self.coordinator.data, self._device_id)
-                
-            return True
-            
-        return False
+        return True
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""

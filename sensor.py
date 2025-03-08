@@ -26,10 +26,9 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .base import SigenergyEntity, setup_entities
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
@@ -38,7 +37,6 @@ from .const import (
     DOMAIN,
     RunningState,
 )
-from .coordinator import SigenergyDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -501,105 +499,72 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     entities = []
 
-    _LOGGER.debug("Setting up sensors for %s", config_entry.data[CONF_NAME])
-    _LOGGER.debug("Inverters: %s", coordinator.hub.inverter_slave_ids)
-    _LOGGER.debug("config_entry: %s", config_entry)
-    _LOGGER.debug("coordinator: %s", coordinator)
-    _LOGGER.debug("config_entry.data: %s", config_entry.data)
-    _LOGGER.debug("coordinator.hub: %s", coordinator.hub)
-    _LOGGER.debug("coordinator.hub.config_entry: %s", coordinator.hub.config_entry)
-    _LOGGER.debug("coordinator.hub.config_entry.data: %s", coordinator.hub.config_entry.data)
-    _LOGGER.debug("coordinator.hub.config_entry.entry_id: %s", coordinator.hub.config_entry.entry_id)
-
-    # Set plant name
-    plant_name : str = config_entry.data[CONF_NAME]
-
-    # Add plant sensors
-    for description in PLANT_SENSORS:
-        entities.append(
-            SigenergySensor(
-                coordinator=coordinator,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-            )
+    # Create plant entities
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            PLANT_SENSORS,
+            SigenergySensor,
+            DEVICE_TYPE_PLANT
         )
+    )
 
-    # Add inverter sensors
-    inverter_no = 0
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
-        _LOGGER.debug("Adding inverter %s with inverter_no %s as %s", inverter_id, inverter_no, inverter_name)
-        for description in INVERTER_SENSORS:
-            entities.append(
-                SigenergySensor(
-                    coordinator=coordinator,
-                    description=description,
-                    name=f"{inverter_name} {description.name}",
-                    device_type=DEVICE_TYPE_INVERTER,
-                    device_id=inverter_id,
-                    device_name=inverter_name,
-                )
-            )
-        inverter_no += 1
+    # Create inverter entities
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            INVERTER_SENSORS,
+            SigenergySensor,
+            DEVICE_TYPE_INVERTER,
+            coordinator.hub.inverter_slave_ids
+        )
+    )
 
-    # Add AC charger sensors
-    ac_charger_no = 0
-    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
-        _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
-        for description in AC_CHARGER_SENSORS:
-            entities.append(
-                SigenergySensor(
-                    coordinator=coordinator,
-                    description=description,
-                    name=f"{ac_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=ac_charger_id,
-                    device_name=ac_charger_name,
-                )
-            )
-        ac_charger_no += 1
+    # Create AC charger entities
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            AC_CHARGER_SENSORS,
+            SigenergySensor,
+            DEVICE_TYPE_AC_CHARGER,
+            coordinator.hub.ac_charger_slave_ids
+        )
+    )
 
-    # Add DC charger sensors
-    dc_charger_no = 0
-    for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
-        dc_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
-        _LOGGER.debug("Adding DC charger %s with dc_charger_no %s as %s", dc_charger_id, dc_charger_no, dc_charger_name)
-        for description in DC_CHARGER_SENSORS:
-            entities.append(
-                SigenergySensor(
-                    coordinator=coordinator,
-                    description=description,
-                    name=f"{dc_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_DC_CHARGER,
-                    device_id=dc_charger_id,
-                    device_name=dc_charger_name,
-                )
-            )
-        dc_charger_no += 1
+    # Create DC charger entities
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            DC_CHARGER_SENSORS,
+            SigenergySensor,
+            DEVICE_TYPE_DC_CHARGER,
+            coordinator.hub.dc_charger_slave_ids
+        )
+    )
 
     async_add_entities(entities)
 
 
-class SigenergySensor(CoordinatorEntity, SensorEntity):
+class SigenergySensor(SigenergyEntity, SensorEntity):
     """Representation of a Sigenergy sensor."""
 
     entity_description: SigenergySensorEntityDescription
 
     def __init__(
         self,
-        coordinator: SigenergyDataUpdateCoordinator,
+        coordinator,
         description: SigenergySensorEntityDescription,
         name: str,
         device_type: str,
         device_id: Optional[int],
-        device_name: Optional[str] ="",
+        device_name: Optional[str] = "",
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, name, device_type, device_id, device_name)
         self.entity_description = description
         self._attr_name = name
         self._device_type = device_type
@@ -745,32 +710,3 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             return "Connected" if value == 1 else "Not Connected"
 
         return value
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        if not self.coordinator.last_update_success:
-            return False
-            
-        if self._device_type == DEVICE_TYPE_PLANT:
-            return self.coordinator.data is not None and "plant" in self.coordinator.data
-        elif self._device_type == DEVICE_TYPE_INVERTER:
-            return (
-                self.coordinator.data is not None
-                and "inverters" in self.coordinator.data
-                and self._device_id in self.coordinator.data["inverters"]
-            )
-        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            return (
-                self.coordinator.data is not None
-                and "ac_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["ac_chargers"]
-            )
-        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-            return (
-                self.coordinator.data is not None
-                and "dc_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["dc_chargers"]
-            )
-            
-        return False

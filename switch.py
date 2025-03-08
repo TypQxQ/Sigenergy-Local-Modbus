@@ -9,10 +9,9 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .base import SigenergyEntity, setup_entities
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
@@ -121,80 +120,60 @@ async def async_setup_entry(
     entities = []
 
     # Add plant switches
-    plant_name = config_entry.data[CONF_NAME]
-    for description in PLANT_SWITCHES:
-        entities.append(
-            SigenergySwitch(
-                coordinator=coordinator,
-                hub=hub,
-                description=description,
-                name=f"{plant_name} {description.name}",
-                device_type=DEVICE_TYPE_PLANT,
-                device_id=None,
-                device_name=plant_name,
-            )
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            PLANT_SWITCHES,
+            SigenergySwitch,
+            DEVICE_TYPE_PLANT,
+            additional_args={"hub": hub}
         )
+    )
 
     # Add inverter switches
-    inverter_no = 0
-    for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
-        for description in INVERTER_SWITCHES:
-            entities.append(
-                SigenergySwitch(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{inverter_name} {description.name}",
-                    device_type=DEVICE_TYPE_INVERTER,
-                    device_id=inverter_id,
-                    device_name=inverter_name,
-                )
-            )
-        inverter_no += 1
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            INVERTER_SWITCHES,
+            SigenergySwitch,
+            DEVICE_TYPE_INVERTER,
+            coordinator.hub.inverter_slave_ids,
+            additional_args={"hub": hub}
+        )
+    )
 
     # Add AC charger switches
-    ac_charger_no = 0
-    for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
-        _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
-        for description in AC_CHARGER_SWITCHES:
-            entities.append(
-                SigenergySwitch(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{ac_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=ac_charger_id,
-                    device_name=ac_charger_name,
-                )
-            )
-        ac_charger_no += 1
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            AC_CHARGER_SWITCHES,
+            SigenergySwitch,
+            DEVICE_TYPE_AC_CHARGER,
+            coordinator.hub.ac_charger_slave_ids,
+            additional_args={"hub": hub}
+        )
+    )
 
     # Add DC charger switches
-    dc_charger_no = 0
-    for dc_charger_id in coordinator.hub.dc_charger_slave_ids:
-        dc_charger_name=f"Sigen { f'{plant_name.split()[-1] } ' if plant_name.split()[-1].isdigit() else ''}DC Charger{'' if dc_charger_no == 0 else f' {dc_charger_no}'}"
-        _LOGGER.debug("Adding DC charger %s with dc_charger_no %s as %s", dc_charger_id, dc_charger_no, dc_charger_name)
-        for description in DC_CHARGER_SWITCHES:
-            entities.append(
-                SigenergySwitch(
-                    coordinator=coordinator,
-                    hub=hub,
-                    description=description,
-                    name=f"{dc_charger_name} {description.name}",
-                    device_type=DEVICE_TYPE_DC_CHARGER,
-                    device_id=dc_charger_id,
-                    device_name=dc_charger_name,
-                )
-            )
-        dc_charger_no += 1
+    entities.extend(
+        setup_entities(
+            config_entry,
+            coordinator,
+            DC_CHARGER_SWITCHES,
+            SigenergySwitch,
+            DEVICE_TYPE_DC_CHARGER,
+            coordinator.hub.dc_charger_slave_ids,
+            additional_args={"hub": hub}
+        )
+    )
 
     async_add_entities(entities)
 
 
-class SigenergySwitch(CoordinatorEntity, SwitchEntity):
+class SigenergySwitch(SigenergyEntity, SwitchEntity):
     """Representation of a Sigenergy switch."""
 
     entity_description: SigenergySwitchEntityDescription
@@ -210,7 +189,7 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
         device_name: Optional[str] = "",
     ) -> None:
         """Initialize the switch."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, name, device_type, device_id, device_name)
         self.entity_description = description
         self.hub = hub
         self._attr_name = name
@@ -283,35 +262,6 @@ class SigenergySwitch(CoordinatorEntity, SwitchEntity):
             return False
             
         return self.entity_description.is_on_fn(self.coordinator.data, self._device_id)
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        if not self.coordinator.last_update_success:
-            return False
-
-        if self._device_type == DEVICE_TYPE_PLANT:
-            return self.coordinator.data is not None and "plant" in self.coordinator.data
-        elif self._device_type == DEVICE_TYPE_INVERTER:
-            return (
-                self.coordinator.data is not None
-                and "inverters" in self.coordinator.data
-                and self._device_id in self.coordinator.data["inverters"]
-            )
-        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-            return (
-                self.coordinator.data is not None
-                and "ac_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["ac_chargers"]
-            )
-        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-            return (
-                self.coordinator.data is not None
-                and "dc_chargers" in self.coordinator.data
-                and self._device_id in self.coordinator.data["dc_chargers"]
-            )
-
-        return False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
