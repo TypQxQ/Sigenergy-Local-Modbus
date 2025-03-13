@@ -7,5 +7,6 @@
     },
     "pylint.args": [
         "--disable=E0401,E1123",
+        "--ignore=Reference/core-dev"
       ],
   }
