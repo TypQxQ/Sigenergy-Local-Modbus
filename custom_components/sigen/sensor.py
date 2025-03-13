@@ -84,10 +84,19 @@ async def async_setup_entry(
         
         # Add inverter sensors
         for description in SS.INVERTER_SENSORS + SCS.INVERTER_SENSORS:
+            # For calculated sensors, we need to add device_id to extra_params
+            if isinstance(description, SC.SigenergySensorEntityDescription):
+                sensor_desc = SC.SigenergySensorEntityDescription.from_entity_description(
+                    description,
+                    extra_params={"device_id": inverter_id},
+                )
+            else:
+                sensor_desc = description
+            
             entities.append(
                 SigenergySensor(
                     coordinator=coordinator,
-                    description=description,
+                    description=sensor_desc,
                     name=f"{inverter_name} {description.name}",
                     device_type=DEVICE_TYPE_INVERTER,
                     device_id=inverter_id,
@@ -288,17 +297,30 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
+        _LOGGER.debug("%s native_value() called. Has coordinator data: %s",
+                     self.entity_description.key,
+                     self.coordinator.data is not None)
         if self.coordinator.data is None:
             return STATE_UNKNOWN
             
+        # Get base value for the sensor
         if self._device_type == DEVICE_TYPE_PLANT:
             # Use the key directly with plant_ prefix already included
             value = self.coordinator.data["plant"].get(self.entity_description.key)
         elif self._device_type == DEVICE_TYPE_INVERTER:
-            # Use the key directly with inverter_ prefix already included
-            value = self.coordinator.data["inverters"].get(self._device_id, {}).get(
-                self.entity_description.key
-            )
+            # For inverter sensors, first check if it's a calculated sensor
+            if (hasattr(self.entity_description, "value_fn")
+                and self.entity_description.value_fn is not None
+                and hasattr(self.entity_description, "extra_fn_data")
+                and self.entity_description.extra_fn_data):
+                _LOGGER.debug("Processing calculated inverter sensor %s for device %s",
+                            self.entity_description.key, self._device_id)
+                value = None  # Value will be calculated by value_fn
+            else:
+                # Use the key directly with inverter_ prefix already included
+                value = self.coordinator.data["inverters"].get(self._device_id, {}).get(
+                    self.entity_description.key
+                )
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
             # Use the key directly with ac_charger_ prefix already included
             value = self.coordinator.data["ac_chargers"].get(self._device_id, {}).get(
@@ -340,9 +362,18 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
             try:
                 # Pass coordinator data if needed by the value_fn
                 if hasattr(self.entity_description, "extra_fn_data") and self.entity_description.extra_fn_data:
-                    # Pass extra parameters if available
-                    extra_params = getattr(self.entity_description, "extra_params", None)
+                    # Pass extra parameters if available, always include device_id for inverter sensors
+                    extra_params = dict(getattr(self.entity_description, "extra_params", {}) or {})
+                    if self._device_type == DEVICE_TYPE_INVERTER and "device_id" not in extra_params:
+                        extra_params["device_id"] = self._device_id
+                    _LOGGER.debug("Preparing to call value_fn for %s with:", self.entity_description.key)
+                    _LOGGER.debug("- value: %s", value)
+                    _LOGGER.debug("- extra_params: %s", extra_params)
+                    _LOGGER.debug("- coordinator has inverters data: %s", "inverters" in self.coordinator.data)
+                    _LOGGER.debug("- available inverter IDs: %s", list(self.coordinator.data.get("inverters", {}).keys()))
+                    
                     transformed_value = self.entity_description.value_fn(value, self.coordinator.data, extra_params)
+                    _LOGGER.debug("value_fn returned: %s", transformed_value)
                 else:
                     transformed_value = self.entity_description.value_fn(value)
                     
