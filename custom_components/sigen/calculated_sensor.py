@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Dict, Optional
+from decimal import Decimal
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -20,6 +21,7 @@ from homeassistant.const import (
 
 from .const import (
     EMSWorkMode,
+    DEFAULT_MAX_SUB_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -199,7 +201,7 @@ class SigenergyCalculations:
         
         This function integrates power over time to calculate accumulated energy (kWh).
         It stores the last power reading and timestamp for each PV string to calculate
-        energy between consecutive readings.
+        energy between consecutive readings using the trapezoidal integration method.
         """
         if not coordinator_data or not extra_params:
             _LOGGER.debug("Missing required data for energy calculation")
@@ -235,16 +237,20 @@ class SigenergyCalculations:
                             pv_idx, type(pv_voltage), type(pv_current))
                 return None
                 
-            # Calculate current power in kW
-            current_power = (pv_voltage * pv_current) / 1000  # Convert W to kW
+            # Calculate current power in kW with more precise decimal handling
+            try:
+                current_power = Decimal(str(pv_voltage * pv_current)) / Decimal('1000')  # Convert W to kW
+            except (ValueError, TypeError):
+                _LOGGER.debug("Could not convert power values to Decimal")
+                current_power = Decimal(str((pv_voltage * pv_current) / 1000))  # Convert W to kW
             
             # Apply some reasonable bounds
-            MAX_REASONABLE_POWER = 20  # 20kW per string is very high already
+            MAX_REASONABLE_POWER = Decimal('20')  # 20kW per string is very high already
             if abs(current_power) > MAX_REASONABLE_POWER:
                 _LOGGER.warning("Calculated power for PV string %s seems excessive: %s kW",
                             pv_idx, current_power)
             
-            # Get current time
+            # Get current time with proper timezone awareness
             current_time = datetime.now(timezone.utc)
             
             # Create a unique key for this PV string
@@ -255,7 +261,7 @@ class SigenergyCalculations:
                 SigenergyCalculations._power_history[key] = {
                     'last_timestamp': current_time,
                     'last_power': current_power,
-                    'accumulated_energy': 0.0
+                    'accumulated_energy': Decimal('0.0')
                 }
                 _LOGGER.debug("Initialized energy tracking for PV string %s on device %s", 
                              pv_idx, device_id)
@@ -264,25 +270,31 @@ class SigenergyCalculations:
             # Retrieve history for this PV string
             history = SigenergyCalculations._power_history[key]
             
-            # Calculate time difference in hours
-            time_diff_hours = (current_time - history['last_timestamp']).total_seconds() / 3600
+            # Calculate time difference in seconds with Decimal precision for accurate integration
+            try:
+                time_diff_seconds = Decimal(str((current_time - history['last_timestamp']).total_seconds()))
+            except (ValueError, TypeError):
+                _LOGGER.debug("Could not convert time difference to Decimal")
+                time_diff_seconds = Decimal(str((current_time - history['last_timestamp']).total_seconds()))
             
             # If the time difference is too large, it might indicate a system restart or another issue
-            # In this case, don't calculate energy for this interval
-            MAX_REASONABLE_TIME_DIFF = 12  # 12 hours max between readings seems reasonable
-            if time_diff_hours <= 0 or time_diff_hours > MAX_REASONABLE_TIME_DIFF:
-                _LOGGER.debug("Unreasonable time difference for energy calculation: %s hours",
-                            time_diff_hours)
+            # Use the DEFAULT_MAX_SUB_INTERVAL constant from const.py (default: 30 seconds)
+            if time_diff_seconds <= Decimal('0') or time_diff_seconds > Decimal(str(DEFAULT_MAX_SUB_INTERVAL)):
+                _LOGGER.debug("Time difference outside allowed range for energy calculation: %s seconds (max allowed: %s)",
+                            time_diff_seconds, DEFAULT_MAX_SUB_INTERVAL)
                 history['last_timestamp'] = current_time
                 history['last_power'] = current_power
-                return history['accumulated_energy']
+                return float(history['accumulated_energy'])
             
-            # Calculate energy for this time period using average power (trapezoidal integration)
+            # Convert time difference to hours for energy calculation (kW * h = kWh)
+            time_diff_hours = time_diff_seconds / Decimal('3600')
+            
+            # Calculate energy for this time period using trapezoidal integration method
             # E = P_avg * t where P_avg = (P1 + P2) / 2 and t is time in hours
-            average_power = (history['last_power'] + current_power) / 2
+            average_power = (history['last_power'] + current_power) / Decimal('2')
             
             # Only accumulate positive energy values (when PV is generating power)
-            energy_this_period = max(0, average_power * time_diff_hours)
+            energy_this_period = max(Decimal('0'), average_power * time_diff_hours)
             
             # Add to accumulated energy
             history['accumulated_energy'] += energy_this_period
@@ -294,7 +306,8 @@ class SigenergyCalculations:
             _LOGGER.debug("PV string %s energy calculation: +%s kWh this period, total: %s kWh", 
                          pv_idx, energy_this_period, history['accumulated_energy'])
             
-            return history['accumulated_energy']
+            # Return float value for compatibility with Home Assistant
+            return float(history['accumulated_energy'])
             
         except Exception as ex:
             _LOGGER.warning("Error calculating accumulated energy for PV string %s: %s",
