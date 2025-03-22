@@ -536,7 +536,7 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
             self._last_valid_state = self._state
             self.async_write_ha_state()
             self._setup_midnight_reset()  # Schedule next reset
-            
+
         # Schedule the reset
         self.async_on_remove(
             async_track_point_in_time(
@@ -821,6 +821,127 @@ class SigenergyIntegrationSensor(CoordinatorEntity, RestoreSensor):
 
 
 
+    @staticmethod
+    def calculate_inverter_accumulated_energy(value: Any, coordinator_data: Optional[Dict[str, Any]] = None, extra_params: Optional[Dict[str, Any]] = None) -> Optional[float]:
+        _LOGGER.info("calculate_inverter_accumulated_energy called with value: %s, extra_params: %s", value, extra_params)
+        """Calculate accumulated PV energy production for inverter.
+        
+        Uses the inverter PV power reading to calculate accumulated energy through
+        time integration using the trapezoidal method.
+        """
+        if not coordinator_data or not extra_params:
+            _LOGGER.debug("Missing required data for inverter energy calculation")
+            return None
+            
+        try:
+            device_id = extra_params.get("device_id")
+            
+            if not device_id:
+                _LOGGER.warning("Missing device ID for inverter energy calculation: %s", extra_params)
+                return None
+
+            # Double-check if device_id is a valid key
+            if not isinstance(device_id, int):
+                _LOGGER.warning("Invalid device_id type: %s (%s)", device_id, type(device_id))
+                try:
+                    device_id = int(device_id)
+                    _LOGGER.debug("Converted device_id to int: %s", device_id)
+                except (ValueError, TypeError) as ex:
+                    _LOGGER.error("Could not convert device_id to int: %s", ex)
+                    return None
+
+            _LOGGER.debug("Calculating accumulated energy for inverter %s", device_id)
+            # Get current power reading from inverter data
+            inverter_data = coordinator_data.get("inverters", {}).get(device_id, {})
+            _LOGGER.debug("Coordinator data contains inverters: %s", "inverters" in coordinator_data)
+            _LOGGER.debug("Available inverter IDs: %s", list(coordinator_data.get("inverters", {}).keys()))
+            if not inverter_data:
+                _LOGGER.warning("No data available for inverter %s", device_id)
+                return None
+            
+            _LOGGER.debug("Raw inverter_data: %s", inverter_data)
+            _LOGGER.debug("Inverter data keys: %s", list(inverter_data.keys()))
+            current_power = inverter_data.get("inverter_pv_power")
+            _LOGGER.debug("Got inverter_pv_power: %s (type: %s)",
+                         current_power,
+                         type(current_power) if current_power is not None else None)
+            
+            # Validate power reading
+            if current_power is None:
+                _LOGGER.debug("Missing PV power data for inverter")
+                return None
+                
+            if not isinstance(current_power, (int, float)):
+                _LOGGER.debug("Invalid data type for inverter PV power: %s", type(current_power))
+                return None
+                
+            # Create a unique key for this inverter's history
+            key = (device_id, "pv_energy")
+            
+            # Convert power to Decimal for precise calculations
+            try:
+                current_power = Decimal(str(current_power))
+            except (ValueError, TypeError) as ex:
+                _LOGGER.warning("Could not convert power value '%s' to Decimal: %s", current_power, ex)
+                return None
+            
+            # Get current time with proper timezone awareness
+            current_time = datetime.now(timezone.utc)
+            
+            # Initialize entry in history if it doesn't exist
+            if key not in SigenergyCalculations._power_history:
+                SigenergyCalculations._power_history[key] = {
+                    'last_timestamp': current_time,
+                    'last_power': current_power,
+                    'accumulated_energy': Decimal('0.0')
+                }
+                _LOGGER.debug("Initialized energy tracking for inverter %s", device_id)
+                return 0.0
+            
+            # Retrieve history for this inverter
+            history = SigenergyCalculations._power_history[key]
+            
+            # Calculate time difference in seconds with Decimal precision
+            try:
+                time_diff_seconds = Decimal(str((current_time - history['last_timestamp']).total_seconds()))
+            except (ValueError, TypeError):
+                _LOGGER.debug("Could not convert time difference to Decimal")
+                return float(history['accumulated_energy'])
+            
+            # Handle large time gaps (might indicate system restart or issue)
+            if time_diff_seconds <= Decimal('0') or time_diff_seconds > Decimal(str(DEFAULT_MAX_SUB_INTERVAL)):
+                _LOGGER.debug("Time difference outside allowed range for energy calculation: %s seconds", time_diff_seconds)
+                history['last_timestamp'] = current_time
+                history['last_power'] = current_power
+                return float(history['accumulated_energy'])
+            
+            # Convert time difference to hours for energy calculation (kW * h = kWh)
+            time_diff_hours = time_diff_seconds / Decimal('3600')
+            
+            # Calculate energy using trapezoidal integration
+            # Only accumulate positive power values (when PV is generating)
+            average_power = (history['last_power'] + current_power) / Decimal('2')
+            _LOGGER.debug("Calculated average power: %s kW over %s hours", average_power, time_diff_hours)
+            energy_this_period = max(Decimal('0'), average_power * time_diff_hours)
+            _LOGGER.debug("Energy this period: %s kWh", energy_this_period)
+            
+            # Add to accumulated energy
+            history['accumulated_energy'] += energy_this_period
+            
+            # Update history for next calculation
+            history['last_timestamp'] = current_time
+            history['last_power'] = current_power
+            
+            _LOGGER.debug("Inverter %s energy calculation: +%s kWh this period, total: %s kWh",
+                         device_id, energy_this_period, history['accumulated_energy'])
+            
+            return float(history['accumulated_energy'])
+            
+        except Exception as ex:
+            _LOGGER.warning("Error calculating accumulated energy for inverter %s: %s",
+                        extra_params.get("device_id", "unknown"), ex)
+            return None
+
 class SigenergyCalculatedSensors:
     """Class for holding calculated sensor methods."""
 
@@ -922,6 +1043,16 @@ class SigenergyCalculatedSensors:
             entity_category=EntityCategory.DIAGNOSTIC,
             value_fn=SigenergyCalculations.epoch_to_datetime,
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data for timestamp conversion
+        ),
+        SigenergyCalculations.SigenergySensorEntityDescription(
+            key="inverter_accumulated_pv_energy",
+            name="Accumulated PV Energy Production",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            suggested_display_precision=3,
+            value_fn=SigenergyCalculations.calculate_inverter_accumulated_energy,
+            extra_fn_data=True,
         ),
     ]
 

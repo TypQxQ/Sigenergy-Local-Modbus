@@ -461,14 +461,24 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
         if self.coordinator.data is None:
             return STATE_UNKNOWN
             
+        # Get base value for the sensor
         if self._device_type == DEVICE_TYPE_PLANT:
             # Use the key directly with plant_ prefix already included
             value = self.coordinator.data["plant"].get(self.entity_description.key)
         elif self._device_type == DEVICE_TYPE_INVERTER:
-            # Use the key directly with inverter_ prefix already included
-            value = self.coordinator.data["inverters"].get(self._device_id, {}).get(
-                self.entity_description.key
-            )
+            # For inverter sensors, first check if it's a calculated sensor
+            if (hasattr(self.entity_description, "value_fn")
+                and self.entity_description.value_fn is not None
+                and hasattr(self.entity_description, "extra_fn_data")
+                and self.entity_description.extra_fn_data):
+                _LOGGER.debug("Processing calculated inverter sensor %s for device %s",
+                            self.entity_description.key, self._device_id)
+                value = None  # Value will be calculated by value_fn
+            else:
+                # Use the key directly with inverter_ prefix already included
+                value = self.coordinator.data["inverters"].get(self._device_id, {}).get(
+                    self.entity_description.key
+                )
         elif self._device_type == DEVICE_TYPE_AC_CHARGER:
             # Use the key directly with ac_charger_ prefix already included
             value = self.coordinator.data["ac_chargers"].get(self._device_id, {}).get(
@@ -514,6 +524,7 @@ class SigenergySensor(CoordinatorEntity, SensorEntity):
                     extra_params = getattr(self.entity_description, "extra_params", None)
                     _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(value, self.coordinator.data, extra_params)
+                    _LOGGER.debug("value_fn returned: %s", transformed_value)
                 else:
                     _LOGGER.debug("[CS][native_value] Calling value_fn %s for %s with coordinator data", self.entity_description.value_fn.__name__, self.entity_description.key)
                     transformed_value = self.entity_description.value_fn(value)

@@ -37,6 +37,17 @@ CONF_DC_CHARGER_SLAVE_ID = "dc_charger_slave_ids"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
 
+# Default values
+DEFAULT_PORT = 502
+DEFAULT_SLAVE_ID = 247  # Plant address
+DEFAULT_SCAN_INTERVAL = 5
+DEFAULT_INVERTER_COUNT = 1
+DEFAULT_AC_CHARGER_COUNT = 0
+DEFAULT_DC_CHARGER_COUNT = 0
+
+# Energy calculation settings
+DEFAULT_MAX_SUB_INTERVAL = 30  # Maximum time difference (in seconds) between energy readings
+
 # Default names
 DEFAULT_INVERTER_NAME = "Sigen Inverter"
 DEFAULT_AC_CHARGER_NAME = "Sigen AC Charger"
