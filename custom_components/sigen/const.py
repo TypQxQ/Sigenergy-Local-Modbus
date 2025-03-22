@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Final, Optional
+from typing import Optional
 
 # Import needed Home Assistant constants
 from homeassistant.const import (
@@ -29,9 +29,11 @@ CONF_SCAN_INTERVAL = "scan_interval"
 CONF_INVERTER_COUNT = "inverter_count"
 CONF_AC_CHARGER_COUNT = "ac_charger_count"
 CONF_DC_CHARGER_COUNT = "dc_charger_count"
-CONF_INVERTER_SLAVE_IDS = "inverter_slave_ids"
-CONF_AC_CHARGER_SLAVE_IDS = "ac_charger_slave_ids"
-CONF_DC_CHARGER_SLAVE_IDS = "dc_charger_slave_ids"
+CONF_INVERTER_SLAVE_ID = "inverter_slave_ids"
+CONF_INVERTER_CONNECTIONS = "inverter_connections"
+CONF_AC_CHARGER_SLAVE_ID = "ac_charger_slave_ids"
+CONF_AC_CHARGER_CONNECTIONS = "ac_charger_connections"
+CONF_DC_CHARGER_SLAVE_ID = "dc_charger_slave_ids"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
 
@@ -61,13 +63,28 @@ STEP_DC_CHARGER_CONFIG = "dc_charger_config"
 STEP_SELECT_PLANT = "select_plant"
 STEP_SELECT_INVERTER = "select_inverter"
 
-# Device type options
-DEVICE_TYPE_PLANT = "new_plant"
+# Configuration constants
+CONF_PARENT_PLANT_ID = "parent_plant_id"
+CONF_PARENT_INVERTER_ID = "parent_inverter_id"
+CONF_PLANT_ID = "plant_id"
+CONF_READ_ONLY = "read_only"
+CONF_SLAVE_ID = "slave_id"
+
+# Default values
+DEFAULT_PORT = 502
+DEFAULT_PLANT_SLAVE_ID = 247  # Plant address
+DEFAULT_INVERTER_SLAVE_ID = 1  # Default Inverter address
+DEFAULT_SCAN_INTERVAL = 5
+DEFAULT_INVERTER_COUNT = 1
+DEFAULT_AC_CHARGER_COUNT = 0
+DEFAULT_DC_CHARGER_COUNT = 0
+DEFAULT_READ_ONLY = True  # Default to read-only mode
 
 # Platforms
 PLATFORMS = ["sensor", "switch", "select", "number"]
 
 # Device types
+DEVICE_TYPE_NEW_PLANT = "new_plant"
 DEVICE_TYPE_PLANT = "plant"
 DEVICE_TYPE_INVERTER = "inverter"
 DEVICE_TYPE_AC_CHARGER = "ac_charger"

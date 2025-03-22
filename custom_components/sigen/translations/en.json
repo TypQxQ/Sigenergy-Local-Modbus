@@ -3,23 +3,70 @@
     "step": {
       "user": {
         "title": "Connect to Sigenergy Energy Storage System",
-        "description": "Set up a Sigenergy Energy Storage System to monitor and control it through Home Assistant. \n\nMake sure the Sigenergy system is connected to the same network as Home Assistant and the Modbus option has been enabled by the installer.",
+        "description": "Set up a Sigenergy Energy Storage System to monitor and control it through Home Assistant. \n\nMake sure the Sigenergy system is connected to the same network as Home Assistant and the Modbus option has been enabled by the installer."
+      },
+      "device_type": {
+        "title": "Select Device Type",
+        "description": "Choose the type of Sigenergy device you want to add.",
         "data": {
-          "host": "Host ( IP address of the main Sigenergy inverter )",
-          "port": "Port ( default is 502 )",
-          "plant_id": "Plant ID ( default is 247 )",
-          "inverter_slave_ids": "Inverter Device IDs ( comma-separated when multiple. Default is 1 )",
-          "ac_charger_slave_ids": "AC Charger Device IDs ( comma-separated when multiple. Default is empty for no AC charger )",
-          "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached ( comma-separated when multiple )"
+          "device_type": "Device Type"
         }
+      },
+      "plant_config": {
+        "title": "Configure Sigenergy Plant",
+        "description": "Set up a new Sigenergy Plant to monitor and control it through Home Assistant. The Plant ID will be automatically set to 247.",
+        "data": {
+          "host": "Host (IP address of the main Sigenergy inverter)",
+          "port": "Port (default is 502)",
+          "inverter_slave_ids": "Inverter Device ID (Default is 1)",
+          "ac_charger_slave_ids": "AC Charger Device IDs (comma-separated when multiple. Default is empty for no AC charger)",
+          "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)",
+          "read_only": "Read-Only Mode (prevents any writes to the Sigenergy system)"
+        }
+      },
+      "select_plant": {
+        "title": "Select Plant",
+        "description": "Choose the Sigenergy Plant to which this device will be connected.",
+        "data": {
+          "parent_plant_id": "Plant"
+        }
+      },
+      "select_inverter": {
+        "title": "Select Inverter",
+        "description": "Choose the Sigenergy Inverter to which this DC Charger will be connected.",
+        "data": {
+          "parent_inverter_id": "Inverter"
+        }
+      },
+      "inverter_config": {
+        "title": "Configure Sigenergy Inverter",
+        "description": "Set up a Sigenergy Inverter. For the first inverter in a plant, the host and port will be pre-filled with the plant's values.",
+        "data": {
+          "host": "Host (IP address of this inverter)",
+          "port": "Port (default is 502)",
+          "slave_id": "Device ID (between 1 and 246)"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Configure Sigenergy AC Charger",
+        "description": "Set up a Sigenergy AC Charger. Enter the unique host address and port for this AC Charger.",
+        "data": {
+          "host": "Host (IP address of this AC charger)",
+          "port": "Port (default is 502)",
+          "slave_id": "Device ID (between 1 and 246)"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Configure Sigenergy DC Charger",
+        "description": "Set up a Sigenergy DC Charger connected to the selected inverter."
       },
       "reconfigure": {
         "title": "Reconfigure Sigenergy System",
         "description": "Update the list of device IDs for this Sigenergy system.",
         "data": {
-          "inverter_slave_ids": "Inverter Device IDs ( comma-separated when multiple. Default is 1 )",
-          "ac_charger_slave_ids": "AC Charger Device IDs ( comma-separated when multiple. Default is empty for no AC charger )",
-          "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached ( comma-separated when multiple )"
+          "inverter_slave_ids": "Inverter Device ID (Default is 1)",
+          "ac_charger_slave_ids": "AC Charger Device ID (Default is empty for no AC charger)",
+          "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)"
         }
       }
     },
@@ -30,10 +77,19 @@
       "each_id_must_be_between_1_and_246": "Each ID must be between 1 and 246.",
       "duplicate_ids_found": "Duplicate IDs found.",
       "dc_charger_requires_inverter": "DC charger IDs must correspond to configured inverter IDs.",
-      "ac_charger_conflicts_inverter": "AC charger IDs must be different from inverter IDs."
+      "ac_charger_conflicts_inverter": "AC charger IDs must be different from inverter IDs.",
+      "no_plants_available": "No plants are available. Please add a plant first.",
+      "no_inverters_available": "No inverters are available on the selected plant. Please add an inverter first.",
+      "read_only_mode_error": "Cannot write to the Sigenergy system while in read-only mode."
     },
     "abort": {
-      "already_configured": "This Sigenergy system is already configured."
+      "already_configured": "This Sigenergy system is already configured.",
+      "no_plants_available": "No plants are available. Please add a plant first.",
+      "no_inverters_available": "No inverters are available on the selected plant. Please add an inverter first.",
+      "device_added": "Device successfully added to the plant configuration.",
+      "parent_plant_not_found": "The parent plant configuration could not be found.",
+      "parent_inverter_not_found": "The parent inverter configuration could not be found.",
+      "parent_inverter_invalid": "The parent inverter configuration is invalid."
     }
   },
   "options": {
@@ -46,7 +102,7 @@
         "title": "Reconfigure Sigenergy System",
         "description": "Update the list of device IDs for this Sigenergy system.",
         "data": {
-          "inverter_slave_ids": "Inverter Device IDs ( comma-separated when multiple. Default is 1 )",
+          "inverter_slave_ids": "Inverter Device ID (Default is 1)",
           "ac_charger_slave_ids": "AC Charger Device IDs ( comma-separated when multiple. Default is empty for no AC charger )",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached ( comma-separated when multiple )"
         }

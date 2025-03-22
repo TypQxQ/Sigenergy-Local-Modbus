@@ -514,7 +514,7 @@ class StaticSensors:
             name="Available Battery Charge Energy",
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            state_class=SensorStateClass.MEASUREMENT,
+            state_class=SensorStateClass.TOTAL,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(
@@ -522,7 +522,7 @@ class StaticSensors:
             name="Available Battery Discharge Energy",
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            state_class=SensorStateClass.MEASUREMENT,
+            state_class=SensorStateClass.TOTAL,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
         SensorEntityDescription(

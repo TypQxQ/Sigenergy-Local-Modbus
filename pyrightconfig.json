@@ -1,0 +1,16 @@
+{
+    "include": [
+        "custom_components"
+    ],
+    "exclude": [
+        "**/Reference/**",
+        "**/reference/**",
+        "**/.venv/**",
+        "**/node_modules/**",
+        "**/__pycache__/**"
+    ],
+    "typeCheckingMode": "basic",
+    "useLibraryCodeForTypes": true,
+    "reportMissingTypeStubs": false,
+    "reportMissingImports": false,
+}

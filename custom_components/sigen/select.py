@@ -132,7 +132,7 @@ PLANT_SELECTS = [
                 "Command Discharging (ESS First)": RemoteEMSControlMode.COMMAND_DISCHARGING_ESS_FIRST,
             }.get(option, RemoteEMSControlMode.PCS_REMOTE_CONTROL),
         ),
-        available_fn=lambda data, _: data["plant"].get("remote_ems_enable") == 1,
+        available_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
     ),
 ]
 
@@ -184,9 +184,9 @@ async def async_setup_entry(
         )
         
     # Add inverter selects
-    inverter_no = 0
+    inverter_no = 1
     for inverter_id in coordinator.hub.inverter_slave_ids:
-        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 0 else f' {inverter_no}'}"
+        inverter_name = f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}Inverter{'' if inverter_no == 1 else f' {inverter_no}'}"
         for description in INVERTER_SELECTS:
             entities.append(
                 SigenergySelect(
@@ -202,9 +202,9 @@ async def async_setup_entry(
         inverter_no += 1
 
     # Add AC charger selects
-    ac_charger_no = 0
+    ac_charger_no = 1
     for ac_charger_id in coordinator.hub.ac_charger_slave_ids:
-        ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 0 else f' {ac_charger_no}'}"
+        ac_charger_name=f"Sigen { f'{plant_name.split()[1] } ' if plant_name.split()[1].isdigit() else ''}AC Charger{'' if ac_charger_no == 1 else f' {ac_charger_no}'}"
         _LOGGER.debug("Adding AC charger %s with ac_charger_no %s as %s", ac_charger_id, ac_charger_no, ac_charger_name)
         for description in AC_CHARGER_SELECTS:
             entities.append(

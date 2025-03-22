@@ -1,12 +1,6 @@
 {
-    "python.languageServer": "Pylance",
-    "python.analysis.diagnosticSeverityOverrides": {
-        "reportShadowedImports": "none",
-        "reportMissingImports": "none",
-        "reportUnusedImport": "information",
-    },
     "pylint.args": [
-        "--disable=E0401,E1123",
+        "--disable=E0401,E1123,W0613",
         "--ignore=Reference/core-dev"
       ],
   }

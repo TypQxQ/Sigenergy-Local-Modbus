@@ -63,6 +63,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     dc_charger_data[dc_charger_id] = await self.hub.async_read_dc_charger_data(dc_charger_id)
                 
                 # Combine all data
+                _LOGGER.debug("[CS][Coordinator] Plant data keys: %s", list(plant_data.keys()) if plant_data else None)
                 data = {
                     "plant": plant_data,
                     "inverters": inverter_data,

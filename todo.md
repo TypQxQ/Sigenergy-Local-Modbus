@@ -12,5 +12,4 @@
 - Fix so no duplicate checks in dev mode.
 - Add "Sigen x DC Charger y" to fileds such as Power.
 - Refactor setup to look for dc chargers.
-- Refactor setup to look for number of pv.
-- Have a read only mode.
+- Refactor the code for calculated sensors to take in acccount multiple plants and inverters.
