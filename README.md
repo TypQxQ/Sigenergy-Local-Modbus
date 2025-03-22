@@ -12,7 +12,7 @@ This integration allows you to monitor and control your Sigenergy ESS (Energy St
 
 ## Requirements
 
-- Home Assistant 2023.8.0 or newer
+- Home Assistant 2024.4.1 or newer
 - Sigenergy ESS with Modbus TCP access
 - Network connectivity between Home Assistant and the Sigenergy system
 - `pymodbus>=3.0.0`
