@@ -150,7 +150,7 @@
       },
       "plant_config": {
         "title": "Reconfigure Sigenergy Plant",
-        "description": "Update the connection details and scan intervals for this Plant.\n\nHigh Priority Scan Interval is used for Power and Energy sensors.\nAlarm Scan Interval is used for Alarm sensors is usually set to same as Medium.\nScan intervals mut be a multiple of the High Scan Interval.",
+        "description": "Update the connection details and scan intervals for this Plant.\n\nHigh Priority Scan Interval is used for Power and Energy sensors.\nAlarm Scan Interval is used for Alarm sensors is usually set to same as Medium.\nScan intervals must be a multiple of the High Scan Interval.",
         "data": {
           "host": "Host (IP address)",
           "port": "Port",
