@@ -135,8 +135,9 @@ class EMSWorkMode(IntEnum):
     MAX_SELF_CONSUMPTION = 0
     AI_MODE = 1
     TOU = 2
+    FULL_FEED_IN_TO_GRID = 5
     REMOTE_EMS = 7
-    TIME_BASED_CONTROL = 9
+    CUSTOM = 9
 
 # Remote EMS control modes (Appendix 6)
 class RemoteEMSControlMode(IntEnum):

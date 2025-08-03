@@ -1090,8 +1090,9 @@ class SigenergyCalculatedSensors:
                 EMSWorkMode.MAX_SELF_CONSUMPTION: "Maximum Self Consumption",
                 EMSWorkMode.AI_MODE: "AI Mode",
                 EMSWorkMode.TOU: "Time of Use",
+                EMSWorkMode.FULL_FEED_IN_TO_GRID: "Full Feed-In to Grid",
                 EMSWorkMode.REMOTE_EMS: "Remote EMS",
-                EMSWorkMode.TIME_BASED_CONTROL: "Time-Based Control",
+                EMSWorkMode.CUSTOM: "Custom",
             }.get(value, f"Unknown: ({value})"), # Fallback to original value
         ),
         SigenergySensorEntityDescription(
