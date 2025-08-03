@@ -253,7 +253,14 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 def safe_float(value: Any, precision: int = 6) -> Optional[float]:
     """Convert to float only if possible, else None."""
     try:
-        return round(float(str(value)), precision)
+        if value is None:
+            return 0.0
+        if isinstance(value, float):
+            return round(value, precision)
+        if isinstance(value, int):
+            return round(float(value), precision)
+        else:
+            return round(float(str(value)), precision)
     except (InvalidOperation, TypeError, ValueError):
         _LOGGER.warning("Could not convert value %s (type %s) to float", value, type(value).__name__)
         return None

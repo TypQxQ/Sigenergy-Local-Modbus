@@ -827,12 +827,12 @@ class SigenergyModbusHub:
             **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
             if reg.register_type != RegisterType.WRITE_ONLY and
             reg.update_frequency >= update_frequency },
-            **{name: reg for name, reg in DC_CHARGER_RUNNING_INFO_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
-            **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
+            # **{name: reg for name, reg in DC_CHARGER_RUNNING_INFO_REGISTERS.items()
+            # if reg.register_type != RegisterType.WRITE_ONLY and
+            # reg.update_frequency >= update_frequency },
+            # **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
+            # if reg.register_type != RegisterType.WRITE_ONLY and
+            # reg.update_frequency >= update_frequency },
         }
         _LOGGER.debug("Reading %s Inverter registers. update_frequency is %s",
                       len(registers_to_read), update_frequency)
