@@ -1936,6 +1936,8 @@ INVERTER_PARAMETER_REGISTERS = {
         description="Start/Stop inverter (0: Stop 1: Start)",
         applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
+    # This register is deprecated in Modbus v. 2.7 and is now marked as reserved.
+    # It still functions in the current implementation but may be removed in future versions.
     "inverter_grid_code": ModbusRegisterDefinition(
         address=40501,
         count=1,

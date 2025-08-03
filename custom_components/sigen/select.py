@@ -54,6 +54,9 @@ COUNTRY_TO_CODE_MAP = {country: code for code, country in GRID_CODE_MAP.items()}
 
 def _get_grid_code_display(data, device_name): # Changed inverter_id to device_name
     """Get the display value for grid code with debug logging."""
+    # This register is deprecated in Modbus v. 2.7 and is now marked as reserved.
+    # It still functions in the current implementation but may be removed in future versions.
+
     # Get the raw grid code value using device_name
     grid_code = data["inverters"].get(device_name, {}).get("inverter_grid_code")
     
@@ -135,6 +138,8 @@ PLANT_SELECTS = [
 ]
 
 INVERTER_SELECTS = [
+    # This register is deprecated in Modbus v. 2.7 and is now marked as reserved.
+    # It still functions in the current implementation but may be removed in future versions.
     SigenergySelectEntityDescription(
         key="inverter_grid_code",
         name="Grid Code",
