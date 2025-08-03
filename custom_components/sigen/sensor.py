@@ -555,6 +555,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     RunningState.RUNNING: "Running",
                     RunningState.FAULT: "Fault",
                     RunningState.SHUTDOWN: "Shutdown",
+                    RunningState.ENVIRONMENTAL_ABNORMALITY: "Environmental Abnormality",
                 }.get(value, f"Unknown: {value}")
             if self.entity_description.key == "inverter_running_state":
                 return {
@@ -562,6 +563,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     RunningState.RUNNING: "Running",
                     RunningState.FAULT: "Fault",
                     RunningState.SHUTDOWN: "Shutdown",
+                    RunningState.ENVIRONMENTAL_ABNORMALITY: "Environmental Abnormality",
                 }.get(value, f"Unknown: {value}")
             if self.entity_description.key == "ac_charger_system_state":
                 return {

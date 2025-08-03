@@ -43,6 +43,7 @@ class RunningState(IntEnum):
     RUNNING = 1
     FAULT = 2
     SHUTDOWN = 3
+    ENVIRONMENTAL_ABNORMALITY = 7
 
 # Alarm code mappings based on Sigenergy Modbus Protocol appendices
 ALARM_CODES = {
@@ -1937,17 +1938,16 @@ INVERTER_PARAMETER_REGISTERS = {
         applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     # This register is deprecated in Modbus v. 2.7 and is now marked as reserved.
-    # It still functions in the current implementation but may be removed in future versions.
-    "inverter_grid_code": ModbusRegisterDefinition(
-        address=40501,
-        count=1,
-        register_type=RegisterType.HOLDING,
-        data_type=DataType.U16,
-        gain=1,
-        description="Grid code setting",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
-    ),
+    # "inverter_grid_code": ModbusRegisterDefinition(
+    #     address=40501,
+    #     count=1,
+    #     register_type=RegisterType.HOLDING,
+    #     data_type=DataType.U16,
+    #     gain=1,
+    #     description="Grid code setting",
+    #     applicable_to=["hybrid_inverter", "pv_inverter"],
+    #     update_frequency=UpdateFrequencyType.LOW,
+    # ),
     "inverter_remote_ems_dispatch_enable": ModbusRegisterDefinition(
         address=41500,
         count=1,
