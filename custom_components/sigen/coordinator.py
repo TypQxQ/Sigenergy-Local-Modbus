@@ -96,8 +96,6 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     inverter_data[inverter_name] = await self.hub.async_read_inverter_data(inverter_name, update_frequency=current_frequency_type)
                     # Fetch DC charger data if the inverter supports it
                     if self.hub.inverter_connections[inverter_name].get(CONF_INVERTER_HAS_DCCHARGER, False):
-                        # dc_charger_data[inverter_name] = await self.hub.async_read_dc_charger_data(inverter_name, update_frequency=current_frequency_type)
-                        _LOGGER.debug("DC charger found for inverter %s", inverter_name)
                         dc_charger_data[inverter_name] = await self.hub.async_read_dc_charger_data(inverter_name, update_frequency=current_frequency_type)
 
                 # Fetch AC charger data for each AC charger

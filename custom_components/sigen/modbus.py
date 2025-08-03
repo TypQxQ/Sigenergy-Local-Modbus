@@ -856,28 +856,28 @@ class SigenergyModbusHub:
         inverter_info = self.inverter_connections[inverter_name]
 
         # Probe registers if not done yet for this inverter
-        if inverter_name not in self.inverter_registers_probed:
+        if inverter_name not in self.dc_charger_registers_probed:
             try:
-                await self.async_probe_registers(inverter_info, INVERTER_RUNNING_INFO_REGISTERS)
+                await self.async_probe_registers(inverter_info, DC_CHARGER_RUNNING_INFO_REGISTERS)
                 # Also probe parameter registers that can be read
                 await self.async_probe_registers(inverter_info, {
-                    name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
+                    name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
                     if reg.register_type != RegisterType.WRITE_ONLY
                 })
-                self.inverter_registers_probed.add(inverter_name)
+                self.dc_charger_registers_probed.add(inverter_name)
             except Exception as ex:
-                _LOGGER.error("Failed to probe inverter '%s' registers: %s", inverter_name, ex)
+                _LOGGER.error("Failed to probe dc-charger '%s' registers: %s", inverter_name, ex)
                 # Continue with reading, some registers might still work
 
         # Read registers from both running info and parameter registers
         registers_to_read = {}
         registers_to_read = {
-            **{name: reg for name, reg in INVERTER_RUNNING_INFO_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
-            **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
+            # **{name: reg for name, reg in INVERTER_RUNNING_INFO_REGISTERS.items()
+            # if reg.register_type != RegisterType.WRITE_ONLY and
+            # reg.update_frequency >= update_frequency },
+            # **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
+            # if reg.register_type != RegisterType.WRITE_ONLY and
+            # reg.update_frequency >= update_frequency },
             **{name: reg for name, reg in DC_CHARGER_RUNNING_INFO_REGISTERS.items()
             if reg.register_type != RegisterType.WRITE_ONLY and
             reg.update_frequency >= update_frequency },
@@ -885,14 +885,14 @@ class SigenergyModbusHub:
             if reg.register_type != RegisterType.WRITE_ONLY and
             reg.update_frequency >= update_frequency },
         }
-        _LOGGER.debug("Reading %s Inverter registers. update_frequency is %s",
+        _LOGGER.debug("Reading %s DC charger registers. update_frequency is %s",
                       len(registers_to_read), update_frequency)
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
             device_info=inverter_info,
             device_name=inverter_name,
-            device_type_log_prefix="inverter",
+            device_type_log_prefix="dc charger",
             registers_to_read=registers_to_read
         )
 

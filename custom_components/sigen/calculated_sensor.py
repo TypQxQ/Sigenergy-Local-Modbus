@@ -327,6 +327,25 @@ class SigenergyCalculations:
         # Get the required values from coordinator data
         plant_data = coordinator_data["plant"]
 
+        _LOGGER.warning("Keys under coordinator_data: %s", coordinator_data.keys())
+
+
+        total_ac_charger_power = 0.0
+        ac_chargers: dict[str, Any] = coordinator_data.get("ac_chargers", {})
+        # _LOGGER.debug("AC Chargers data: %s", ac_chargers)
+        for _, ac_charger_data in ac_chargers.items():
+            ac_power = safe_float(ac_charger_data.get("ac_charger_charging_power"))
+            if ac_power is not None:
+                total_ac_charger_power += ac_power
+
+        total_dc_charger_power = 0.0
+        dc_chargers: dict[str, Any] = coordinator_data.get("dc_chargers", {})
+        # _LOGGER.debug("DC Chargers data: %s", dc_chargers)
+        for _, dc_charger_data in dc_chargers.items():
+            dc_power = safe_float(dc_charger_data.get("dc_charger_output_power"))
+            if dc_power is not None:
+                total_dc_charger_power += dc_power
+
         # Use the correct calculation for total PV power
         pv_power = SigenergyCalculations.calculate_total_pv_power(
             None, coordinator_data=coordinator_data
@@ -372,17 +391,21 @@ class SigenergyCalculations:
         # Calculate plant consumed power
         # Note: battery_power is positive when charging, negative when discharging
         try:
-            consumed_power = pv_power + grid_import - grid_export - battery_power
+            consumed_power = pv_power + grid_import - grid_export - battery_power - total_ac_charger_power - total_dc_charger_power
 
             # Sanity check
             if consumed_power < 0:
                 _LOGGER.warning(
-                    "[CS][Plant Consumed] Calculated power is negative: %s kW = %s + %s - %s - %s",
+                    "[CS][Plant Consumed] Calculated power is negative.\n" \
+                    "consumed_power = pv_power + grid_import - grid_export - battery_power - total_ac_charger_power - total_dc_charger_power\n" \
+                    "%s kW = %s + %s - %s - %s - %s - %s",
                     consumed_power,
                     pv_power,
                     grid_import,
                     grid_export,
-                    battery_power
+                    battery_power,
+                    total_ac_charger_power,
+                    total_dc_charger_power
                 )
                 # Keep the negative value as it might be valid in some scenarios
 
