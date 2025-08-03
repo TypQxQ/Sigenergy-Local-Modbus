@@ -15,6 +15,7 @@ from pymodbus.constants import Endian
 from pymodbus.exceptions import ConnectionException, ModbusException
 from pymodbus.payload import BinaryPayloadBuilder
 from pymodbus.client.mixin import ModbusClientMixin
+from pymodbus import __version__ as pymodbus_version
 
 from .const import (
     CONF_INVERTER_CONNECTIONS,
@@ -85,6 +86,9 @@ class SigenergyModbusHub:
         """Initialize the Modbus hub."""
         self.hass = hass
         self.config_entry = config_entry
+
+        # Log to dev logger the version of pymodbus being used
+        _LOGGER.debug("Using pymodbus version: %s", pymodbus_version)
 
         # Dictionary to store Modbus clients for different connections
         # Key is (host, port) tuple, value is the client instance
