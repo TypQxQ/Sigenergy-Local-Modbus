@@ -20,6 +20,6 @@
   "issue_tracker": "https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues",
   "loggers": ["custom_components.sigen"],
   "quality_scale": "custom",
-  "requirements": ["pymodbus>=3.0.0"],
+  "requirements": ["pymodbus>=3.9.2"],
   "version": "1.0.11"
 }
