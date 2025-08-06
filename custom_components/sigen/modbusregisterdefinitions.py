@@ -646,16 +646,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         description="Battery State of Health (weighted average of all ESS devices)",
         update_frequency=UpdateFrequencyType.HIGH,
     ),
-    "plant_ess_daily_charge_energy": ModbusRegisterDefinition(
-        address=30566,
-        count=2,
-        register_type=RegisterType.READ_ONLY,
-        data_type=DataType.U32,
-        gain=100,
-        unit=UnitOfEnergy.KILO_WATT_HOUR,
-        description="ESS Daily Charge Energy",
-        applicable_to=["hybrid_inverter"],
-    ),
 
     # Following fields have been added in v.2.7
     "plant_pv_total_generation": ModbusRegisterDefinition(
