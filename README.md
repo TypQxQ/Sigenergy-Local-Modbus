@@ -25,8 +25,7 @@ Monitor and control your Sigenergy Energy Storage System (ESS) from Home Assista
 - **Configurable update interval** in three update frequencies for faster updates
 
 ## Requirements
-- [Home Assistant](https://www.home-assistant.io/)
-- [Home Assistant Community Store (HACS)](https://hacs.xyz/)
+- [Home Assistant](https://www.home-assistant.io/) at least version 2025.2
 - [Sigenergy ESS](https://www.sigenergy.com/) with Modbus‑TCP enabled by your installer. And prefferably confirmed with a screenshot of your DeviceID. If using AC Charger, that will have the id `1` and the inverter has to be set to a higher ID, for example `2`.
 - Prefferably assign a **static IP** to your Sigenergy device in your router to ensure it always receives the same IP address.
 
