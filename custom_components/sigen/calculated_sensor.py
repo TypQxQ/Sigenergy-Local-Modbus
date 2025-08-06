@@ -327,9 +327,6 @@ class SigenergyCalculations:
         # Get the required values from coordinator data
         plant_data = coordinator_data["plant"]
 
-        _LOGGER.warning("Keys under coordinator_data: %s", coordinator_data.keys())
-
-
         total_ac_charger_power = 0.0
         ac_chargers: dict[str, Any] = coordinator_data.get("ac_chargers", {})
         # _LOGGER.debug("AC Chargers data: %s", ac_chargers)
@@ -397,7 +394,7 @@ class SigenergyCalculations:
             if consumed_power < 0:
                 _LOGGER.warning(
                     "[CS][Plant Consumed] Calculated power is negative.\n" \
-                    "consumed_power = pv_power + grid_import - grid_export - battery_power - total_ac_charger_power - total_dc_charger_power\n" \
+                    "consumed_power = pv_power + grid_import - grid_export - battery_power - total_ac_charger_power - total_dc_charger_power:\n" \
                     "%s kW = %s + %s - %s - %s - %s - %s",
                     consumed_power,
                     pv_power,

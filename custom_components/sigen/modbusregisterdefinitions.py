@@ -195,7 +195,7 @@ class ModbusRegisterDefinition:
     gain: float
     unit: Optional[str] = None
     description: Optional[str] = None
-    applicable_to: Optional[list[str]] = ["hybrid_inverter", "pv_inverter"]
+    applicable_to: Optional[list[str]] = None#["hybrid_inverter", "pv_inverter"]
     is_supported: Optional[bool] = None  # Tracks whether register is supported by device
     update_frequency: UpdateFrequencyType = UpdateFrequencyType.MEDIUM
 
