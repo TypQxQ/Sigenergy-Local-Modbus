@@ -1039,22 +1039,24 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     @callback
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
-        return SigenergyOptionsFlowHandler(config_entry)
+        return SigenergyOptionsFlowHandler()
 
 
 class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle Sigenergy options for reconfiguring existing devices."""
 
-    def __init__(self, config_entry):
+    def __init__(self):
         """Initialize options flow."""
-        self.config_entry = config_entry
-        self.options = dict(config_entry.options)
-        self._data = dict(config_entry.data)
         self._plants = {}
         self._devices = {}
         self._inverters = {}
         self._selected_device = None
         self._temp_config = {}
+
+    @property
+    def _data(self) -> dict[str, Any]:
+        """Return a copy of the config entry data."""
+        return dict(self.config_entry.data)
 
     async def _async_load_devices(self) -> None:
         """Load all existing devices for reconfiguration selection."""
