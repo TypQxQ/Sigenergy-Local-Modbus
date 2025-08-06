@@ -646,7 +646,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         description="Battery State of Health (weighted average of all ESS devices)",
         update_frequency=UpdateFrequencyType.HIGH,
     ),
-    "inverter_ess_daily_charge_energy": ModbusRegisterDefinition(
+    "plant_ess_daily_charge_energy": ModbusRegisterDefinition(
         address=30566,
         count=2,
         register_type=RegisterType.READ_ONLY,
@@ -1600,6 +1600,41 @@ PLANT_PARAMETER_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="PCS maximum import limitation. Range: [0, 0xFFFFFFFE]. With value 0xFFFFFFFF, register is not valid. Takes effect globally.",
+    ),
+
+    # Additions for Modbus specification v2.7
+    "plant_backup_soc": ModbusRegisterDefinition(
+        address=40046,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=10,
+        unit=PERCENTAGE,
+        description="[ESS]Backup SOC. Range: [0,100.0]",
+        update_frequency=UpdateFrequencyType.HIGH,
+        applicable_to=["hybrid_inverter"],
+    ),
+    "plant_charge_cut_off_soc": ModbusRegisterDefinition(
+        address=40047,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=10,
+        unit=PERCENTAGE,
+        description="[ESS]Charge Cut-Off SOC. Range: [0,100.0]",
+        update_frequency=UpdateFrequencyType.HIGH,
+        applicable_to=["hybrid_inverter"],
+    ),
+    "plant_discharge_cut_off_soc": ModbusRegisterDefinition(
+        address=40048,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=10,
+        unit=PERCENTAGE,
+        description="[ESS]Discharge Cut-Off SOC. Range: [0,100.0]",
+        update_frequency=UpdateFrequencyType.HIGH,
+        applicable_to=["hybrid_inverter"],
     ),
 }
 
