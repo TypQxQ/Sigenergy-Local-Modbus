@@ -43,6 +43,12 @@ from .modbusregisterdefinitions import (
     DC_CHARGER_RUNNING_INFO_REGISTERS,
     DC_CHARGER_PARAMETER_REGISTERS,
 )
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from .common import generate_device_id
+from .const import DOMAIN
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from .common import generate_device_id
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -700,6 +706,61 @@ class SigenergyModbusHub:
 
         data = {}
         for register_name, register_def in registers_to_read.items():
+            # Skip registers for entities disabled in HA
+            registry = async_get_entity_registry(self.hass)
+            
+            # Check if this is a PV string register
+            pv_match = None
+            if register_name.startswith("inverter_pv") and "_" in register_name:
+                import re
+                pv_match = re.match(r"inverter_pv(\d+)_(.+)", register_name)
+            
+            if pv_match:
+                # Handle PV string registers
+                pv_string_idx = int(pv_match.group(1))
+                sensor_type = pv_match.group(2)  # e.g., "voltage", "current"
+                
+                # Map register types to PV string sensor keys
+                pv_sensor_map = {
+                    "voltage": "voltage",
+                    "current": "current",
+                    "power": "power"
+                }
+                
+                if sensor_type in pv_sensor_map:
+                    attr_key = pv_sensor_map[sensor_type]
+                    # PV strings have their own device, use inverter name as base
+                    unique_device_part = generate_device_id(device_name, device_type_log_prefix)
+                    unique_id = f"{self.config_entry.entry_id}_{unique_device_part}_pv{pv_string_idx}_{attr_key}"
+                    
+                    entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+                    if entity_id:
+                        entry = registry.async_get(entity_id)
+                        if entry and entry.disabled:
+                            # _LOGGER.warning("Skipping disabled PV string entity %s (unique_id=%s)", entity_id, unique_id)
+                            continue
+            else:
+                # Handle regular (non-PV string) registers
+                unique_device_part = generate_device_id(device_name, device_type_log_prefix)
+                # Use the full register_name as attr_key (same as description.key in entity creation)
+                attr_key = register_name
+                unique_id = f"{self.config_entry.entry_id}_{unique_device_part}_{attr_key}"
+                
+                entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+                if entity_id:
+                    entry = registry.async_get(entity_id)
+                    if entry and entry.disabled:
+                        # _LOGGER.warning("Skipping disabled entity %s (unique_id=%s)", entity_id, unique_id)
+                        continue
+                    elif not entry:
+                        _LOGGER.debug("Checking regular entity: device_name=%s, device_type=%s, unique_device_part=%s, register_name=%s, attr_key=%s, unique_id=%s", 
+                                    device_name, device_type_log_prefix, unique_device_part, register_name, attr_key, unique_id)
+                        _LOGGER.debug("Could not get entry for entity %s (unique_id=%s)", entity_id, unique_id)
+                else:
+                    _LOGGER.debug("Checking regular entity: device_name=%s, device_type=%s, unique_device_part=%s, register_name=%s, attr_key=%s, unique_id=%s", 
+                                device_name, device_type_log_prefix, unique_device_part, register_name, attr_key, unique_id)
+                    _LOGGER.debug("Could not get entity_id for unique_id: %s with log_prefix=%s", unique_id, device_type_log_prefix)
+
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
                     registers = await self.async_read_registers(
@@ -787,9 +848,12 @@ class SigenergyModbusHub:
         # Use the core reading logic
         plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
         plant_info.setdefault(CONF_SLAVE_ID, self.plant_id)
+        # Get the actual plant name from config instead of hardcoded "plant"
+        from homeassistant.const import CONF_NAME
+        plant_name = self.config_entry.data.get(CONF_NAME, "plant")
         return await self._async_read_device_data_core(
             device_info=plant_info,
-            device_name="plant",
+            device_name=plant_name,
             device_type_log_prefix="plant",
             registers_to_read=registers_to_read
         )
