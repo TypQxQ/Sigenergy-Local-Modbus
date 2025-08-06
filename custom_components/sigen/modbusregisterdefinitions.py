@@ -650,7 +650,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
     ),
 
     # Following fields have been added in v.2.7
-    "plant_pv_total_generation": ModbusRegisterDefinition(
+    "plant_accumulated_pv_energy": ModbusRegisterDefinition(
         address=30088,
         count=4,
         register_type=RegisterType.READ_ONLY,
@@ -659,7 +659,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="Plant PV total generation",
     ),
-    "plant_total_load_daily_consumption": ModbusRegisterDefinition(
+    "plant_daily_consumed_energy": ModbusRegisterDefinition(
         address=30092,
         count=2,
         register_type=RegisterType.READ_ONLY,
@@ -668,7 +668,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="Total load daily consumption",
     ),
-    "plant_total_load_consumption": ModbusRegisterDefinition(
+    "plant_accumulated_consumed_energy": ModbusRegisterDefinition(
         address=30094,
         count=4,
         register_type=RegisterType.READ_ONLY,
@@ -685,6 +685,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 1] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_2_total_consumption": ModbusRegisterDefinition(
         address=30100,
@@ -694,6 +695,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 2] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_3_total_consumption": ModbusRegisterDefinition(
         address=30102,
@@ -703,6 +705,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 3] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_4_total_consumption": ModbusRegisterDefinition(
         address=30104,
@@ -712,6 +715,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 4] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_5_total_consumption": ModbusRegisterDefinition(
         address=30106,
@@ -721,6 +725,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 5] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_6_total_consumption": ModbusRegisterDefinition(
         address=30108,
@@ -730,6 +735,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 6] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_7_total_consumption": ModbusRegisterDefinition(
         address=30110,
@@ -739,6 +745,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 7] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_8_total_consumption": ModbusRegisterDefinition(
         address=30112,
@@ -748,6 +755,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 8] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_9_total_consumption": ModbusRegisterDefinition(
         address=30114,
@@ -757,6 +765,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 9] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_10_total_consumption": ModbusRegisterDefinition(
         address=30116,
@@ -766,6 +775,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 10] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_11_total_consumption": ModbusRegisterDefinition(
         address=30118,
@@ -775,6 +785,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 11] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_12_total_consumption": ModbusRegisterDefinition(
         address=30120,
@@ -784,6 +795,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 12] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_13_total_consumption": ModbusRegisterDefinition(
         address=30122,
@@ -793,6 +805,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 13] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_14_total_consumption": ModbusRegisterDefinition(
         address=30124,
@@ -802,6 +815,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 14] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_15_total_consumption": ModbusRegisterDefinition(
         address=30126,
@@ -811,6 +825,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 15] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_16_total_consumption": ModbusRegisterDefinition(
         address=30128,
@@ -820,6 +835,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 16] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_17_total_consumption": ModbusRegisterDefinition(
         address=30130,
@@ -829,6 +845,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 17] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_18_total_consumption": ModbusRegisterDefinition(
         address=30132,
@@ -838,6 +855,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 18] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_19_total_consumption": ModbusRegisterDefinition(
         address=30134,
@@ -847,6 +865,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 19] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_20_total_consumption": ModbusRegisterDefinition(
         address=30136,
@@ -856,6 +875,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 20] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_21_total_consumption": ModbusRegisterDefinition(
         address=30138,
@@ -865,6 +885,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 21] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_22_total_consumption": ModbusRegisterDefinition(
         address=30140,
@@ -874,6 +895,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 22] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_23_total_consumption": ModbusRegisterDefinition(
         address=30142,
@@ -883,6 +905,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 23] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_24_total_consumption": ModbusRegisterDefinition(
         address=30144,
@@ -892,6 +915,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="[Smart load 24] Total consumption",
+        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_smart_load_1_power": ModbusRegisterDefinition(
         address=30146,

@@ -1,5 +1,6 @@
 """Static sensors for Sigenergy."""
 from __future__ import annotations
+from datetime import timedelta
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -395,6 +396,187 @@ class StaticSensors:
             entity_category=EntityCategory.DIAGNOSTIC,
             icon="mdi:battery-heart",
         ),
+
+        # Sensors added in Modbus specification v.2.7
+            # Migrated from calculated sensors.
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_pv_energy",
+            name="Total PV Generation",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_daily_consumed_energy",
+            name="Total Load Daily Consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            icon="mdi:home-lightning-bolt",
+            suggested_display_precision=2,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_consumed_energy",
+            name="Total Load Consumption",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            max_sub_interval=timedelta(seconds=30),
+            icon="mdi:home-lightning-bolt",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_1_total_consumption",
+            name="[Smart load 1] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_2_total_consumption",
+            name="[Smart load 2] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_3_total_consumption",
+            name="[Smart load 3] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_4_total_consumption",
+            name="[Smart load 4] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_5_total_consumption",
+            name="[Smart load 5] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_6_total_consumption",
+            name="[Smart load 6] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_7_total_consumption",
+            name="[Smart load 7] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_8_total_consumption",
+            name="[Smart load 8] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_9_total_consumption",
+            name="[Smart load 9] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_10_total_consumption",
+            name="[Smart load 10] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_11_total_consumption",
+            name="[Smart load 11] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_12_total_consumption",
+            name="[Smart load 12] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_13_total_consumption",
+            name="[Smart load 13] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_14_total_consumption",
+            name="[Smart load 14] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_15_total_consumption",
+            name="[Smart load 15] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_16_total_consumption",
+            name="[Smart load 16] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_17_total_consumption",
+            name="[Smart load 17] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_18_total_consumption",
+            name="[Smart load 18] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_19_total_consumption",
+            name="[Smart load 19] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_20_total_consumption",
+            name="[Smart load 20] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_21_total_consumption",
+            name="[Smart load 21] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_22_total_consumption",
+            name="[Smart load 22] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_23_total_consumption",
+            name="[Smart load 23] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_smart_load_24_total_consumption",
+            name="[Smart load 24] Total consumption",
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+
+            
     ]
 
     INVERTER_SENSORS = [

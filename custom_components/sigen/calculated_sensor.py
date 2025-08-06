@@ -1248,19 +1248,19 @@ class SigenergyCalculatedSensors:
 
     # Add the plant integration sensors list
     PLANT_INTEGRATION_SENSORS = [
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_pv_energy",
-            name="Accumulated PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="plant_photovoltaic_power",  # Key of the source entity to use
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:solar-power",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_pv_energy",
+        #     name="Accumulated PV Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="plant_photovoltaic_power",  # Key of the source entity to use
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:solar-power",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
         SigenergySensorEntityDescription(
             key="plant_daily_pv_energy",
             name="Daily PV Energy",
@@ -1323,31 +1323,31 @@ class SigenergyCalculatedSensors:
             max_sub_interval=timedelta(seconds=30),
             icon="mdi:transmission-tower-import",
         ),
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_consumed_energy",
-            name="Accumulated Consumed Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="plant_consumed_power",  # Key of the source entity to use
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:home-lightning-bolt",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_daily_consumed_energy",
-            name="Daily Consumed Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="plant_consumed_power",  # Key of the source entity to use
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:home-lightning-bolt",
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_consumed_energy",
+        #     name="Accumulated Consumed Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="plant_consumed_power",  # Key of the source entity to use
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:home-lightning-bolt",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_daily_consumed_energy",
+        #     name="Daily Consumed Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        #     source_key="plant_consumed_power",  # Key of the source entity to use
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:home-lightning-bolt",
+        # ),
     ]
 
     # Add the inverter integration sensors list

@@ -143,7 +143,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     self.largest_update_interval = timetaken
                 self._latest_fetch_times[current_frequency_type] = timetaken
 
-                log_level = logging.WARNING if timetaken > update_interval else logging.DEBUG
+                log_level = logging.WARNING if timetaken > update_interval \
+                    and self._update_counter > 1 else logging.DEBUG
                 self.logger.log(
                     log_level,
                     "Fetching data for %s took %.3f seconds%s",
