@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Optional
 
+from dataclasses import field
+
 # Import needed Home Assistant constants
 from homeassistant.const import (
     PERCENTAGE,
@@ -195,7 +197,7 @@ class ModbusRegisterDefinition:
     gain: float
     unit: Optional[str] = None
     description: Optional[str] = None
-    applicable_to: Optional[list[str]] = None#["hybrid_inverter", "pv_inverter"]
+    applicable_to: Optional[list[str]] = field(default_factory=lambda: ["hybrid_inverter", "pv_inverter"])
     is_supported: Optional[bool] = None  # Tracks whether register is supported by device
     update_frequency: UpdateFrequencyType = UpdateFrequencyType.MEDIUM
 
@@ -2550,44 +2552,78 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         description="PV16 Current",
         update_frequency=UpdateFrequencyType.HIGH,
     ),
-    # This sensors are quite unkonown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
-    # They are undocumented.
-    # "daily_export_energy": ModbusRegisterDefinition(
-    #     address=30554,
-    #     count=2,
-    #     register_type=RegisterType.READ_ONLY,
-    #     data_type=DataType.U32,
-    #     gain=100,
-    #     unit=UnitOfEnergy.KILO_WATT_HOUR,
-    #     description="Daily Export Energy",
-    # ),
-    # "accumulated_export_energy": ModbusRegisterDefinition(
-    #     address=30556,
-    #     count=4,
-    #     register_type=RegisterType.READ_ONLY,
-    #     data_type=DataType.U64,
-    #     gain=100,
-    #     unit=UnitOfEnergy.KILO_WATT_HOUR,
-    #     description="Accumulated Export Energy",
-    # ),
-    # "daily_import_energy": ModbusRegisterDefinition(
-    #     address=30560,
-    #     count=2,
-    #     register_type=RegisterType.READ_ONLY,
-    #     data_type=DataType.U32,
-    #     gain=100,
-    #     unit=UnitOfEnergy.KILO_WATT_HOUR,
-    #     description="Daily Import Energy",
-    # ),
-    # "accumulated_import_energy": ModbusRegisterDefinition(
-    #     address=30562,
-    #     count=4,
-    #     register_type=RegisterType.READ_ONLY,
-    #     data_type=DataType.U64,
-    #     gain=100,
-    #     unit=UnitOfEnergy.KILO_WATT_HOUR,
-    #     description="Accumulated Import Energy",
-    # ),
+
+    # Additions for Modbus specification v2.7
+    "inverter_active_power_fixed_value_adjustment_feedback": ModbusRegisterDefinition(
+        address=30613,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Active power fixed value adjustment feedback",
+        update_frequency=UpdateFrequencyType.LOW,
+    ),
+    "inverter_reactive_power_fixed_value_adjustment_feedback": ModbusRegisterDefinition(
+        address=30615,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit="kvar",
+        description="Reactive power fixed value adjustment feedback",
+        update_frequency=UpdateFrequencyType.LOW,
+    ),
+    "inverter_active_power_percentage_adjustment_feedback": ModbusRegisterDefinition(
+        address=30617,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S16,
+        gain=100,
+        unit=PERCENTAGE,
+        description="Active power percentage adjustment feedback",
+        update_frequency=UpdateFrequencyType.LOW,
+    ),
+    "inverter_reactive_power_qs_adjustment_feedback": ModbusRegisterDefinition(
+        address=30618,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S16,
+        gain=100,
+        unit=PERCENTAGE,
+        description="Reactive power Q/S adjustment feedback",
+        update_frequency=UpdateFrequencyType.LOW,
+    ),
+    "inverter_power_factor_adjustment_feedback": ModbusRegisterDefinition(
+        address=30619,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S16,
+        gain=1000,
+        description="Power factor adjustment feedback",
+        update_frequency=UpdateFrequencyType.LOW,
+    ),
+    "inverter_pv_daily_generation": ModbusRegisterDefinition(
+        address=31509,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="PV daily generation",
+        update_frequency=UpdateFrequencyType.LOW,
+    ),
+    "inverter_pv_total_generation": ModbusRegisterDefinition(
+        address=31511,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="PV total generation",
+        update_frequency=UpdateFrequencyType.LOW,
+    ),
+
 }
 
 INVERTER_PARAMETER_REGISTERS = {
