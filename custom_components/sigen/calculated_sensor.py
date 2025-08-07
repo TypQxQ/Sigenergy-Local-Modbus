@@ -387,7 +387,7 @@ class SigenergyCalculations:
 
             # Sanity check
             if consumed_power < 0:
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "[CS][Plant Consumed] Calculated power is negative.\n" \
                     "consumed_power = pv_power + grid_import - grid_export - battery_power - total_ac_charger_power - total_dc_charger_power:\n" \
                     "%s kW = %s + %s - %s - %s - %s - %s",
@@ -401,11 +401,6 @@ class SigenergyCalculations:
                 )
                 # Keep the negative value as it might be valid in some scenarios
 
-            if consumed_power > 50:  # Unlikely to have consumption over 50 kW
-                _LOGGER.warning(
-                    "[CS][Plant Consumed] Calculated power seems excessive: %s kW",
-                    consumed_power,
-                )
         except Exception as ex:  # pylint: disable=broad-exception-caught
             _LOGGER.error(
                 "[CS][Plant Consumed] Error during calculation: %s", ex, exc_info=True
