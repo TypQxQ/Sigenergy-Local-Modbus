@@ -89,13 +89,13 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 if self.largest_update_interval < timetaken:
                     self.largest_update_interval = timetaken
 
-                log_level = logging.WARNING if timetaken > update_interval else logging.DEBUG
-                self.logger.log(
-                    log_level,
-                    "Fetching all data took %.3f seconds%s",
-                    timetaken,
-                    " - exceeds update interval!" if timetaken > update_interval else ""
-                )
+                # log_level = logging.WARNING if timetaken > update_interval else logging.DEBUG
+                # self.logger.log(
+                #     log_level,
+                #     "Fetching all data took %.3f seconds%s",
+                #     timetaken,
+                #     " - exceeds update interval!" if timetaken > update_interval else ""
+                # )
 
                 # Return the updated, complete data structure
                 return self.data
@@ -111,7 +111,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         register_name: str,
         value: Union[int, float, str]
     ) -> None:
-        """Write a parameter via the Modbus hub and schedule a low-frequency update."""
+        """Write a parameter via the Modbus hub and schedule a update."""
         try:
             await self.hub.async_write_parameter(
                 device_type=device_type,

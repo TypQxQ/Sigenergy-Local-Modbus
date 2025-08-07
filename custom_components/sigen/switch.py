@@ -115,9 +115,8 @@ DC_CHARGER_SWITCHES = [
         icon="mdi:ev-station",
         # consider changing is_on_fn to check for dc_charger_output_power > 0 if the below doesn't work
         # identifier here is dc_charger_id (but it's accessing inverter data?) - This seems wrong, needs review based on coordinator data structure
-
-        # is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_start_stop") == 0, # TODO: Review this logic - should likely use dc_charger data
-        is_on_fn=lambda data, identifier: (_LOGGER.debug("DC charger identifier: %s, dc_charger_output_power: %s", identifier, data["inverters"].get(identifier, {}).get("dc_charger_output_power")), data["inverters"].get(identifier, {}).get("dc_charger_output_power") != 0.0)[1],   # Log the identifier and return the original check result
+        # is_on_fn=lambda data, identifier: (_LOGGER.debug("DC charger identifier: %s, dc_charger_output_power: %s", identifier, data["inverters"].get(identifier, {}).get("dc_charger_output_power")), data["inverters"].get(identifier, {}).get("dc_charger_output_power") != 0.0)[1],   # Log the identifier and return the original check result
+        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_output_power") != 0.0,
 
 
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0), # TODO: Review this logic - Assuming DC charger controlled via inverter.

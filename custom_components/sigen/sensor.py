@@ -25,7 +25,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .modbusregisterdefinitions import (
     RunningState,
     ALARM_CODES,
-    UpdateFrequencyType,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .calculated_sensor import (
