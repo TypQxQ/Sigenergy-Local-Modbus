@@ -203,6 +203,7 @@ class StaticSensors:
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=3,
             icon="mdi:solar-power",
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_third_party_photovoltaic_power",
