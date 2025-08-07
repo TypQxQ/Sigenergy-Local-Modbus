@@ -371,6 +371,47 @@ PLANT_NUMBERS = [
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
     ),
+    # Additions for Modbus specification v2.7
+        SigenergyNumberEntityDescription(
+        key="plant_backup_soc",
+        name="ESS Backup State of Charge",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_backup_soc", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_backup_soc", value),
+        entity_registry_enabled_default=False,
+    ),
+        SigenergyNumberEntityDescription(
+        key="plant_charge_cut_off_soc",
+        name="ESS Charge Cut-Off State of Charge",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_charge_cut_off_soc", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_charge_cut_off_soc", value),
+        entity_registry_enabled_default=False,
+    ),
+        SigenergyNumberEntityDescription(
+        key="plant_discharge_cut_off_soc",
+        name="ESS Discharge Cut-Off State of Charge",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_discharge_cut_off_soc", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_discharge_cut_off_soc", value),
+        entity_registry_enabled_default=False,
+    ),
+
 ]
 
 INVERTER_NUMBERS = [

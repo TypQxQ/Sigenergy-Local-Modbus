@@ -36,3 +36,8 @@
 - plant_accumulated_grid_import_energy
 - inverter_accumulated_pv_energy
 - inverter_daily_pv_energy
+
+# Configurable values added:
+- plant_discharge_cut_off_soc
+- plant_charge_cut_off_soc
+- plant_backup_soc
