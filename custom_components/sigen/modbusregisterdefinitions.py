@@ -1587,7 +1587,7 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.U32,
         gain=1000,
-        unit=UnitOfPower.KILO_WATT,
+        # unit=UnitOfPower.KILO_WATT,
         description="Grid Point Maximum export limitation",
     ),
     "plant_grid_maximum_import_limitation": ModbusRegisterDefinition(
@@ -1596,7 +1596,7 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.U32,
         gain=1000,
-        unit=UnitOfPower.KILO_WATT,
+        # unit=UnitOfPower.KILO_WATT,
         description="Grid Point Maximum import limitation",
     ),
     "plant_pcs_maximum_export_limitation": ModbusRegisterDefinition(
@@ -1605,7 +1605,7 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.U32,
         gain=1000,
-        unit=UnitOfPower.KILO_WATT,
+        # unit=UnitOfPower.KILO_WATT,
         description="PCS maximum export limitation. Range: [0, 0xFFFFFFFE]. With value 0xFFFFFFFF, register is not valid. Takes effect globally.",
     ),
     "plant_pcs_maximum_import_limitation": ModbusRegisterDefinition(
@@ -1614,7 +1614,7 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.U32,
         gain=1000,
-        unit=UnitOfPower.KILO_WATT,
+        # unit=UnitOfPower.KILO_WATT,
         description="PCS maximum import limitation. Range: [0, 0xFFFFFFFE]. With value 0xFFFFFFFF, register is not valid. Takes effect globally.",
     ),
 
