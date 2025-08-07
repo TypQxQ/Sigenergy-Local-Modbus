@@ -771,17 +771,8 @@ class CoordinatorDiagnosticSensor(SigenergyEntity, SensorEntity):
         try:
             if key == "modbus_max_data_fetch_time":
                 value = coordinator.largest_update_interval
-            elif key == "modbus_latest_fetch_time_high":
-                value = coordinator._latest_fetch_times[UpdateFrequencyType.HIGH]
-            elif key == "modbus_latest_fetch_time_medium":
-                value = coordinator._latest_fetch_times[UpdateFrequencyType.MEDIUM]
-            elif key == "modbus_latest_fetch_time_low":
-                value = coordinator._latest_fetch_times[UpdateFrequencyType.LOW]
-            elif key == "modbus_latest_fetch_time_alarm":
-                value = coordinator._latest_fetch_times[UpdateFrequencyType.ALARM]
             else:
-                _LOGGER.warning("Unknown key for CoordinatorDiagnosticSensor: %s", key)
-                return None
+                value = coordinator.latest_fetch_time
 
             # Ensure the final value is a float or None
             if value is None:

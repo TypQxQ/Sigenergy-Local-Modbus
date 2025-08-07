@@ -33,10 +33,7 @@
           "inverter_slave_id": "Inverter Device ID (Default is 1)",
           "ac_charger_slave_ids": "AC Charger Device IDs (comma-separated when multiple. Default is empty for no AC charger)",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)",
-          "scan_interval_high": "High Priority Scan Interval (seconds)",
-          "scan_interval_medium": "Medium Priority Scan Interval (seconds)",
-          "scan_interval_low": "Low Priority Scan Interval (seconds)",
-          "scan_interval_alarm": "Alarm Scan Interval (seconds)",
+          "scan_interval": "Scan Interval (seconds)",
           "migrate_yaml": "Migrate legacy YAML sensor values",
           "migrate_yaml_description": "If enabled, initial sensor values will be imported from the legacy YAML configuration (if present).",
           "read_only": "Read-Only Mode",
@@ -150,15 +147,12 @@
       },
       "plant_config": {
         "title": "Reconfigure Sigenergy Plant",
-        "description": "Update the connection details and scan intervals for this Plant.\n\nHigh Priority Scan Interval is used for Power and Energy sensors.\nAlarm Scan Interval is used for Alarm sensors is usually set to same as Medium.\nScan intervals must be a multiple of the High Scan Interval.",
+        "description": "Update the connection details and scan interval for this Plant.",
         "data": {
           "host": "Host (IP address)",
           "port": "Port",
           "read_only": "Read-Only Mode",
-          "scan_interval_high": "High Priority Scan Interval (seconds)",
-          "scan_interval_alarm": "Alarm Scan Interval (seconds)",
-          "scan_interval_medium": "Medium Priority Scan Interval (seconds)",
-          "scan_interval_low": "Low Priority Scan Interval (seconds)"
+          "scan_interval": "Scan Interval (seconds)"
         },
         "data_description": {
           "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)"
