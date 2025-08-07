@@ -736,7 +736,7 @@ class SigenergyModbusHub:
                     if entity_id:
                         entry = registry.async_get(entity_id)
                         if entry and entry.disabled:
-                            _LOGGER.warning("Skipping disabled PV string entity %s", entity_id)
+                            # _LOGGER.warning("Skipping disabled PV string entity %s", entity_id)
                             continue
                     # No debug messages for non-existent PV string entities to reduce log noise
             else:
@@ -750,7 +750,7 @@ class SigenergyModbusHub:
                 if entity_id:
                     entry = registry.async_get(entity_id)
                     if entry and entry.disabled:
-                        _LOGGER.warning("Skipping disabled entity %s", entity_id)
+                        # _LOGGER.warning("Skipping disabled entity %s", entity_id)
                         continue
                 # No debug messages for non-existent entities to reduce log noise
 

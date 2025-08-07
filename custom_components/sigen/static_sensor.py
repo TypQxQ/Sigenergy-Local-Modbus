@@ -212,6 +212,7 @@ class StaticSensors:
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=3,
             icon="mdi:solar-power",
+            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_power",
@@ -427,7 +428,6 @@ class StaticSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.TOTAL,
             round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
             icon="mdi:home-lightning-bolt",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
@@ -719,9 +719,134 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             entity_registry_enabled_default=False,
         ),
-
-
-            
+        SigenergySensorEntityDescription(
+            key="plant_total_generation_of_third_party_inverter",
+            name="Total Generation of Third Party Inverter",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            icon="mdi:home-lightning-bolt",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_battery_charge_energy",
+            name="Total Charged Energy of the ESS",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+            icon="mdi:battery-positive",
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_battery_discharge_energy",
+            name="Total Discharged Energy of the ESS",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+            icon="mdi:battery-negative",
+            suggested_display_precision=2,
+            round_digits=6, # Match other energy sensors
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR, # Suggest a different unit for display
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_total_charged_energy_of_the_evdc",
+            name="Total Charged Energy of the EVDC",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+            icon="mdi:ev-station",
+            suggested_display_precision=2,
+            round_digits=6, # Match other energy sensors
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR, # Suggest a different unit for display
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_total_discharged_energy_of_the_evdc",
+            name="Total Discharged Energy of the EVDC",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+            icon="mdi:ev-station",
+            suggested_display_precision=2,
+            round_digits=6, # Match other energy sensors
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR, # Suggest a different unit for display
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_grid_import_energy",
+            name="Total Imported Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            icon="mdi:transmission-tower-import",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_accumulated_grid_export_energy",
+            name="Total Exported Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            icon="mdi:transmission-tower-export",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_total_energy_output_of_oil_fueled_generator",
+            name="Total Energy Output of Oil Fueled Generator",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            icon="mdi:transmission-tower-export",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_total_charged_energy_of_the_evac",
+            name="Total Charged Energy of the EVAC",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            icon="mdi:transmission-tower-export",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_total_generation_of_self_pv",
+            name="Total Generation of Self PV",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            icon="mdi:transmission-tower-export",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_total_charged_energy_of_the_evac",
+            name="Total Charged Energy of the EVAC",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            icon="mdi:transmission-tower-export",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
+            entity_registry_enabled_default=False,
+        ),
     ]
 
     INVERTER_SENSORS = [

@@ -44,11 +44,6 @@ _LOGGER = logging.getLogger(__name__)
 
 # Only log for these entities
 LOG_THIS_ENTITY = [
-    # "sensor.sigen_plant_accumulated_consumed_energy",
-    # "sensor.sigen_plant_accumulated_grid_import_energy",
-    # "sensor.sigen_plant_accumulated_pv_energy",
-    # "sigen_plant_accumulated_battery_charge_energy",
-    # "sensor.sigen_plant_accumulated_pv_energy",
     # "sensor.sigen_plant_daily_pv_energy",
 ]
 
@@ -1163,32 +1158,32 @@ class SigenergyCalculatedSensors:
             suggested_display_precision=3,
             round_digits=6,
         ),
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_battery_charge_energy",
-            name="Accumulated Battery Charge Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
-            icon="mdi:battery-positive",
-            value_fn=SigenergyCalculations.calculate_accumulated_battery_charge_energy,
-            extra_fn_data=True, # Pass coordinator data to value_fn
-            suggested_display_precision=3,
-            round_digits=6, # Match other energy sensors
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_battery_discharge_energy",
-            name="Accumulated Battery Discharge Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            state_class=SensorStateClass.TOTAL, # Assumes this value only increases
-            icon="mdi:battery-negative",
-            value_fn=SigenergyCalculations.calculate_accumulated_battery_discharge_energy,
-            extra_fn_data=True, # Pass coordinator data to value_fn
-            suggested_display_precision=3,
-            round_digits=6, # Match other energy sensors
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_battery_charge_energy",
+        #     name="Accumulated Battery Charge Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+        #     icon="mdi:battery-positive",
+        #     value_fn=SigenergyCalculations.calculate_accumulated_battery_charge_energy,
+        #     extra_fn_data=True, # Pass coordinator data to value_fn
+        #     suggested_display_precision=3,
+        #     round_digits=6, # Match other energy sensors
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_battery_discharge_energy",
+        #     name="Accumulated Battery Discharge Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     state_class=SensorStateClass.TOTAL, # Assumes this value only increases
+        #     icon="mdi:battery-negative",
+        #     value_fn=SigenergyCalculations.calculate_accumulated_battery_discharge_energy,
+        #     extra_fn_data=True, # Pass coordinator data to value_fn
+        #     suggested_display_precision=3,
+        #     round_digits=6, # Match other energy sensors
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR # Suggest a different unit for display
+        # ),
         SigenergySensorEntityDescription(
             key="plant_daily_battery_charge_energy",
             name="Daily Battery Charge Energy",
@@ -1273,32 +1268,32 @@ class SigenergyCalculatedSensors:
             max_sub_interval=timedelta(seconds=30),
             icon="mdi:solar-power",
         ),
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_grid_export_energy",
-            name="Accumulated Grid Export Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="plant_grid_export_power",  # Key matches the calculated sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:transmission-tower-export",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_accumulated_grid_import_energy",
-            name="Accumulated Grid Import Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="plant_grid_import_power",  # Key matches the calculated sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:transmission-tower-import",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_grid_export_energy",
+        #     name="Accumulated Grid Export Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="plant_grid_export_power",  # Key matches the calculated sensor
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:transmission-tower-export",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_accumulated_grid_import_energy",
+        #     name="Accumulated Grid Import Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="plant_grid_import_power",  # Key matches the calculated sensor
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:transmission-tower-import",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
         SigenergySensorEntityDescription(
             key="plant_daily_grid_export_energy",
             name="Daily Grid Export Energy",
