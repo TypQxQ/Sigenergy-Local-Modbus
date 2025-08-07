@@ -408,13 +408,12 @@ class StaticSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.TOTAL,
             round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
             icon="mdi:solar-power",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
         SigenergySensorEntityDescription(
             key="plant_daily_consumed_energy",
-            name="Total Load Daily Consumption",
+            name="Daily Load Consumption",
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
             icon="mdi:home-lightning-bolt",
@@ -1322,6 +1321,68 @@ class StaticSensors:
             entity_category=EntityCategory.DIAGNOSTIC,
             entity_registry_enabled_default=False,
         ),
+        # Sensors added in Modbus Specification v.2.7
+        SigenergySensorEntityDescription(
+            key="inverter_active_power_fixed_value_adjustment_feedback",
+            name="Active Power Fixed Value Adjustment Feedback",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="inverter_reactive_power_fixed_value_adjustment_feedback",
+            name="Reactive Power Fixed Value Adjustment Feedback",
+            state_class=SensorStateClass.MEASUREMENT,
+            native_unit_of_measurement="kvar",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="inverter_active_power_percentage_adjustment_feedback",
+            name="Active Power Percentage Adjustment Feedback",
+            state_class=SensorStateClass.MEASUREMENT,
+            native_unit_of_measurement="%",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="inverter_reactive_power_qs_adjustment_feedback",
+            name="Reactive Power Q/S Adjustment Feedback",
+            state_class=SensorStateClass.MEASUREMENT,
+            native_unit_of_measurement="%",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="inverter_power_factor_adjustment_feedback",
+            name="Power Factor Adjustment Feedback",
+            state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="inverter_daily_pv_energy",
+            name="Daily PV Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            round_digits=6,
+            icon="mdi:solar-power",
+        ),
+        SigenergySensorEntityDescription(
+            key="inverter_accumulated_pv_energy",
+            name="Total PV Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL,
+            round_digits=6,
+            icon="mdi:solar-power",
+            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        ),
+
         # This sensors are unkonown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
         # They are undocumented.
         # SigenergySensorEntityDescription(

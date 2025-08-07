@@ -20,7 +20,11 @@
 - plant_total_generation_of_self_pv
 - plant_total_charged_energy_of_the_evac
 - plant_total_energy_output_of_oil_fueled_generator
-- 
+- inverter_power_factor_adjustment_feedback
+- inverter_reactive_power_qs_adjustment_feedback
+- inverter_active_power_percentage_adjustment_feedback
+- inverter_reactive_power_fixed_value_adjustment_feedback
+- inverter_active_power_fixed_value_adjustment_feedback
 
 # This sensors have moved from calculated to static sensors, regaining history
 - plant_accumulated_battery_charge_energy
@@ -30,3 +34,5 @@
 - plant_accumulated_pv_energy
 - plant_accumulated_grid_export_energy
 - plant_accumulated_grid_import_energy
+- inverter_accumulated_pv_energy
+- inverter_daily_pv_energy

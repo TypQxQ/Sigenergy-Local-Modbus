@@ -2627,7 +2627,7 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         description="Power factor adjustment feedback",
         update_frequency=UpdateFrequencyType.LOW,
     ),
-    "inverter_pv_daily_generation": ModbusRegisterDefinition(
+    "inverter_daily_pv_energy": ModbusRegisterDefinition(
         address=31509,
         count=2,
         register_type=RegisterType.READ_ONLY,
@@ -2637,7 +2637,7 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         description="PV daily generation",
         update_frequency=UpdateFrequencyType.LOW,
     ),
-    "inverter_pv_total_generation": ModbusRegisterDefinition(
+    "inverter_accumulated_pv_energy": ModbusRegisterDefinition(
         address=31511,
         count=2,
         register_type=RegisterType.READ_ONLY,

@@ -1347,31 +1347,31 @@ class SigenergyCalculatedSensors:
 
     # Add the inverter integration sensors list
     INVERTER_INTEGRATION_SENSORS = [
-        SigenergySensorEntityDescription(
-            key="inverter_accumulated_pv_energy",
-            name="Accumulated PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:solar-power",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
-        ),
-        SigenergySensorEntityDescription(
-            key="inverter_daily_pv_energy",
-            name="Daily PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:solar-power",
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="inverter_accumulated_pv_energy",
+        #     name="Accumulated PV Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL,
+        #     source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:solar-power",
+        #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="inverter_daily_pv_energy",
+        #     name="Daily PV Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        #     source_key="inverter_pv_power",  # Key matches the sensor in static_sensor.py
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:solar-power",
+        # ),
     ]
     # Integration sensors for individual PV strings (dynamically created)
     PV_INTEGRATION_SENSORS = [
