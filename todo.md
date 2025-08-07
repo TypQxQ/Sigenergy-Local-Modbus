@@ -5,9 +5,6 @@
 
 # Changes in 2.7
 
-# This calculated sensors are deprecated as of 2.7:
-- ( plant_daily_pv_energy )
-
 # This are missing yet:
 - plant_pv_daily_total_generation 
 

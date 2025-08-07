@@ -513,6 +513,20 @@ class SigenergyCalculations:
             "CS][Daily Batt Discharge"
         )
 
+    @staticmethod
+    def calculate_plant_daily_pv_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Calculate the total daily PV energy across all inverters."""
+        # _LOGGER.debug("[CS][Daily PV] Calculating daily PV energy")
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_daily_pv_energy",
+            "CS][Daily PV"
+        )
+
 
 class IntegrationTrigger(Enum):
     """Trigger type for integration calculations."""
@@ -1158,6 +1172,18 @@ class SigenergyCalculatedSensors:
             suggested_display_precision=3,
             round_digits=6,
         ),
+        SigenergySensorEntityDescription(
+            key="plant_daily_pv_energy",
+            name="Daily PV Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            value_fn=SigenergyCalculations.calculate_plant_daily_pv_energy,
+            extra_fn_data=True,  # Pass coordinator data to value_fn
+            max_sub_interval=timedelta(seconds=30),
+            icon="mdi:solar-power",
+        ),
         # SigenergySensorEntityDescription(
         #     key="plant_accumulated_battery_charge_energy",
         #     name="Accumulated Battery Charge Energy",
@@ -1256,18 +1282,18 @@ class SigenergyCalculatedSensors:
         #     icon="mdi:solar-power",
         #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         # ),
-        SigenergySensorEntityDescription(
-            key="plant_daily_pv_energy",
-            name="Daily PV Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:solar-power",
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_daily_pv_energy",
+        #     name="Daily PV Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        #     source_key="plant_photovoltaic_power",  # Key matches the PV power sensor
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:solar-power",
+        # ),
         # SigenergySensorEntityDescription(
         #     key="plant_accumulated_grid_export_energy",
         #     name="Accumulated Grid Export Energy",
