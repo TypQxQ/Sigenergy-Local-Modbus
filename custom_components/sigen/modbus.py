@@ -733,12 +733,12 @@ class SigenergyModbusHub:
                     unique_device_part = generate_device_id(device_name, device_type_log_prefix)
                     unique_id = f"{self.config_entry.entry_id}_{unique_device_part}_pv{pv_string_idx}_{attr_key}"
                     
-                    entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
                     if entity_id:
                         entry = registry.async_get(entity_id)
                         if entry and entry.disabled:
-                            # _LOGGER.warning("Skipping disabled PV string entity %s (unique_id=%s)", entity_id, unique_id)
+                            _LOGGER.warning("Skipping disabled PV string entity %s", entity_id)
                             continue
+                    # No debug messages for non-existent PV string entities to reduce log noise
             else:
                 # Handle regular (non-PV string) registers
                 unique_device_part = generate_device_id(device_name, device_type_log_prefix)
@@ -750,16 +750,9 @@ class SigenergyModbusHub:
                 if entity_id:
                     entry = registry.async_get(entity_id)
                     if entry and entry.disabled:
-                        # _LOGGER.warning("Skipping disabled entity %s (unique_id=%s)", entity_id, unique_id)
+                        _LOGGER.warning("Skipping disabled entity %s", entity_id)
                         continue
-                    elif not entry:
-                        _LOGGER.debug("Checking regular entity: device_name=%s, device_type=%s, unique_device_part=%s, register_name=%s, attr_key=%s, unique_id=%s", 
-                                    device_name, device_type_log_prefix, unique_device_part, register_name, attr_key, unique_id)
-                        _LOGGER.debug("Could not get entry for entity %s (unique_id=%s)", entity_id, unique_id)
-                else:
-                    _LOGGER.debug("Checking regular entity: device_name=%s, device_type=%s, unique_device_part=%s, register_name=%s, attr_key=%s, unique_id=%s", 
-                                device_name, device_type_log_prefix, unique_device_part, register_name, attr_key, unique_id)
-                    _LOGGER.debug("Could not get entity_id for unique_id: %s with log_prefix=%s", unique_id, device_type_log_prefix)
+                # No debug messages for non-existent entities to reduce log noise
 
             if register_def.is_supported is not False:  # Read if supported or unknown
                 try:
