@@ -102,7 +102,14 @@ AC_CHARGER_SWITCHES = [
         name="AC Charger Power",
         icon="mdi:ev-station",
         # identifier here will be ac_charger_name
-        is_on_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_system_state") not in ("Initializing", "Fault", "Error", "Not Connected"),
+        is_on_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_system_state") not in (
+            "Initializing",
+            "Fault",
+            "Error",
+            "Not Connected",
+            "Reserving - Charger & EV Not Ready",
+            "EV Ready, Charger Not Ready",
+        ),
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
     ),
