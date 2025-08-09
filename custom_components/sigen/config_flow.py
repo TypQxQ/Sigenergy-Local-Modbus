@@ -69,7 +69,7 @@ from .const import (
     CONF_PARENT_INVERTER_ID,
     STEP_SELECT_DEVICE,
     STEP_ACCUMULATED_ENERGY_CONFIG,
-    RESETABLE_SENSORS,
+    RESETTABLE_SENSORS,
     CONF_VALUES_TO_INIT,
 )
 from .common import (safe_decimal, safe_float)
@@ -1161,7 +1161,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         def generate_accumulated_energy_schema(data_source: Dict):
             # Define the schema for the accumulated energy sensor configuration
             schema = {}
-            for sensor, sensor_name in RESETABLE_SENSORS.items():
+            for sensor, sensor_name in RESETTABLE_SENSORS.items():
                 current_value = self.hass.states.get(sensor)
                 if not current_value:
                     _LOGGER.debug("Sensor %s not found in states", sensor)
@@ -1189,7 +1189,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
         # Validate the user input and update the configuration
         errors = {}
-        for sensor in RESETABLE_SENSORS.keys():
+        for sensor in RESETTABLE_SENSORS.keys():
             if user_input.get(sensor) == "":
                 errors[sensor] = "required value"
             elif not isinstance(user_input.get(sensor), float):
@@ -1206,7 +1206,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # If chose to reset values, save sensor values to reset.
         values_to_initialize = {}
         for sensor, value in user_input.items():
-            if sensor in RESETABLE_SENSORS:
+            if sensor in RESETTABLE_SENSORS:
                 values_to_initialize[sensor] = value * 1000000.0  # Convert to MW
                 _LOGGER.debug("Adding %s as init value for %s", value, sensor)
 

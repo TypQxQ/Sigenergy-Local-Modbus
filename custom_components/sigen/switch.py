@@ -42,7 +42,7 @@ class SigenergySwitchEntityDescription(SwitchEntityDescription):
     entity_registry_enabled_default: bool = True
 
 
-PLANT_SWITCHES = [
+PLANT_SWITCHES: list[SigenergySwitchEntityDescription] = [
     SigenergySwitchEntityDescription(
         key="plant_start_stop",
         name="Plant Power",
@@ -56,7 +56,7 @@ PLANT_SWITCHES = [
         key="plant_remote_ems_enable",
         name="Remote EMS (Controled by Home Assistant)",
         icon="mdi:home-assistant",
-        is_on_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
+        is_on_fn=lambda data, _: data.get("plant", {}).get("plant_remote_ems_enable") == 1,
         turn_on_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_remote_ems_enable", 1),
         turn_off_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_remote_ems_enable", 0),
         entity_registry_enabled_default=False,
@@ -66,20 +66,20 @@ PLANT_SWITCHES = [
         name="Independent Phase Power Control",
         icon="mdi:tune",
         entity_category=EntityCategory.CONFIG,
-        is_on_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1, # Sync
+        is_on_fn=lambda data, _: data.get("plant", {}).get("plant_independent_phase_power_control_enable") == 1,
         turn_on_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_independent_phase_power_control_enable", 1),
         turn_off_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_independent_phase_power_control_enable", 0),
         entity_registry_enabled_default=False,
     ),
 ]
 
-INVERTER_SWITCHES = [
+INVERTER_SWITCHES: list[SigenergySwitchEntityDescription] = [
     SigenergySwitchEntityDescription(
         key="inverter_start_stop",
         name="Inverter Power",
         icon="mdi:power",
         # Use device_name (inverter_name) instead of device_id (now passed as the second arg 'identifier')
-        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_running_state") == 1,
+        is_on_fn=lambda data, identifier: data.get("inverters", {}).get(identifier, {}).get("inverter_running_state") == 1,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_start_stop", 1),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_start_stop", 0),
         entity_registry_enabled_default=False,
@@ -90,38 +90,32 @@ INVERTER_SWITCHES = [
         icon="mdi:remote",
         entity_category=EntityCategory.CONFIG,
         # Use device_name (inverter_name) instead of device_id (now passed as the second arg 'identifier')
-        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_remote_ems_dispatch_enable") == 1,
+        is_on_fn=lambda data, identifier: data.get("inverters", {}).get(identifier, {}).get("inverter_remote_ems_dispatch_enable") == 1,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 1),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 0),
         entity_registry_enabled_default=False,
     ),
 ]
-AC_CHARGER_SWITCHES = [
+AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
     SigenergySwitchEntityDescription(
         key="ac_charger_start_stop",
         name="AC Charger Power",
         icon="mdi:ev-station",
         # identifier here will be ac_charger_name
-        is_on_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_system_state") not in ("Initializing", "Fault", "Error", "Not Connected"),
+        is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") not in ("Initializing", "Fault", "Error", "Not Connected"),
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
     ),
 ]
 
-DC_CHARGER_SWITCHES = [
+DC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
     SigenergySwitchEntityDescription(
         key="dc_charger_start_stop",
         name="DC Charger",
         icon="mdi:ev-station",
-        # consider changing is_on_fn to check for dc_charger_output_power > 0 if the below doesn't work
-        # identifier here is dc_charger_id (but it's accessing inverter data?) - This seems wrong, needs review based on coordinator data structure
-        # is_on_fn=lambda data, identifier: (_LOGGER.debug("DC charger identifier: %s, dc_charger_output_power: %s", identifier, data["inverters"].get(identifier, {}).get("dc_charger_output_power")), data["inverters"].get(identifier, {}).get("dc_charger_output_power") != 0.0)[1],   # Log the identifier and return the original check result
-        is_on_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("dc_charger_output_power") != 0.0,
-
-
-        turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0), # TODO: Review this logic - Assuming DC charger controlled via inverter.
-
-        turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1), # TODO: Review this logic - Assuming DC charger controlled via inverter.
+        is_on_fn=lambda data, identifier: data.get("inverters", {}).get(identifier, {}).get("dc_charger_output_power", 0) > 0,
+        turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
+        turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
     ),
 ]
 
@@ -134,22 +128,35 @@ async def async_setup_entry(
     """Set up the Sigenergy switch platform."""
     coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     plant_name = config_entry.data[CONF_NAME]
-    # Add plant Switches
-    entities : list[SigenergySwitch] = generate_sigen_entity(plant_name, None, None, coordinator, SigenergySwitch,
-                                           PLANT_SWITCHES, DEVICE_TYPE_PLANT)
+    entities_to_add = []
 
-    # Add inverter Switches
+    # Helper to add entities to the list
+    def add_entities_for_device(device_name, device_conn, entity_descriptions, device_type, **kwargs):
+        entities_to_add.extend(
+            generate_sigen_entity(
+                plant_name,
+                device_name,
+                device_conn,
+                coordinator,
+                SigenergySwitch,
+                entity_descriptions,
+                device_type,
+                **kwargs,
+            )
+        )
+
+    # Plant Switches
+    add_entities_for_device(None, None, PLANT_SWITCHES, DEVICE_TYPE_PLANT)
+
+    # Inverter and related switches
     for device_name, device_conn in coordinator.hub.inverter_connections.items():
-        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator, 
-                                          SigenergySwitch, INVERTER_SWITCHES, DEVICE_TYPE_INVERTER)
+        add_entities_for_device(device_name, device_conn, INVERTER_SWITCHES, DEVICE_TYPE_INVERTER)
 
-        # Add DC charger sensors
+        # DC Charger
         if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
             dc_name = f"{device_name} DC Charger"
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
-
-            # Create device info
             dc_device_info = DeviceInfo(
                 identifiers={(DOMAIN, dc_id)},
                 name=dc_name,
@@ -157,28 +164,18 @@ async def async_setup_entry(
                 model="DC Charger",
                 via_device=(DOMAIN, parent_inverter_id),
             )
+            add_entities_for_device(device_name, device_conn, DC_CHARGER_SWITCHES, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
 
-            # Static Sensors:
-            async_add_entities(
-                generate_sigen_entity(
-                    plant_name,
-                    device_name,
-                    device_conn,
-                    coordinator,
-                    SigenergySwitch,
-                    DC_CHARGER_SWITCHES,
-                    DEVICE_TYPE_DC_CHARGER,
-                    device_info=dc_device_info
-                )
-            )
-
-    # Add AC charger Switches
+    # AC Charger Switches
     for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
-        entities += generate_sigen_entity(plant_name, device_name, device_conn, coordinator,
-                                          SigenergySwitch, AC_CHARGER_SWITCHES,
-                                          DEVICE_TYPE_AC_CHARGER)
-    async_add_entities(entities)
-    return
+        add_entities_for_device(device_name, device_conn, AC_CHARGER_SWITCHES, DEVICE_TYPE_AC_CHARGER)
+
+    if entities_to_add:
+        async_add_entities(entities_to_add)
+        _LOGGER.debug("Added %d switch entities", len(entities_to_add))
+    else:
+        _LOGGER.debug("No switch entities to add.")
+
 
 class SigenergySwitch(SigenergyEntity, SwitchEntity):
     """Representation of a Sigenergy switch."""
@@ -193,13 +190,12 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
         description: SigenergySwitchEntityDescription,
         name: str,
         device_type: str,
-        device_id: Optional[str] = None, # Changed to Optional[str]
-        device_name: Optional[str] = "",
+        device_id: Optional[str] = None,
+        device_name: str = "",
         device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the switch."""
-        # Call the base class __init__
         super().__init__(
             coordinator=coordinator,
             description=description,
@@ -210,32 +206,23 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
             device_info=device_info,
             pv_string_idx=pv_string_idx,
         )
-        # No switch-specific init needed for now
 
     @property
     def is_on(self) -> bool:
         """Return true if the switch is on."""
         if self.coordinator.data is None:
             return False
-            
-        # Pass device_name for inverters, device_id otherwise
-        # Use device_name as the primary identifier passed to the lambda,
-        # consistent with base class setup and other platforms.
-        # The lambda itself needs to handle how to access data (e.g., using device_name for inverters/AC, or potentially device_id for AC if needed)
         identifier = self._device_name
         return self.entity_description.is_on_fn(self.coordinator.data, identifier)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
-        # Pass device_name for inverters, device_id otherwise
-        identifier = self._device_name # Use device_name for both Inverter and AC Charger now
-        # Exceptions are handled and logged in coordinator.async_write_parameter
-        await self.entity_description.turn_on_fn(self.coordinator, identifier) # Pass coordinator
-
+        identifier = self._device_name
+        await self.entity_description.turn_on_fn(self.coordinator, identifier)
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
-        # Pass device_name for inverters, device_id otherwise
-        identifier = self._device_name # Use device_name for both Inverter and AC Charger now
-        # Exceptions are handled and logged in coordinator.async_write_parameter
-        await self.entity_description.turn_off_fn(self.coordinator, identifier) # Pass coordinator
+        identifier = self._device_name
+        await self.entity_description.turn_off_fn(self.coordinator, identifier)
+        await self.coordinator.async_request_refresh()

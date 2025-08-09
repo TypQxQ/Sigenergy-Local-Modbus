@@ -95,7 +95,7 @@ LEGACY_SENSOR_MIGRATION_MAP = {
     "sensor.sigen_plant_accumulated_grid_export_energy": "sensor.sigen_accumulated_grid_energy_export",
 }
 
-RESETABLE_SENSORS =  {
+RESETTABLE_SENSORS =  {
     "sensor.sigen_plant_accumulated_pv_energy": "Plant Accumulated PV Energy",
     "sensor.sigen_plant_accumulated_consumed_energy": "Plant Accumulated Consumed Energy",
     "sensor.sigen_plant_accumulated_grid_import_energy": "Plant Accumulated Grid Import Energy",

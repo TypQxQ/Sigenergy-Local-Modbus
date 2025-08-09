@@ -383,21 +383,21 @@ class SigenergyCalculations:
         # Calculate plant consumed power
         # Note: battery_power is positive when charging, negative when discharging
         try:
-            consumed_power = pv_power + grid_import - grid_export - battery_power - total_ac_charger_power - total_dc_charger_power
+            # The household consumption should include the power used by the EV chargers.
+            # The chargers are loads within the household.
+            consumed_power = pv_power + grid_import - grid_export - battery_power
 
             # Sanity check
             if consumed_power < 0:
                 _LOGGER.debug(
                     "[CS][Plant Consumed] Calculated power is negative.\n" \
-                    "consumed_power = pv_power + grid_import - grid_export - battery_power - total_ac_charger_power - total_dc_charger_power:\n" \
-                    "%s kW = %s + %s - %s - %s - %s - %s",
+                    "consumed_power = pv_power + grid_import - grid_export - battery_power:\n" \
+                    "%s kW = %s + %s - %s - %s",
                     consumed_power,
                     pv_power,
                     grid_import,
                     grid_export,
-                    battery_power,
-                    total_ac_charger_power,
-                    total_dc_charger_power
+                    battery_power
                 )
                 # Keep the negative value as it might be valid in some scenarios
 
@@ -543,7 +543,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         name: str,
         device_type: str,
         device_id: Optional[str] = None,
-        device_name: Optional[str] = "",
+        device_name: str = "",
         device_info: Optional[DeviceInfo] = None,
         source_entity_id: str = "",
         pv_string_idx: Optional[int] = None,
@@ -572,19 +572,12 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         # Sensor-specific initialization
         self._source_entity_id = source_entity_id
-        self._round_digits = getattr(description, "round_digits", None)
-        self._max_sub_interval = getattr(description, "max_sub_interval", None)
+        self._round_digits = getattr(description, "round_digits", 6)
+        self._max_sub_interval = getattr(description, "max_sub_interval", timedelta(seconds=30))
         self.log_this_entity = False
         self._last_coordinator_update = None
 
         # Time tracking variables
-        self._max_sub_interval = (
-            None  # disable time based integration
-            if self._max_sub_interval is None
-            or self._max_sub_interval.total_seconds() == 0
-            else self._max_sub_interval
-        )
-
         self._max_sub_interval_exceeded_callback = lambda *args: None  # Just a placeholder
         self._cancel_max_sub_interval_exceeded_callback = None  # Will store the cancel handle
         self._last_integration_time = dt_util.utcnow()
@@ -847,33 +840,26 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         # Cancel existing timer safely
         if self._cancel_max_sub_interval_exceeded_callback is not None:
-            # Only log for specific entities
-            if self.log_this_entity:
-                _LOGGER.debug(
-                    "[%s] Cancelling timer due to state change", self.entity_id
-                )
             self._cancel_max_sub_interval_exceeded_callback()
             self._cancel_max_sub_interval_exceeded_callback = None
 
         now = dt_util.utcnow()
-        # Compare coordinator update time and elapsed interval
-        coordinatorTime = self.coordinator.last_update_success or now
-        timeSinceLast = (now - self._last_integration_time).total_seconds()
-        if coordinatorTime == getattr(self, "_last_coordinator_update", None) \
-           and timeSinceLast < DEFAULT_MIN_INTEGRATION_TIME:
-            _LOGGER.debug("Skipping integration: %s, interval too short: %s", self.name, timeSinceLast)
-        else:
-            self._last_coordinator_update = coordinatorTime
-            try:
-                self._integrate_on_state_change(old_state, new_state)
-                self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
-                self._last_integration_time = now
-                # _LOGGER.debug(f"[_integrate_on_state_change_with_max_sub_interval] Setting _last_integration_time: {self._last_integration_time.time()}")
-            except Exception as ex:
-                _LOGGER.warning("Integration error: %s", ex)
-            finally:
-                # Reschedule timer after processing state change
-                self._schedule_max_sub_interval_exceeded_if_state_is_numeric(new_state)
+        time_since_last = (now - self._last_integration_time).total_seconds()
+
+        if time_since_last < DEFAULT_MIN_INTEGRATION_TIME:
+            if self.log_this_entity:
+                _LOGGER.debug("Skipping integration for %s, interval too short: %.2fs", self.name, time_since_last)
+            return
+
+        try:
+            self._integrate_on_state_change(old_state, new_state)
+            self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
+            self._last_integration_time = now
+        except Exception as ex:
+            _LOGGER.warning("Integration error for %s: %s", self.entity_id, ex)
+        finally:
+            # Reschedule timer after processing state change
+            self._schedule_max_sub_interval_exceeded_if_state_is_numeric(new_state)
 
     def _integrate_on_state_change(
         self, old_state: State | None, new_state: State | None
@@ -930,114 +916,45 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             and (source_state_dec := self._decimal_state(source_state.state))
             is not None
         ):
-            # Only log scheduling for specific entities
 
             @callback
             def _integrate_on_max_sub_interval_exceeded_callback(now: datetime) -> None:
                 """Integrate based on time and reschedule."""
                 if self.log_this_entity:
-                    _LOGGER.debug(
-                        "[%s] Timer callback executed at %s", self.entity_id, now
-                    )
-                # ... existing checks ...
+                    _LOGGER.debug("[%s] Timer callback executed at %s", self.entity_id, now)
 
-                # Check if a state change happened very recently to avoid double updates
                 time_since_last = now - self._last_integration_time
-                # Use fixed buffer of 5 seconds
                 if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT and time_since_last < timedelta(seconds=5):
                     if self.log_this_entity:
                         _LOGGER.debug(
                             "[%s] Skipping timer integration; state change occurred %s ago. Rescheduling only.",
-                            self.entity_id,
-                            time_since_last,
+                            self.entity_id, time_since_last
                         )
-                    # Only reschedule the next integration
-                    source_state_obj = self.hass.states.get(self._source_entity_id)
-                    if source_state_obj: # Ensure state object exists before rescheduling
-                        self._schedule_max_sub_interval_exceeded_if_state_is_numeric(
-                            source_state_obj)
+                    self._schedule_max_sub_interval_exceeded_if_state_is_numeric(self.hass.states.get(self._source_entity_id))
                     return
 
-                if self.log_this_entity:
-                    _LOGGER.debug("[%s] Performing timer-based integration", self.entity_id)
+                elapsed_seconds = safe_decimal((now - self._last_integration_time).total_seconds())
+                if not elapsed_seconds:
+                    return
 
-                elapsed_seconds = safe_decimal(
-                    (now - self._last_integration_time).total_seconds()
-                )
-                if self.log_this_entity:
-                    _LOGGER.debug(
-                        "[%s] Timer - Elapsed seconds: %s, Last state decimal: %s",
-                        self.entity_id,
-                        elapsed_seconds,
-                        source_state_dec, # Log the state value used
-                    )
-
-                # Calculate area with constant state
                 try:
-                    if elapsed_seconds and source_state:
-                        area = elapsed_seconds * source_state_dec
-                    else:
-                        raise ValueError(
-                            "Elapsed seconds or source state is invalid for area calculation"
-                        )
+                    area = elapsed_seconds * source_state_dec
                 except (ValueError, TypeError) as e:
                     _LOGGER.warning(
-                        "[%s] Timer - Error calculating area. elapsed_seconds: %s, state: %s, error: %s",
-                        self.entity_id,
-                        elapsed_seconds,
-                        source_state_dec,
-                        e,
+                        "[%s] Timer - Error calculating area: %s", self.entity_id, e
                     )
                     return
 
-                if self.log_this_entity:
-                    _LOGGER.debug("[%s] Timer - Calculated area: %s", self.entity_id, area)
+                self._update_integral(area)
+                self.async_write_ha_state()
 
-                # Store state before update for logging
-                state_before = self._state
-
-                # Update the integral
-                self._update_integral(area) # Logging is now inside _update_integral
-
-                if self.log_this_entity:
-                    _LOGGER.debug(
-                        "[%s] Timer - State before update: %s, State after update: %s",
-                        self.entity_id,
-                        state_before,
-                        self._state, # Log the state after update
-                    )
-
-                # Write state
-                if self.log_this_entity:
-                    _LOGGER.debug(
-                        "[%s] Timer - Calling _async_write_ha_state(force_refresh=True) with state: %s",
-                        self.entity_id,
-                        self._state,
-                    )
-                self._attr_force_update = True  # Force update on state change
-                self._async_write_ha_state()
-                self._attr_force_update = False  # Force update on state change
-                if self.log_this_entity:
-                    _LOGGER.debug("[%s] Timer - Called _async_write_ha_state(force_refresh=True)", self.entity_id)
-
-
-                # Update tracking variables
-                self._last_integration_time = dt_util.utcnow() # Use utcnow for consistency
+                self._last_integration_time = now
                 self._last_integration_trigger = IntegrationTrigger.TIME_ELAPSED
+                self._schedule_max_sub_interval_exceeded_if_state_is_numeric(source_state)
 
-                # Schedule the next integration
-                if self.log_this_entity:
-                    _LOGGER.debug("[%s] Rescheduling timer after execution", self.entity_id)
-                self._schedule_max_sub_interval_exceeded_if_state_is_numeric(
-                    source_state # Use the original source_state captured by closure
-                )
-
-            # Store the cancel handle correctly
             if self.log_this_entity:
                 _LOGGER.debug(
-                    "[%s] Scheduling timer with interval %s",
-                    self.entity_id,
-                    self._max_sub_interval,
+                    "[%s] Scheduling timer with interval %s", self.entity_id, self._max_sub_interval
                 )
             self._cancel_max_sub_interval_exceeded_callback = async_call_later(
                 self.hass,
@@ -1048,12 +965,9 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     @property
     def native_value(self) -> Decimal | None:
         """Return the state of the sensor."""
-        value = (
-            round(self._state, self._round_digits)
-            if isinstance(self._state, Decimal) and self._round_digits is not None
-            else self._state
-        )
-        return value
+        if self._state is None:
+            return None
+        return round(self._state, self._round_digits)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

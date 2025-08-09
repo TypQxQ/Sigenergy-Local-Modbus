@@ -17,7 +17,7 @@ from .const import (DOMAIN, DEVICE_TYPE_INVERTER, DEVICE_TYPE_DC_CHARGER)
 
 _LOGGER = logging.getLogger(__name__)
 
-@staticmethod
+
 def get_suffix_if_not_one(name: str) -> str:
     """Get the last part of the name if it is a number other than 1."""
     return name.split()[-1].strip() + " " if len(name.split()) > 1 and name.split()[-1].isdigit() and name.split()[-1] != "1" else ""
@@ -27,7 +27,6 @@ def generate_device_name(plant_name: str, device_name: str) -> str:
     device_type = " ".join(device_name.split()[:-1]) if len(device_name.split()) > 1 and device_name.split()[-1].isdigit() else device_name
     return f"Sigen {get_suffix_if_not_one(plant_name)}{device_type}{get_suffix_if_not_one(device_name)}"
 
-@staticmethod
 def generate_sigen_entity(
         plant_name: str,
         device_name: str | None,
@@ -133,7 +132,6 @@ def generate_sigen_entity(
                  entity_kwargs)
     return entities
 
-@staticmethod
 def get_source_entity_id(device_type, device_name, source_key, coordinator, hass, pv_string_idx: Optional[int] = None): # Add pv_string_idx
     """Get the source entity ID for an integration sensor."""
     # Try to find entities by unique ID pattern
@@ -169,7 +167,6 @@ def get_source_entity_id(device_type, device_name, source_key, coordinator, hass
     except Exception as ex: # pylint: disable=broad-exception-caught
         _LOGGER.warning("Error looking for entity with config entry ID: %s", ex)
 
-@staticmethod
 def generate_unique_entity_id(
         device_type: str,
         device_name: str | None,
@@ -188,7 +185,6 @@ def generate_unique_entity_id(
 
     return unique_id
 
-@staticmethod
 def generate_device_id(
     device_name: str | None,
     device_type: Optional[str] = None,
@@ -219,7 +215,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
         # Create a new instance with the base attributes
         if isinstance(description, cls):
             # If it's already our class, copy all attributes
-            result = cls(
+            return cls(
 				key=description.key,
 				name=description.name,
 				device_class=description.device_class,
@@ -229,26 +225,24 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 				value_fn=value_fn or description.value_fn,
 				extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
 				extra_params=extra_params or description.extra_params,
-				source_entity_id=getattr(description, "source_entity_id", None),
-				source_key=getattr(description, "source_key", None),
-				max_sub_interval=getattr(description, "max_sub_interval", None),
-				round_digits=getattr(description, "round_digits", None),
-				suggested_display_precision=getattr(description, "suggested_display_precision", None),
+				source_entity_id=description.source_entity_id,
+				source_key=description.source_key,
+				max_sub_interval=description.max_sub_interval,
+				round_digits=description.round_digits,
+				suggested_display_precision=description.suggested_display_precision,
 			)
-        else:
-            # It's a regular SensorEntityDescription
-            result = cls(
-                key=description.key,
-                name=description.name,
-                device_class=getattr(description, "device_class", None),
-                native_unit_of_measurement=getattr(description, "native_unit_of_measurement", None),
-                state_class=getattr(description, "state_class", None),
-                entity_registry_enabled_default=getattr(description, "entity_registry_enabled_default", True),
-                value_fn=value_fn,
-                extra_fn_data=extra_fn_data,
-                extra_params=extra_params,
-            )
-        return result
+        # It's a regular SensorEntityDescription
+        return cls(
+            key=description.key,
+            name=description.name,
+            device_class=getattr(description, "device_class", None),
+            native_unit_of_measurement=getattr(description, "native_unit_of_measurement", None),
+            state_class=getattr(description, "state_class", None),
+            entity_registry_enabled_default=getattr(description, "entity_registry_enabled_default", True),
+            value_fn=value_fn,
+            extra_fn_data=extra_fn_data,
+            extra_params=extra_params,
+        )
 
 def safe_float(value: Any, precision: int = 6) -> Optional[float]:
     """Convert to float only if possible, else None."""

@@ -38,19 +38,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub = SigenergyModbusHub(hass, entry)
     _LOGGER.debug("async_setup_entry: SigenergyModbusHub created: %s", hub)
 
-    try:
-        _LOGGER.debug("async_setup_entry: Connecting to Modbus hub...")
-        await hub.async_connect(entry.data[CONF_PLANT_CONNECTION])
-        _LOGGER.debug("async_setup_entry: Modbus hub connected successfully")
-    except Exception as ex:
-        _LOGGER.error(
-            "async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s",
-            host,
-            port,
-            ex
-        )
-        raise ConfigEntryNotReady(f"Error connecting to Sigenergy system: {ex}") from ex
-
     coordinator = SigenergyDataUpdateCoordinator(
         hass,
         _LOGGER,
@@ -60,9 +47,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     _LOGGER.debug("async_setup_entry: SigenergyDataUpdateCoordinator created: %s", coordinator)
 
-    _LOGGER.debug("async_setup_entry: Performing first refresh of coordinator...")
-    await coordinator.async_config_entry_first_refresh()
-    _LOGGER.debug("async_setup_entry: Coordinator first refresh completed")
+    try:
+        _LOGGER.debug("async_setup_entry: Connecting to Modbus hub and performing first refresh...")
+        await coordinator.async_config_entry_first_refresh()
+        _LOGGER.debug("async_setup_entry: Modbus hub connected and coordinator first refresh completed")
+    except ConfigEntryNotReady:
+        # This exception is already logged by the coordinator
+        # We can optionally add more context here if needed
+        _LOGGER.error("async_setup_entry: Initial data fetch failed. Deferring setup for %s.", entry.title)
+        # The coordinator's first refresh will re-raise ConfigEntryNotReady, which is what we want.
+        raise
+    except Exception as ex:
+        _LOGGER.error(
+            "async_setup_entry: An unexpected error occurred during initial setup for %s: %s",
+            entry.title,
+            ex,
+            exc_info=True
+        )
+        # Disconnect the hub before raising the exception
+        await hub.async_close()
+        raise ConfigEntryNotReady(f"Unexpected error during setup: {ex}") from ex
+
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
