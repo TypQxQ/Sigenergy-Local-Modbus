@@ -58,21 +58,43 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # Fetch all data at once
                 plant_data = await self.hub.async_read_plant_data()
 
-                # Fetch inverter data for each inverter
-                inverter_data = {}
-                dc_charger_data = {}
-                for inverter_name in self.hub.inverter_connections.keys():
-                    # Fetch inverter data
-                    inverter_data[inverter_name] = await self.hub.async_read_inverter_data(inverter_name)
-                    # Fetch DC charger data if the inverter supports it
-                    if self.hub.inverter_connections[inverter_name].get(CONF_INVERTER_HAS_DCCHARGER, False):
-                        dc_charger_data[inverter_name] = await self.hub.async_read_dc_charger_data(inverter_name)
+                # Fetch inverter and DC charger data concurrently
+                inverter_tasks = {
+                    name: asyncio.create_task(self.hub.async_read_inverter_data(name))
+                    for name in self.hub.inverter_connections
+                }
+                dc_tasks = {
+                    name: asyncio.create_task(self.hub.async_read_dc_charger_data(name))
+                    for name, cfg in self.hub.inverter_connections.items()
+                    if cfg.get(CONF_INVERTER_HAS_DCCHARGER, False)
+                }
+                inverter_data: dict[str, Any] = {}
+                for name, task in inverter_tasks.items():
+                    try:
+                        inverter_data[name] = await task
+                    except Exception as e:
+                        _LOGGER.error("Error fetching inverter %s data: %s", name, e)
+                        inverter_data[name] = {}
+                dc_charger_data: dict[str, Any] = {}
+                for name, task in dc_tasks.items():
+                    try:
+                        dc_charger_data[name] = await task
+                    except Exception as e:
+                        _LOGGER.error("Error fetching DC charger %s data: %s", name, e)
+                        dc_charger_data[name] = {}
 
-                # Fetch AC charger data for each AC charger
-                ac_charger_data = {}
-                for ac_charger_name in self.hub.ac_charger_connections.keys():
-                    # Fetch AC charger data
-                    ac_charger_data[ac_charger_name] = await self.hub.async_read_ac_charger_data(ac_charger_name)
+                # Fetch AC charger data concurrently
+                ac_tasks = {
+                    name: asyncio.create_task(self.hub.async_read_ac_charger_data(name))
+                    for name in self.hub.ac_charger_connections
+                }
+                ac_charger_data: dict[str, Any] = {}
+                for name, task in ac_tasks.items():
+                    try:
+                        ac_charger_data[name] = await task
+                    except Exception as e:
+                        _LOGGER.error("Error fetching AC charger %s data: %s", name, e)
+                        ac_charger_data[name] = {}
 
                 # Merge fetched data into existing coordinator data
                 self.data = {

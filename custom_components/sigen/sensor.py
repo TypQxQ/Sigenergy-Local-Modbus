@@ -35,6 +35,7 @@ from .calculated_sensor import (
 from .static_sensor import StaticSensors as SS
 from .static_sensor import COORDINATOR_DIAGNOSTIC_SENSORS # Import the new descriptions
 from .common import generate_sigen_entity, generate_device_id, SigenergySensorEntityDescription, SensorEntityDescription
+import inspect
 from .const import (
     DOMAIN,
     DEVICE_TYPE_PLANT,
@@ -200,70 +201,49 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             
         return ", ".join(active_alarms)
 
+    def _get_raw_value(self) -> Any:
+        """Retrieve the raw value from coordinator data for this entity."""
+        data = self.coordinator.data or {}
+        if self._device_type == DEVICE_TYPE_PLANT:
+            return data.get("plant", {}).get(self.entity_description.key)
+        if self._device_type == DEVICE_TYPE_INVERTER:
+            return data.get("inverters", {}).get(self._device_name, {}).get(self.entity_description.key)
+        if self._device_type == DEVICE_TYPE_AC_CHARGER:
+            return data.get("ac_chargers", {}).get(self._device_name, {}).get(self.entity_description.key)
+        if self._device_type == DEVICE_TYPE_DC_CHARGER:
+            return data.get("inverters", {}).get(self._device_name, {}).get(self.entity_description.key)
+        return None
+
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
-        raw_value = None
+        raw_value = self._get_raw_value()
         data = self.coordinator.data
         if data is None:
             return None
 
-        try:
-            if self._device_type == DEVICE_TYPE_PLANT:
-                raw_value = data.get("plant", {}).get(self.entity_description.key)
-            elif self._device_type == DEVICE_TYPE_INVERTER:
-                raw_value = data.get("inverters", {}).get(self._device_name, {}).get(self.entity_description.key)
-            elif self._device_type == DEVICE_TYPE_AC_CHARGER:
-                raw_value = data.get("ac_chargers", {}).get(self._device_name, {}).get(self.entity_description.key)
-            elif self._device_type == DEVICE_TYPE_DC_CHARGER:
-                raw_value = data.get("inverters", {}).get(self._device_name, {}).get(self.entity_description.key)
-        except KeyError:
-            # This is expected if a key is not present, so we can just pass
-            pass
-
         if hasattr(self.entity_description, "value_fn") and self.entity_description.value_fn:
             try:
-                fn_kwargs = {
-                    "value": raw_value,
-                    "data": data,
-                    "extra_params": getattr(self.entity_description, "extra_params", {}) or {},
-                }
-                if not getattr(self.entity_description, "extra_fn_data", False):
-                    # If extra_fn_data is false, remove the data and extra_params
-                    fn_kwargs.pop("data")
-                    fn_kwargs.pop("extra_params")
-                
-                # Adjust arguments based on what the function expects
-                # This is a simplification; a more robust solution might inspect the function signature
-                # For now, we assume the function can handle the dictionary or specific args
-                
-                # A simplified call assuming the function can handle the arguments
-                # The original code had complex logic here, this is a placeholder for a cleaner approach
-                # Let's stick to the original structure for now to avoid breaking changes
-                
-                if getattr(self.entity_description, "extra_fn_data", False):
-                     transformed_value = self.entity_description.value_fn(
-                         raw_value,
-                         data,
-                         getattr(self.entity_description, "extra_params", {}) or {}
-                     )
-                else:
-                     transformed_value = self.entity_description.value_fn(
-                         raw_value,
-                         data,
-                         None
-                     )
-
-                if transformed_value is not None and self._round_digits is not None:
+                # Call transformation function, trying 3,2,1 args for compatibility
+                fn = self.entity_description.value_fn
+                extra_params = getattr(self.entity_description, "extra_params", {}) or {}
+                transformed = None
+                for args in [(raw_value, data, extra_params), (raw_value, data), (raw_value,)]:
                     try:
-                        return round(Decimal(transformed_value), self._round_digits)
-                    except (TypeError, ValueError, InvalidOperation):
-                        _LOGGER.warning("Could not round transformed value for %s: %s", self.entity_id, transformed_value)
-                return transformed_value
+                        transformed = fn(*args)
+                        break
+                    except TypeError:
+                        continue
+
+                # Round if needed
+                if transformed is not None and self._round_digits is not None:
+                    return round(Decimal(transformed), self._round_digits)
+                return transformed
             except Exception as ex:
                 _LOGGER.error("Error in value_fn for %s: %s", self.entity_id, ex, exc_info=True)
                 return None if self.entity_description.state_class else STATE_UNKNOWN
 
+        # No transformation function, handle raw_value
         if raw_value is None:
             return None if self.entity_description.state_class else STATE_UNKNOWN
 
