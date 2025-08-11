@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
@@ -127,10 +128,45 @@ class SigenergyModbusHub:
         self.inverter_register_intervals: Dict[str, Dict[RegisterType, List[Tuple[int, int]]]] = {}
         self.ac_charger_register_intervals: Dict[str, Dict[RegisterType, List[Tuple[int, int]]]] = {}
         self.dc_charger_register_intervals: Dict[str, Dict[RegisterType, List[Tuple[int, int]]]] = {}
+        
+        # Track last failed probe times for retry logic (1 minute retry delay)
+        self.plant_last_probe_failure: Optional[float] = None
+        self.inverter_last_probe_failure: Dict[str, float] = {}
+        self.dc_charger_last_probe_failure: Dict[str, float] = {}
+        self.probe_retry_delay: float = 60.0  # 1 minute retry delay
 
     def _get_connection_key(self, device_info: dict) -> Tuple[str, int]:
         """Get the connection key (host, port) for a device_info dict."""
         return (device_info[CONF_HOST], device_info[CONF_PORT])
+    
+    def _should_retry_probe(self, device_type: str, device_name: Optional[str] = None) -> bool:
+        """Check if enough time has passed since last probe failure to retry."""
+        current_time = time.time()
+        
+        if device_type == "plant":
+            if self.plant_last_probe_failure is None:
+                return True
+            return (current_time - self.plant_last_probe_failure) >= self.probe_retry_delay
+        elif device_type == "inverter" and device_name:
+            if device_name not in self.inverter_last_probe_failure:
+                return True
+            return (current_time - self.inverter_last_probe_failure[device_name]) >= self.probe_retry_delay
+        elif device_type == "dc_charger" and device_name:
+            if device_name not in self.dc_charger_last_probe_failure:
+                return True
+            return (current_time - self.dc_charger_last_probe_failure[device_name]) >= self.probe_retry_delay
+        return True
+    
+    def _record_probe_failure(self, device_type: str, device_name: Optional[str] = None) -> None:
+        """Record the timestamp of a probe failure for retry delay."""
+        current_time = time.time()
+        
+        if device_type == "plant":
+            self.plant_last_probe_failure = current_time
+        elif device_type == "inverter" and device_name:
+            self.inverter_last_probe_failure[device_name] = current_time
+        elif device_type == "dc_charger" and device_name:
+            self.dc_charger_last_probe_failure[device_name] = current_time
 
     async def _get_client(self, device_info: dict) -> AsyncModbusTcpClient:
         """Get or create a Modbus client for the given device_info dict."""
@@ -340,11 +376,8 @@ class SigenergyModbusHub:
                     # Use return_exceptions=True to prevent one failure from stopping others
                     results = await asyncio.gather(*tasks, return_exceptions=True)
             except asyncio.CancelledError:
-                _LOGGER.warning("Register probing for %s was cancelled.", device_info_log)
-                # Mark remaining unknown registers as potentially unsupported due to cancellation
-                for name, register in register_defs.items():
-                    if register.is_supported is None:
-                        register.is_supported = False # Assume unsupported if probe was cancelled
+                _LOGGER.warning("Register probing for %s was cancelled due to timeout or communication error. Will retry after 1 minute.", device_info_log)
+                # Don't mark registers as unsupported when cancelled - allow retry after delay
                 raise # Re-raise CancelledError
             except Exception as ex:
                 _LOGGER.error("Unexpected error during concurrent register probing for %s: %s",
@@ -855,20 +888,29 @@ class SigenergyModbusHub:
         """Read all supported plant data."""
         # Probe registers if not done yet
         if not self.plant_register_intervals:
-            try:
-                plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
-                # Combine all readable registers for one probe call
-                all_plant_registers = {
-                    **PLANT_RUNNING_INFO_REGISTERS,
-                    **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
-                       if reg.register_type != RegisterType.WRITE_ONLY}
-                }
-                self.plant_register_intervals = await self.async_probe_registers(
-                    plant_info, all_plant_registers
-                )
-            except Exception as ex:
-                _LOGGER.error("Failed to probe plant registers: %s", ex)
-                # Continue with reading, some registers might still work
+            if self._should_retry_probe("plant"):
+                try:
+                    plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
+                    # Combine all readable registers for one probe call
+                    all_plant_registers = {
+                        **PLANT_RUNNING_INFO_REGISTERS,
+                        **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+                           if reg.register_type != RegisterType.WRITE_ONLY}
+                    }
+                    _LOGGER.debug("Attempting to probe plant registers...")
+                    self.plant_register_intervals = await self.async_probe_registers(
+                        plant_info, all_plant_registers
+                    )
+                    _LOGGER.info("Plant register probing successful")
+                except asyncio.CancelledError:
+                    _LOGGER.warning("Plant register probing was cancelled, will retry in 1 minute")
+                    self._record_probe_failure("plant")
+                    raise  # Re-raise to allow coordinator timeout handling
+                except Exception as ex:
+                    _LOGGER.error("Failed to probe plant registers: %s", ex)
+                    self._record_probe_failure("plant")
+            else:
+                _LOGGER.debug("Skipping plant register probing - waiting for retry delay")
 
         # Read all running info and parameter registers
         registers_to_read = {
@@ -901,19 +943,28 @@ class SigenergyModbusHub:
 
         # Probe registers if not done yet for this inverter
         if inverter_name not in self.inverter_register_intervals:
-            try:
-                # Combine all readable registers for one probe call
-                all_inverter_registers = {
-                    **INVERTER_RUNNING_INFO_REGISTERS,
-                    **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
-                       if reg.register_type != RegisterType.WRITE_ONLY}
-                }
-                self.inverter_register_intervals[inverter_name] = await self.async_probe_registers(
-                    inverter_info, all_inverter_registers
-                )
-            except Exception as ex:
-                _LOGGER.error("Failed to probe inverter '%s' registers: %s", inverter_name, ex)
-                # Continue with reading, some registers might still work
+            if self._should_retry_probe("inverter", inverter_name):
+                try:
+                    # Combine all readable registers for one probe call
+                    all_inverter_registers = {
+                        **INVERTER_RUNNING_INFO_REGISTERS,
+                        **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
+                           if reg.register_type != RegisterType.WRITE_ONLY}
+                    }
+                    _LOGGER.debug("Attempting to probe inverter '%s' registers...", inverter_name)
+                    self.inverter_register_intervals[inverter_name] = await self.async_probe_registers(
+                        inverter_info, all_inverter_registers
+                    )
+                    _LOGGER.info("Inverter '%s' register probing successful", inverter_name)
+                except asyncio.CancelledError:
+                    _LOGGER.warning("Inverter '%s' register probing was cancelled, will retry in 1 minute", inverter_name)
+                    self._record_probe_failure("inverter", inverter_name)
+                    raise  # Re-raise to allow coordinator timeout handling
+                except Exception as ex:
+                    _LOGGER.error("Failed to probe inverter '%s' registers: %s", inverter_name, ex)
+                    self._record_probe_failure("inverter", inverter_name)
+            else:
+                _LOGGER.debug("Skipping inverter '%s' register probing - waiting for retry delay", inverter_name)
 
         # Read all running info and parameter registers
         registers_to_read = {
@@ -942,19 +993,28 @@ class SigenergyModbusHub:
 
         # Probe registers if not done yet for this inverter
         if inverter_name not in self.dc_charger_register_intervals:
-            try:
-                # Combine all readable registers for one probe call
-                all_dc_charger_registers = {
-                    **DC_CHARGER_RUNNING_INFO_REGISTERS,
-                    **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
-                       if reg.register_type != RegisterType.WRITE_ONLY}
-                }
-                self.dc_charger_register_intervals[inverter_name] = await self.async_probe_registers(
-                    inverter_info, all_dc_charger_registers
-                )
-            except Exception as ex:
-                _LOGGER.error("Failed to probe dc-charger '%s' registers: %s", inverter_name, ex)
-                # Continue with reading, some registers might still work
+            if self._should_retry_probe("dc_charger", inverter_name):
+                try:
+                    # Combine all readable registers for one probe call
+                    all_dc_charger_registers = {
+                        **DC_CHARGER_RUNNING_INFO_REGISTERS,
+                        **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
+                           if reg.register_type != RegisterType.WRITE_ONLY}
+                    }
+                    _LOGGER.debug("Attempting to probe DC charger '%s' registers...", inverter_name)
+                    self.dc_charger_register_intervals[inverter_name] = await self.async_probe_registers(
+                        inverter_info, all_dc_charger_registers
+                    )
+                    _LOGGER.info("DC charger '%s' register probing successful", inverter_name)
+                except asyncio.CancelledError:
+                    _LOGGER.warning("DC charger '%s' register probing was cancelled, will retry in 1 minute", inverter_name)
+                    self._record_probe_failure("dc_charger", inverter_name)
+                    raise  # Re-raise to allow coordinator timeout handling
+                except Exception as ex:
+                    _LOGGER.error("Failed to probe DC charger '%s' registers: %s", inverter_name, ex)
+                    self._record_probe_failure("dc_charger", inverter_name)
+            else:
+                _LOGGER.debug("Skipping DC charger '%s' register probing - waiting for retry delay", inverter_name)
 
         # Read all running info and parameter registers
         registers_to_read = {
