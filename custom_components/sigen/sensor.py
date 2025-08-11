@@ -150,6 +150,8 @@ async def async_setup_entry(
     if entities_to_add:
         async_add_entities(entities_to_add)
         _LOGGER.debug("Added %d sensor entities", len(entities_to_add))
+        entity_unique_ids = [entity._attr_unique_id for entity in entities_to_add if hasattr(entity, '_attr_unique_id')]
+        _LOGGER.debug("Added sensor entity unique IDs: %s", ", ".join(entity_unique_ids))
     else:
         _LOGGER.debug("No sensor entities to add.")
 
