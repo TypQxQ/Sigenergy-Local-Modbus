@@ -102,6 +102,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "inverters": inverter_data,
                     "ac_chargers": ac_charger_data,
                     "dc_chargers": dc_charger_data,
+                    "_sensors_initialized": False,  # Flag to indicate if static sensors have been loaded
                 }
 
                 timetaken = (dt_util.utcnow() - start_time).total_seconds()
@@ -153,3 +154,9 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                           register_name, device_type, device_identifier or 'plant', ex)
             # Re-raise for visibility
             raise
+
+    def mark_sensors_initialized(self) -> None:
+        """Mark that static sensors have been initialized and calculated sensors can run."""
+        if self.data is not None:
+            self.data["_sensors_initialized"] = True
+            _LOGGER.debug("Static sensors marked as initialized - calculated sensors can now execute")

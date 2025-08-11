@@ -420,6 +420,11 @@ class SigenergyCalculations:
             _LOGGER.debug("[%s] No inverter data available for calculation", log_prefix)
             return None
 
+        # Check if static sensors have been initialized
+        if not coordinator_data.get("_sensors_initialized", False):
+            _LOGGER.debug("[%s] Static sensors not yet initialized, skipping calculation for '%s'", log_prefix, energy_key)
+            return None
+
         total_energy = Decimal("0.0")
         inverters_data = coordinator_data.get("inverters", {})
 

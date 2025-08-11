@@ -152,6 +152,9 @@ async def async_setup_entry(
         _LOGGER.debug("Added %d sensor entities", len(entities_to_add))
         entity_unique_ids = [entity._attr_unique_id for entity in entities_to_add if hasattr(entity, '_attr_unique_id')]
         _LOGGER.debug("Added sensor entity unique IDs: %s", ", ".join(entity_unique_ids))
+        
+        # Mark sensors as initialized so calculated sensors can start executing
+        coordinator.mark_sensors_initialized()
     else:
         _LOGGER.debug("No sensor entities to add.")
 
