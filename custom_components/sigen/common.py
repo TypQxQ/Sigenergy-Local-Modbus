@@ -158,8 +158,8 @@ def get_source_entity_id(device_type, device_name, source_key, coordinator, hass
 
         if entity_id is None:
             _LOGGER.warning("No entity found for unique ID pattern: %s", unique_id_pattern)
-            _LOGGER.debug("unique ID pattern constructed from: \n config_entry_id: %s \n device_type: %s \n device_name: %s \n source_key: %s \n pv_idx: %s",
-                            coordinator.hub.config_entry.entry_id, device_type, device_name, source_key, pv_string_idx)
+            _LOGGER.debug("unique ID pattern constructed from: \n config_entry_id: %s \n device_type: %s \n device_name: %s \n source_key: %s \n source_attr_key: %s \n pv_idx: %s",
+                            coordinator.hub.config_entry.entry_id, device_type, device_name, source_key, source_attr_key, pv_string_idx)
         # else:
         #     _LOGGER.debug("Found entity ID: %s for pattern %s", entity_id, unique_id_pattern)
 
