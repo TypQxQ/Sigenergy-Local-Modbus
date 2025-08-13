@@ -26,8 +26,8 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import SigenergyDataUpdateCoordinator # Import coordinator
-from .modbus import SigenergyModbusError
-from .common import(generate_sigen_entity, generate_unique_entity_id, generate_device_id) # Added generate_device_id
+# from .modbus import SigenergyModbusError
+from .common import(generate_sigen_entity) # Added generate_device_id
 from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
@@ -538,7 +538,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class SigenergyNumber(SigenergyEntity, NumberEntity):
+class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract-method
     """Representation of a Sigenergy number."""
 
     entity_description: SigenergyNumberEntityDescription
@@ -564,7 +564,7 @@ class SigenergyNumber(SigenergyEntity, NumberEntity):
             name=name,
             device_type=device_type,
             device_id=device_id,
-            device_name=device_name,
+            device_name=device_name or "",
             device_info=device_info,
             pv_string_idx=pv_string_idx,
         )
@@ -583,7 +583,12 @@ class SigenergyNumber(SigenergyEntity, NumberEntity):
             # Ensure the value is a float
             return float(value) if value is not None else 0.0
         except (TypeError, ValueError, KeyError) as e:
-            _LOGGER.error(f"Error getting native value for {self.entity_id} (identifier: {identifier}): {e}")
+            _LOGGER.error(
+                "Error getting native value for %s (identifier: %s): %s",
+                self.entity_id,
+                identifier,
+                e,
+            )
             return 0.0
 
 

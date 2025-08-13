@@ -219,7 +219,7 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
             name=name,
             device_type=device_type,
             device_id=device_id,
-            device_name=device_name,
+            device_name=device_name or "",
             device_info=device_info,
             pv_string_idx=pv_string_idx,
         )
