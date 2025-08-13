@@ -1,0 +1,101 @@
+name: "Bug Report"
+description: "Report a problem with Sigenergy-Local-Modbus"
+title: "[Bug] "
+labels: ["bug", "more info needed"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill out the form and attach logs and diagnostics so we can investigate quickly. Without logs and diagnostics, it may be difficult to identify the issue.
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: "Integration version"
+      description: "Found in Home Assistant, HACS or custom_components/sigen/manifest.json"
+      placeholder: "e.g., 1.1.4"
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: "Home Assistant version"
+      placeholder: "e.g., 2025.8.1"
+    validations:
+      required: false
+
+  - type: textarea
+    id: bug_description
+    attributes:
+      label: "Describe the bug"
+      description: "A clear, concise description of the problem."
+      placeholder: "What happened?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: "Steps to reproduce"
+      description: "Step-by-step instructions to reproduce."
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See error ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: "Expected behavior"
+      placeholder: "What did you expect to happen?"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Logs"
+      description: "Attach relevant log excerpts. See the discussion below for how to collect logs."
+      placeholder: |
+        Paste logs here or attach files below.
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        How to get logs: https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/54
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: "Diagnostics file"
+      description: "Home Assistant → Settings → Devices & Services → Sigenergy → Download Diagnostics, then attach."
+      placeholder: "Attach the downloaded diagnostics file."
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: "Additional context"
+      placeholder: "Anything else we should know?"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Checklist"
+      options:
+        - label: "I searched existing issues and discussions."
+          required: true
+        - label: "I attached logs and/or diagnostics."
+          required: false
+        - label: "This is not a support request; it describes a reproducible bug."
+          required: true
