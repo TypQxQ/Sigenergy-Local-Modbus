@@ -4,7 +4,6 @@
   "codeowners": ["@TypQxQ"],
   "config_flow": true,
   "dependencies": ["modbus", "integration"],
-  "diagnostics": ["diagnostics"],
   "dhcp": [
     {
       "macaddress": "0C47A99*",
