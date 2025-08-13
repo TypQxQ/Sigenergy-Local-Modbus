@@ -22,6 +22,11 @@ async def async_get_config_entry_diagnostics(
 
     diagnostics_data = {
         "entry": async_redact_data(entry.as_dict(), TO_REDACT),
+        "coordinator": {
+            "last_update_success": coordinator.last_update_success,
+            "update_interval": str(coordinator.update_interval),
+            "last_exception": str(coordinator.last_exception) if coordinator.last_exception else None,
+        },
         "data": coordinator.data,
         "hub_info": {
             "host": "redacted",
