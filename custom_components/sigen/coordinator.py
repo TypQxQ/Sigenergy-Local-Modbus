@@ -5,7 +5,6 @@ import asyncio
 import logging
 from datetime import timedelta
 from typing import Any, Dict, Optional, Union # Added Optional, Union
-from typing import Any, Dict
 
 import async_timeout
 from homeassistant.core import HomeAssistant
@@ -13,7 +12,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
-from .modbus import SigenergyModbusHub
 from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,9 +35,9 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.latest_fetch_time: float = 0.0
         self.data: dict[str, Any] | None = None
 
-        if scan_interval <= 0:
+        if scan_interval <= 1:
             scan_interval = DEFAULT_SCAN_INTERVAL
-            logger.warning("Invalid scan_interval <= 0, defaulting to %s", DEFAULT_SCAN_INTERVAL)
+            logger.warning("Invalid scan_interval <= 1, defaulting to %s", DEFAULT_SCAN_INTERVAL)
 
         super().__init__(
             hass,
@@ -52,7 +50,6 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         """Update data via Modbus library."""
         try:
             async with async_timeout.timeout(60):
-                update_interval = self.update_interval.total_seconds() if self.update_interval else DEFAULT_SCAN_INTERVAL
                 start_time = dt_util.utcnow()
 
                 # Fetch all data at once
