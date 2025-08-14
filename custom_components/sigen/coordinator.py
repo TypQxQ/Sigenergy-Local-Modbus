@@ -94,12 +94,14 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                         ac_charger_data[name] = {}
 
                 # Merge fetched data into existing coordinator data
+                # Preserve the _sensors_initialized flag across updates
+                sensors_initialized = self.data.get("_sensors_initialized", False) if self.data else False
                 self.data = {
                     "plant": plant_data,
                     "inverters": inverter_data,
                     "ac_chargers": ac_charger_data,
                     "dc_chargers": dc_charger_data,
-                    "_sensors_initialized": False,  # Flag to indicate if static sensors have been loaded
+                    "_sensors_initialized": sensors_initialized,  # Preserve flag across updates
                 }
 
                 timetaken = (dt_util.utcnow() - start_time).total_seconds()
