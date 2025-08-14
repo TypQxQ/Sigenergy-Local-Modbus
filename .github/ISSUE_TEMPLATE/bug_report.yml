@@ -19,13 +19,13 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: ha_version
-    attributes:
-      label: "Home Assistant version"
-      placeholder: "e.g., 2025.8.1"
-    validations:
-      required: false
+  # - type: input
+  #   id: ha_version
+  #   attributes:
+  #     label: "Home Assistant version"
+  #     placeholder: "e.g., 2025.8.1"
+  #   validations:
+  #     required: false
 
   - type: textarea
     id: bug_description
@@ -36,25 +36,25 @@ body:
     validations:
       required: true
 
-  - type: textarea
-    id: reproduction_steps
-    attributes:
-      label: "Steps to reproduce"
-      description: "Step-by-step instructions to reproduce."
-      placeholder: |
-        1. Go to ...
-        2. Click ...
-        3. See error ...
-    validations:
-      required: false
+  # - type: textarea
+  #   id: reproduction_steps
+  #   attributes:
+  #     label: "Steps to reproduce"
+  #     description: "Step-by-step instructions to reproduce."
+  #     placeholder: |
+  #       1. Go to ...
+  #       2. Click ...
+  #       3. See error ...
+  #   validations:
+  #     required: false
 
-  - type: textarea
-    id: expected_behavior
-    attributes:
-      label: "Expected behavior"
-      placeholder: "What did you expect to happen?"
-    validations:
-      required: false
+  # - type: textarea
+  #   id: expected_behavior
+  #   attributes:
+  #     label: "Expected behavior"
+  #     placeholder: "What did you expect to happen?"
+  #   validations:
+  #     required: false
 
   - type: textarea
     id: logs
@@ -80,13 +80,13 @@ body:
     validations:
       required: false
 
-  - type: textarea
-    id: additional_context
-    attributes:
-      label: "Additional context"
-      placeholder: "Anything else we should know?"
-    validations:
-      required: false
+  # - type: textarea
+  #   id: additional_context
+  #   attributes:
+  #     label: "Additional context"
+  #     placeholder: "Anything else we should know?"
+  #   validations:
+  #     required: false
 
   - type: checkboxes
     id: confirmations
@@ -96,6 +96,6 @@ body:
         - label: "I searched existing issues and discussions."
           required: true
         - label: "I attached logs and/or diagnostics."
-          required: false
+          required: true
         - label: "This is not a support request; it describes a reproducible bug."
           required: true
