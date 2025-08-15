@@ -21,5 +21,5 @@
   "loggers": ["custom_components.sigen"],
   "quality_scale": "custom",
   "requirements": ["pymodbus>=3.8.3"],
-  "version": "1.1.5"
+  "version": "1.1.6A1"
 }

@@ -103,7 +103,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "dc_chargers": dc_charger_data,
                     "_sensors_initialized": sensors_initialized,  # Preserve flag across updates
                 }
-
+                _LOGGER.debug("RBS-coordinator-106-coordinator-post Merged fetched, len: %s data: %s", len(self.data), self.data)
+                
                 timetaken = (dt_util.utcnow() - start_time).total_seconds()
                 self.latest_fetch_time = timetaken
 

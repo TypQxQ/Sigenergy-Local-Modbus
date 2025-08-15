@@ -73,9 +73,13 @@ def generate_sigen_entity(
             sensor_name = f"{pv_string_name} {description.name}"
             sensor_id = pv_string_name
         elif device_type == DEVICE_TYPE_DC_CHARGER:
-            sensor_id = f"{device_name} DC Charger"
-            sensor_name = sensor_id
-            device_type = DEVICE_TYPE_INVERTER
+            # Check if device_name already contains "DC Charger" to avoid double naming
+            if "DC Charger" in device_name:
+                sensor_id = device_name
+            else:
+                sensor_id = f"{device_name} DC Charger"
+            sensor_name = f"{sensor_id} {description.name}"
+            # Keep device_type as DEVICE_TYPE_DC_CHARGER, don't change it to DEVICE_TYPE_INVERTER
         else:
             sensor_name = f"{device_name} {description.name}"
             sensor_id = sensor_name
