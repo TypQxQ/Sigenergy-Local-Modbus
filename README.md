@@ -24,6 +24,12 @@ Monitor and control your Sigenergy Energy Storage System (ESS) from Home Assista
 - **Control Capabilities** for EMS work modes and more
 - **Configurable update interval** in three update frequencies for faster updates
 
+## Enhance with Add-ons
+Take your setup further with community add-ons and tools:
+- Si-GCG "sigenergy_projects": https://github.com/Si-GCG/sigenergy_projects
+
+More add-ons and enhancements are coming—stay tuned.
+
 ## Requirements
 - Sigenergy ESS firmware SPC109 or newer is required starting with integration v1.1.0. If your device runs older firmware and does not auto-update, upgrade the firmware or use a previous integration release until updated.
 - [Home Assistant](https://www.home-assistant.io/) at least version 2025.2
@@ -121,6 +127,7 @@ Contributions welcome!
 ## Support & Links
 - Issues: https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues  
 - Discussions: https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions  
+- Add-ons & tools: https://github.com/Si-GCG/sigenergy_projects  
 - HACS docs: https://hacs.xyz/
 
 ## License
