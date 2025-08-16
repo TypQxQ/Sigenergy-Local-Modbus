@@ -25,6 +25,8 @@ from homeassistant.core import callback, State
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event, async_call_later
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.history import state_changes_during_period
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_VALUES_TO_INIT, DEFAULT_MIN_INTEGRATION_TIME
@@ -41,6 +43,11 @@ if TYPE_CHECKING:
     from .coordinator import SigenergyDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Constants for daily sensor reset
+DAILY_RESET_HOUR = 0
+DAILY_RESET_MINUTE = 0
+DAILY_RESET_SECOND = 0
 
 # Only log for these entities
 LOG_THIS_ENTITY = [
@@ -527,12 +534,537 @@ class SigenergyCalculations:
             "CS][Daily PV"
         )
 
+    @staticmethod
+    def calculate_daily_energy_from_lifetime(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Calculate daily energy from lifetime total using register name from extra_params."""
+        if coordinator_data is None or "plant" not in coordinator_data:
+            return None
+            
+        if extra_params is None or "register_name" not in extra_params:
+            _LOGGER.warning("[CS][Daily Energy] Missing register_name in extra_params")
+            return None
+
+        register_name = extra_params["register_name"]
+        
+        # Get the current lifetime total
+        current_lifetime = coordinator_data["plant"].get(register_name)
+        if current_lifetime is None:
+            return None
+
+        current_lifetime_dec = safe_decimal(current_lifetime)
+        if current_lifetime_dec is None:
+            return None
+
+        # The daily calculation will be handled by SigenergyLifetimeDailySensor
+        # This function just returns the current lifetime value for the sensor to use
+        return current_lifetime_dec
+
 
 class IntegrationTrigger(Enum):
     """Trigger type for integration calculations."""
 
     STATE_EVENT = "state_event"
     TIME_ELAPSED = "time_elapsed"
+
+
+class SigenergyLifetimeDailySensor(SigenergyEntity, RestoreSensor):
+    """Sensor that calculates daily totals from lifetime values with midnight reset."""
+
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        coordinator,
+        description: SensorEntityDescription,
+        name: str,
+        device_type: str,
+        device_id: Optional[str] = None,
+        device_name: str = "",
+        device_info: Optional[DeviceInfo] = None,
+        pv_string_idx: Optional[int] = None,
+    ) -> None:
+        """Initialize the lifetime daily sensor."""
+        # Call SigenergyEntity's __init__ first
+        super().__init__(
+            coordinator=coordinator,
+            description=description,
+            name=name,
+            device_type=device_type,
+            device_id=device_id,
+            device_name=device_name,
+            device_info=device_info,
+            pv_string_idx=pv_string_idx,
+        )
+        # Then initialize RestoreSensor
+        RestoreSensor.__init__(self)
+        
+        self._attr_suggested_display_precision = getattr(
+            description, "suggested_display_precision", None
+        )
+
+        # State tracking
+        self._daily_value: Optional[Decimal] = None
+        self._start_of_day_lifetime: Optional[Decimal] = None
+        self._last_lifetime_value: Optional[Decimal] = None
+        self._last_reset_date: Optional[str] = None  # Store as YYYY-MM-DD string
+        
+        # Sensor configuration
+        self._round_digits = getattr(description, "round_digits", 6)
+        self.log_this_entity = False
+
+    def _get_current_date_str(self) -> str:
+        """Get current date as YYYY-MM-DD string."""
+        return dt_util.now().strftime("%Y-%m-%d")
+
+    def _should_reset_for_new_day(self) -> bool:
+        """Check if we should reset because it's a new day."""
+        current_date = self._get_current_date_str()
+        return self._last_reset_date != current_date
+
+    async def _get_lifetime_value_at_midnight(self) -> Optional[Decimal]:
+        """Get the lifetime value from history at the start of today.
+        
+        Approach:
+        1. Look for a state at midnight (±30 minutes window)
+        2. If not found, look for a state one hour before midnight (23:00 ±30 minutes)
+        3. If not available, return None to use current reading (daily = 0 at startup)
+        """
+        try:
+            # Get the coordinator data to determine which register to look up
+            extra_params = getattr(self.entity_description, 'extra_params', None)
+            if not extra_params or "register_name" not in extra_params:
+                return None
+            
+            register_name = extra_params["register_name"]
+            
+            # Find the corresponding sensor entity ID for this register
+            register_to_entity_map = {
+                "plant_accumulated_grid_import_energy": "sensor.sigen_plant_total_imported_energy",
+                "plant_accumulated_grid_export_energy": "sensor.sigen_plant_total_exported_energy",
+            }
+            
+            source_entity_id = register_to_entity_map.get(register_name)
+            if not source_entity_id:
+                if self.log_this_entity:
+                    _LOGGER.debug(
+                        "[%s] No entity mapping found for register %s", 
+                        self.entity_id, register_name
+                    )
+                return None
+            
+            # Calculate midnight of current day
+            now = dt_util.now()
+            midnight_today = now.replace(
+                hour=DAILY_RESET_HOUR, 
+                minute=DAILY_RESET_MINUTE, 
+                second=DAILY_RESET_SECOND, 
+                microsecond=0
+            )
+            
+            # If we're very close to midnight, look at yesterday's midnight
+            if (now - midnight_today).total_seconds() < 300:  # Within 5 minutes of midnight
+                midnight_today = midnight_today - timedelta(days=1)
+            
+            # Get recorder instance
+            recorder_instance = get_instance(self.hass)
+            if not recorder_instance:
+                if self.log_this_entity:
+                    _LOGGER.debug("[%s] Recorder not available", self.entity_id)
+                return None
+            
+            # Primary: Look for state at midnight (±30 minutes window)
+            start_time = midnight_today - timedelta(minutes=30)  # 23:30
+            end_time = midnight_today + timedelta(minutes=30)    # 00:30
+            
+            if self.log_this_entity:
+                _LOGGER.debug(
+                    "[%s] Looking for %s state at midnight between %s and %s", 
+                    self.entity_id, source_entity_id, start_time, end_time
+                )
+            
+            result = await self._query_history_for_midnight_value(
+                recorder_instance, source_entity_id, start_time, end_time, midnight_today, "midnight"
+            )
+            
+            if result is not None:
+                return result
+            
+            # Fallback: Look for state around 23:00 (1 hour before midnight) - ±30 minutes window
+            target_time = midnight_today - timedelta(hours=1)  # 23:00
+            start_time = target_time - timedelta(minutes=30)   # 22:30
+            end_time = target_time + timedelta(minutes=30)     # 23:30
+            
+            if self.log_this_entity:
+                _LOGGER.debug(
+                    "[%s] No midnight value found, looking for %s state around 23:00 between %s and %s", 
+                    self.entity_id, source_entity_id, start_time, end_time
+                )
+            
+            result = await self._query_history_for_midnight_value(
+                recorder_instance, source_entity_id, start_time, end_time, target_time, "23:00 fallback"
+            )
+            
+            if result is not None:
+                return result
+            
+            # No history found - this is fine, will use current reading (daily = 0 at startup)
+            if self.log_this_entity:
+                _LOGGER.debug(
+                    "[%s] No state found at midnight or 23:00 for %s, will use current reading", 
+                    self.entity_id, source_entity_id
+                )
+            return None
+            
+        except Exception as ex:
+            _LOGGER.warning(
+                "[%s] Error getting midnight value from history: %s", 
+                self.entity_id, ex
+            )
+            return None
+
+    async def _query_history_for_midnight_value(
+        self, recorder_instance, source_entity_id: str, start_time, end_time, 
+        target_time, phase_name: str
+    ) -> Optional[Decimal]:
+        """Query history and find the state closest to the target time."""
+        try:
+            states_dict = await recorder_instance.async_add_executor_job(
+                state_changes_during_period,
+                self.hass,
+                start_time,
+                end_time,
+                source_entity_id
+            )
+            
+            if not states_dict or source_entity_id not in states_dict:
+                return None
+            
+            states = states_dict[source_entity_id]
+            if not states:
+                return None
+            
+            # Find the state closest to the target time
+            closest_state = None
+            closest_time_diff = None
+            
+            for state in states:
+                if state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
+                    continue
+                    
+                time_diff = abs((state.last_reported - target_time).total_seconds())
+                
+                if closest_time_diff is None or time_diff < closest_time_diff:
+                    closest_state = state
+                    closest_time_diff = time_diff
+            
+            if closest_state is None:
+                return None
+            
+            target_value = safe_decimal(closest_state.state)
+            
+            if self.log_this_entity:
+                _LOGGER.info(
+                    "[%s] Found %s value: %s at %s (diff: %d seconds)", 
+                    self.entity_id, 
+                    phase_name,
+                    target_value,
+                    closest_state.last_reported,
+                    closest_time_diff or 0
+                )
+            
+            return target_value
+            
+        except Exception as ex:
+            _LOGGER.warning(
+                "[%s] Error in %s query: %s", 
+                self.entity_id, phase_name, ex
+            )
+            return None
+
+
+    def _get_lifetime_value(self) -> Optional[Decimal]:
+        """Get the current lifetime value from coordinator data."""
+        if not hasattr(self.entity_description, 'value_fn'):
+            return None
+            
+        try:
+            # Call the value function to get the current lifetime value
+            value_fn = getattr(self.entity_description, 'value_fn')
+            coordinator_data = self.coordinator.data if self.coordinator else None
+            
+            # Get extra_fn_data flag and extra_params
+            extra_fn_data = getattr(self.entity_description, 'extra_fn_data', False)
+            extra_params = getattr(self.entity_description, 'extra_params', None)
+            
+            if extra_fn_data:
+                result = value_fn(None, coordinator_data, extra_params)
+            else:
+                # Get the raw value from coordinator data if available
+                raw_value = None
+                if coordinator_data and hasattr(self.entity_description, 'key'):
+                    # Try to get value from plant data first
+                    plant_data = coordinator_data.get("plant", {})
+                    raw_value = plant_data.get(self.entity_description.key)
+                
+                result = value_fn(raw_value)
+            
+            return safe_decimal(result) if result is not None else None
+            
+        except Exception as ex:
+            _LOGGER.warning(
+                "[%s] Error getting lifetime value: %s", 
+                self.entity_id, ex
+            )
+            return None
+
+    def _reset_daily_calculation(self, current_lifetime: Decimal) -> None:
+        """Reset the daily calculation for a new day."""
+        self._start_of_day_lifetime = current_lifetime
+        self._daily_value = Decimal("0.0")
+        self._last_reset_date = self._get_current_date_str()
+        
+        if self.log_this_entity:
+            _LOGGER.debug(
+                "[%s] Reset for new day: start_of_day=%s, date=%s",
+                self.entity_id,
+                self._start_of_day_lifetime,
+                self._last_reset_date
+            )
+
+    def _calculate_daily_value(self, current_lifetime: Decimal) -> Optional[Decimal]:
+        """Calculate the daily value from current and start-of-day lifetime values."""
+        if self._start_of_day_lifetime is None:
+            # First time - we'll set this up properly in async_added_to_hass
+            # For now, just return None to indicate we're not ready yet
+            return None
+        
+        # Check if we need to reset for a new day
+        if self._should_reset_for_new_day():
+            self._reset_daily_calculation(current_lifetime)
+            return Decimal("0.0")
+        
+        # Handle potential counter rollover (rare but possible)
+        if current_lifetime < self._start_of_day_lifetime:
+            _LOGGER.warning(
+                "[%s] Lifetime counter rollover detected: current=%s < start_of_day=%s",
+                self.entity_id,
+                current_lifetime,
+                self._start_of_day_lifetime
+            )
+            # Reset with current value as new start
+            self._reset_daily_calculation(current_lifetime)
+            return Decimal("0.0")
+        
+        # Normal calculation
+        daily_value = current_lifetime - self._start_of_day_lifetime
+        
+        if self.log_this_entity:
+            _LOGGER.debug(
+                "[%s] Daily calculation: %s = %s - %s",
+                self.entity_id,
+                daily_value,
+                current_lifetime,
+                self._start_of_day_lifetime
+            )
+        
+        return daily_value
+
+    def _update_from_coordinator(self) -> None:
+        """Update sensor value from coordinator data."""
+        current_lifetime = self._get_lifetime_value()
+        
+        if current_lifetime is None:
+            if self.log_this_entity:
+                _LOGGER.debug("[%s] No lifetime value available", self.entity_id)
+            return
+        
+        # Calculate daily value (will return None if not initialized yet)
+        daily_value = self._calculate_daily_value(current_lifetime)
+        
+        if daily_value is not None:
+            self._daily_value = daily_value
+            self._last_lifetime_value = current_lifetime
+            
+            if self.log_this_entity:
+                _LOGGER.debug(
+                    "[%s] Updated: daily=%s, lifetime=%s",
+                    self.entity_id,
+                    self._daily_value,
+                    current_lifetime
+                )
+        elif self.log_this_entity:
+            _LOGGER.debug(
+                "[%s] Not ready for calculation yet (start_of_day not set)",
+                self.entity_id
+            )
+
+    def _setup_midnight_reset(self) -> None:
+        """Schedule reset at midnight."""
+        now = dt_util.now()
+        # Calculate next midnight
+        next_midnight = (now + timedelta(days=1)).replace(
+            hour=DAILY_RESET_HOUR, 
+            minute=DAILY_RESET_MINUTE, 
+            second=DAILY_RESET_SECOND, 
+            microsecond=0
+        )
+
+        @callback
+        def _handle_midnight(current_time):
+            """Handle midnight reset."""
+            if self.log_this_entity:
+                _LOGGER.debug("[%s] Midnight reset triggered at %s", self.entity_id, current_time)
+            
+            # Get current lifetime value and reset
+            current_lifetime = self._get_lifetime_value()
+            if current_lifetime is not None:
+                self._reset_daily_calculation(current_lifetime)
+                self.async_write_ha_state()
+            
+            # Schedule next reset
+            self._setup_midnight_reset()
+
+        # Schedule the reset
+        self.async_on_remove(
+            async_track_point_in_time(self.hass, _handle_midnight, next_midnight)
+        )
+        
+        if self.log_this_entity:
+            _LOGGER.debug(
+                "[%s] Scheduled midnight reset for %s", 
+                self.entity_id, 
+                next_midnight
+            )
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+        self.log_this_entity = self.entity_id in LOG_THIS_ENTITY
+
+        # Try to restore previous state
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
+            try:
+                # Restore daily value
+                self._daily_value = safe_decimal(last_state.state)
+                
+                # Restore attributes
+                if last_state.attributes:
+                    start_of_day = last_state.attributes.get("start_of_day_lifetime")
+                    if start_of_day is not None:
+                        self._start_of_day_lifetime = safe_decimal(start_of_day)
+                    
+                    last_reset = last_state.attributes.get("last_reset_date")
+                    if last_reset:
+                        self._last_reset_date = last_reset
+                
+                if self.log_this_entity:
+                    _LOGGER.debug(
+                        "[%s] Restored state: daily=%s, start_of_day=%s, last_reset=%s",
+                        self.entity_id,
+                        self._daily_value,
+                        self._start_of_day_lifetime,
+                        self._last_reset_date
+                    )
+                        
+            except (ValueError, TypeError, InvalidOperation) as e:
+                _LOGGER.warning(
+                    "[%s] Could not restore state: %s", 
+                    self.entity_id, e
+                )
+
+        # Check if midnight has passed since last update or if we need to initialize start-of-day
+        current_lifetime = self._get_lifetime_value()
+        
+        if self._should_reset_for_new_day():
+            if current_lifetime is not None:
+                self._reset_daily_calculation(current_lifetime)
+                if self.log_this_entity:
+                    _LOGGER.info(
+                        "[%s] Reset due to date change on startup", 
+                        self.entity_id
+                    )
+        elif self._start_of_day_lifetime is None and current_lifetime is not None:
+            # First time setup - try to get the start-of-day value from history
+            try:
+                midnight_value = await self._get_lifetime_value_at_midnight()
+                if midnight_value is not None:
+                    self._start_of_day_lifetime = midnight_value
+                    self._last_reset_date = self._get_current_date_str()
+                    # Calculate initial daily value
+                    if current_lifetime >= midnight_value:
+                        self._daily_value = current_lifetime - midnight_value
+                    else:
+                        # Handle potential rollover
+                        _LOGGER.warning(
+                            "[%s] Current lifetime (%s) < midnight value (%s), treating as rollover",
+                            self.entity_id, current_lifetime, midnight_value
+                        )
+                        self._daily_value = Decimal("0.0")
+                        self._start_of_day_lifetime = current_lifetime
+                    
+                    if self.log_this_entity:
+                        _LOGGER.info(
+                            "[%s] Initialized from history: start_of_day=%s, current=%s, daily=%s", 
+                            self.entity_id, 
+                            self._start_of_day_lifetime,
+                            current_lifetime,
+                            self._daily_value
+                        )
+                else:
+                    # Fallback to current value as start of day
+                    self._reset_daily_calculation(current_lifetime)
+                    if self.log_this_entity:
+                        _LOGGER.info(
+                            "[%s] No history found, using current value as start-of-day: %s", 
+                            self.entity_id, current_lifetime
+                        )
+                        
+            except Exception as ex:
+                _LOGGER.warning(
+                    "[%s] Error during history initialization, using current value: %s", 
+                    self.entity_id, ex
+                )
+                self._reset_daily_calculation(current_lifetime)
+
+        # Set up midnight reset scheduling
+        self._setup_midnight_reset()
+
+        # Update from coordinator data initially
+        self._update_from_coordinator()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self._update_from_coordinator()
+        super()._handle_coordinator_update()
+
+    @property
+    def native_value(self) -> Decimal | None:
+        """Return the state of the sensor."""
+        if self._daily_value is None:
+            return None
+        return round(self._daily_value, self._round_digits)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        attrs = {
+            "last_reset_date": self._last_reset_date,
+        }
+        
+        if self._start_of_day_lifetime is not None:
+            attrs["start_of_day_lifetime"] = str(self._start_of_day_lifetime)
+            
+        if self._last_lifetime_value is not None:
+            attrs["current_lifetime"] = str(self._last_lifetime_value)
+            
+        return attrs
 
 
 class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
@@ -984,6 +1516,36 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 class SigenergyCalculatedSensors:
     """Class for holding calculated sensor methods."""
 
+    # Lifetime-based daily energy sensors (require special handling)
+    PLANT_LIFETIME_DAILY_SENSORS = [
+        SigenergySensorEntityDescription(
+            key="plant_daily_grid_import_energy_from_lifetime",
+            name="Daily Grid Import Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            icon="mdi:transmission-tower-import",
+            value_fn=SigenergyCalculations.calculate_daily_energy_from_lifetime,
+            extra_fn_data=True,
+            extra_params={"register_name": "plant_accumulated_grid_import_energy"},
+            suggested_display_precision=2,
+            round_digits=6,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_daily_grid_export_energy_from_lifetime",
+            name="Daily Grid Export Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            icon="mdi:transmission-tower-export",
+            value_fn=SigenergyCalculations.calculate_daily_energy_from_lifetime,
+            extra_fn_data=True,
+            extra_params={"register_name": "plant_accumulated_grid_export_energy"},
+            suggested_display_precision=2,
+            round_digits=6,
+        ),
+    ]
+
     PV_STRING_SENSORS = [
         SigenergySensorEntityDescription(
             key="power",
@@ -1234,30 +1796,30 @@ class SigenergyCalculatedSensors:
         #     icon="mdi:transmission-tower-import",
         #     suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         # ),
-        SigenergySensorEntityDescription(
-            key="plant_daily_grid_export_energy",
-            name="Daily Grid Export Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="plant_grid_export_power",  # Key matches the grid export power sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:transmission-tower-export",
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_daily_grid_import_energy",
-            name="Daily Grid Import Energy",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            source_key="plant_grid_import_power",  # Key matches the grid import power sensor
-            round_digits=6,
-            max_sub_interval=timedelta(seconds=30),
-            icon="mdi:transmission-tower-import",
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_daily_grid_export_energy",
+        #     name="Daily Grid Export Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        #     source_key="plant_grid_export_power",  # Key matches the grid export power sensor
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:transmission-tower-export",
+        # ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_daily_grid_import_energy",
+        #     name="Daily Grid Import Energy",
+        #     device_class=SensorDeviceClass.ENERGY,
+        #     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        #     suggested_display_precision=2,
+        #     state_class=SensorStateClass.TOTAL_INCREASING,
+        #     source_key="plant_grid_import_power",  # Key matches the grid import power sensor
+        #     round_digits=6,
+        #     max_sub_interval=timedelta(seconds=30),
+        #     icon="mdi:transmission-tower-import",
+        # ),
         # SigenergySensorEntityDescription(
         #     key="plant_accumulated_consumed_energy",
         #     name="Accumulated Consumed Energy",

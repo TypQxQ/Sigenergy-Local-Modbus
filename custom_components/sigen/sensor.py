@@ -9,7 +9,6 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
-    SensorStateClass,
 )
 from homeassistant.config_entries import (  # pylint: disable=syntax-error
     ConfigEntry,
@@ -31,11 +30,11 @@ from .calculated_sensor import (
     SigenergyCalculations as SC,
     SigenergyCalculatedSensors as SCS,
     SigenergyIntegrationSensor,
+    SigenergyLifetimeDailySensor,
 )
 from .static_sensor import StaticSensors as SS
 from .static_sensor import COORDINATOR_DIAGNOSTIC_SENSORS # Import the new descriptions
 from .common import generate_sigen_entity, generate_device_id, SigenergySensorEntityDescription, SensorEntityDescription
-import inspect
 from .const import (
     DOMAIN,
     DEVICE_TYPE_PLANT,
@@ -80,7 +79,13 @@ async def async_setup_entry(
 
     # Plant Sensors
     add_entities_for_device(None, None, SS.PLANT_SENSORS, SigenergySensor, DEVICE_TYPE_PLANT)
-    add_entities_for_device(None, None, SCS.PLANT_SENSORS, SigenergySensor, DEVICE_TYPE_PLANT)
+    
+    # Add calculated plant sensors (all use regular SigenergySensor class)
+    add_entities_for_device(None, None, SCS.PLANT_SENSORS, SigenergySensor, DEVICE_TYPE_PLANT, hass=hass)
+    
+    # Add lifetime-based daily sensors with the special sensor class
+    add_entities_for_device(None, None, SCS.PLANT_LIFETIME_DAILY_SENSORS, SigenergyLifetimeDailySensor, DEVICE_TYPE_PLANT, hass=hass)
+    
     add_entities_for_device(None, None, SCS.PLANT_INTEGRATION_SENSORS, SigenergyIntegrationSensor, DEVICE_TYPE_PLANT, hass=hass)
     add_entities_for_device(None, None, list(COORDINATOR_DIAGNOSTIC_SENSORS), CoordinatorDiagnosticSensor, DEVICE_TYPE_PLANT)
 
