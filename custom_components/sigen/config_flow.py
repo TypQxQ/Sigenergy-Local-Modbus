@@ -481,6 +481,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         new_plant_connection = DEFAULT_PLANT_CONNECTION.copy()
         new_plant_connection[CONF_HOST] = user_input[CONF_HOST]
         new_plant_connection[CONF_PORT] = user_input[CONF_PORT]
+        new_plant_connection[CONF_SLAVE_ID] = DEFAULT_PLANT_SLAVE_ID
         new_plant_connection[CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
         self._data[CONF_PLANT_CONNECTION] = new_plant_connection
 
