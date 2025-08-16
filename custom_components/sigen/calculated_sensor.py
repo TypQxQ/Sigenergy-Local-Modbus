@@ -646,6 +646,7 @@ class SigenergyLifetimeDailySensor(SigenergyEntity, RestoreSensor):
             register_to_entity_map = {
                 "plant_accumulated_grid_import_energy": "sensor.sigen_plant_total_imported_energy",
                 "plant_accumulated_grid_export_energy": "sensor.sigen_plant_total_exported_energy",
+                "plant_total_generation_of_third_party_inverter": "sensor.sigen_plant_total_generation_of_third_party_inverter",
             }
             
             source_entity_id = register_to_entity_map.get(register_name)
@@ -1541,6 +1542,19 @@ class SigenergyCalculatedSensors:
             value_fn=SigenergyCalculations.calculate_daily_energy_from_lifetime,
             extra_fn_data=True,
             extra_params={"register_name": "plant_accumulated_grid_export_energy"},
+            suggested_display_precision=2,
+            round_digits=6,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_daily_third_party_inverter_energy_from_lifetime",
+            name="Daily Third Party Inverter Energy",
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            icon="mdi:home-lightning-bolt",
+            value_fn=SigenergyCalculations.calculate_daily_energy_from_lifetime,
+            extra_fn_data=True,
+            extra_params={"register_name": "plant_total_generation_of_third_party_inverter"},
             suggested_display_precision=2,
             round_digits=6,
         ),
