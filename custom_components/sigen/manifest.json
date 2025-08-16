@@ -3,7 +3,7 @@
   "name": "Sigenergy ESS",
   "codeowners": ["@TypQxQ"],
   "config_flow": true,
-  "dependencies": ["modbus", "integration"],
+  "dependencies": ["modbus", "integration", "recorder"],
   "dhcp": [
     {
       "macaddress": "0C47A99*",
