@@ -110,10 +110,10 @@ AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
 
 DC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
     SigenergySwitchEntityDescription(
-        key="dc_charger_start_stop",
-        name="DC Charger",
+        key="dc_charging",
+        name="DC Charging",
         icon="mdi:ev-station",
-        is_on_fn=lambda data, identifier: data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_output_power", 0) > 0,
+        is_on_fn=lambda data, identifier: data.get("dc_chargers", {}).get(identifier, {}).get("output_power", 0) > 0,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
     ),
@@ -154,7 +154,7 @@ async def async_setup_entry(
 
         # DC Charger
         if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
-            dc_name = f"{device_name} DC Charging"
+            dc_name = f"{device_name} DC Charger"
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
             dc_device_info = DeviceInfo(
