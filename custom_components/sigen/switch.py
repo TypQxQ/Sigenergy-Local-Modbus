@@ -154,7 +154,7 @@ async def async_setup_entry(
 
         # DC Charger
         if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
-            dc_name = f"{device_name} DC Charger"
+            dc_name = f"{device_name} DC Charging"
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
             dc_device_info = DeviceInfo(
