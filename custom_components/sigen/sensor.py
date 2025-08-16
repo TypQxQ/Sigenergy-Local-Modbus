@@ -113,7 +113,10 @@ async def async_setup_entry(
 
         # DC Charger
         if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
-            dc_name = f"{device_name} DC Charger"
+            if "dc charger" not in device_name.lower():
+                dc_name = f"{device_name} DC Charger"
+            else:
+                dc_name = device_name
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
             dc_device_info = DeviceInfo(
@@ -123,7 +126,7 @@ async def async_setup_entry(
                 model="DC Charger",
                 via_device=(DOMAIN, parent_inverter_id),
             )
-            add_entities_for_device(device_name, device_conn, SS.DC_CHARGER_SENSORS, SigenergySensor, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
+            add_entities_for_device(dc_name, device_conn, SS.DC_CHARGER_SENSORS, SigenergySensor, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
 
     # AC Charger Sensors
     for ac_charger_name, ac_details in coordinator.hub.ac_charger_connections.items():
