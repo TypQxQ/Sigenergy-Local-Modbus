@@ -266,6 +266,8 @@ def safe_float(value: Any, precision: int = 6) -> Optional[float]:
 def safe_decimal(value: Any) -> Optional[Decimal]:
     """Convert to Decimal only if possible, else None."""
     try:
+        if value is None:
+            return Decimal(0.0)
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         _LOGGER.warning("Could not convert value %s (type %s) to Decimal", value, type(value).__name__)
