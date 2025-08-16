@@ -23,7 +23,6 @@ CONF_AC_CHARGER_CONNECTIONS = "ac_charger_connections"
 CONF_DC_CHARGER_CONNECTIONS = "dc_charger_connections"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
-CONF_KEEP_EXISTING = "keep_existing"
 CONF_VALUES_TO_INIT = "values_to_initialize"
 STEP_ACCUMULATED_ENERGY_CONFIG = "accumulated_energy_config"
 

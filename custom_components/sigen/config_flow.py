@@ -47,7 +47,6 @@ from .const import (
     CONF_PARENT_PLANT_ID,
     CONF_INVERTER_HAS_DCCHARGER,
     CONF_READ_ONLY,
-    CONF_KEEP_EXISTING,
     CONF_REMOVE_DEVICE,
     CONF_SCAN_INTERVAL,
     DEVICE_TYPE_NEW_PLANT,
@@ -56,7 +55,6 @@ from .const import (
     DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_PLANT,
     DEVICE_TYPE_UNKNOWN,
-    LEGACY_SENSOR_MIGRATION_MAP,
     STEP_DHCP_PLANT_CONFIG,
     STEP_DEVICE_TYPE,
     STEP_PLANT_CONFIG,
@@ -108,7 +106,6 @@ def generate_plant_schema(
         user_input,
         discovered_ip = "",
         use_inverter_device_id = False,
-        keep_existing_alternative = False,
         display_update_frq = False
     ) -> vol.Schema:
     """Dynamically create schema using the determined prefill_host
@@ -117,7 +114,6 @@ def generate_plant_schema(
         user_input (_type_, optional): _description_. Defaults to None.
         discovered_ip (str, optional): _description_. Defaults to "".
         use_inverter_device_id (bool, optional): _description_. Defaults to False.
-        keep_existing_alternative (bool, optional): _description_. Defaults to False.
         display_update_frq (bool, optional): _description_. Defaults to False.
 
     Returns:
@@ -135,9 +131,6 @@ def generate_plant_schema(
     validation_schema[vol.Required(CONF_READ_ONLY,
                                    default=user_input.get(CONF_READ_ONLY, DEFAULT_READ_ONLY))] = bool
 
-    if keep_existing_alternative:
-        validation_schema[vol.Required(CONF_KEEP_EXISTING,
-                                       default=user_input.get(CONF_KEEP_EXISTING, False))] = bool
     if display_update_frq:
         validation_schema[vol.Required(CONF_SCAN_INTERVAL,
                                        default=user_input.get(CONF_SCAN_INTERVAL,DEFAULT_SCAN_INTERVAL))] = vol.All(vol.Coerce(int))
@@ -285,20 +278,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
 
         # Check if the accumulated energy consumption sensor exists
-        keep_existing = self.hass.states.get(next(iter(LEGACY_SENSOR_MIGRATION_MAP.values())))
-        if keep_existing:
-            _LOGGER.debug(
-            "Found old yaml integration."
-            )
-            # Give an error that it is recommended to remove the old integration.
-        else:
-            _LOGGER.debug("Old yaml integration does not exist.")
-
-        validation_schema = {vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool}
-        if keep_existing:
-            validation_schema[vol.Required(CONF_KEEP_EXISTING, default=False)] = bool
-
-        schema = vol.Schema(validation_schema)
+        schema = vol.Schema({vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool})
 
         if user_input is None:
             return self.async_show_form(
@@ -306,10 +286,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 data_schema=schema,
                 description_placeholders={"ip_address": self._discovered_ip},
             )
-
-        # Check if keep_existing is set to True, if so and the user has not approved to continue, throw an error.
-        if keep_existing and not user_input.get(CONF_KEEP_EXISTING, False):
-            errors[CONF_KEEP_EXISTING] = "old_config_found"
 
         if errors:
             return self.async_show_form(
@@ -457,21 +433,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
         has_dc_charger = False
 
-        # Check if the accumulated energy consumption sensor exists
-        legacy_yaml_present = self.hass.states.get(next(iter(LEGACY_SENSOR_MIGRATION_MAP.values())))
-        if legacy_yaml_present:
-            _LOGGER.debug(
-            "Found old yaml integration."
-            )
-            # Store or use accumulatedEnergyState.state if needed for setup logic
-        else:
-            _LOGGER.debug("Old yaml integration does not exist.")
-
-
         if user_input is None:
             schema = generate_plant_schema(DEFAULT_PLANT_CONNECTION,
                                            discovered_ip=self._discovered_ip or "",
-                                           keep_existing_alternative=bool(legacy_yaml_present),
                                            use_inverter_device_id=True,
                                            display_update_frq=True
             )
@@ -480,10 +444,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=schema,
             )
-
-        # Check if keep_existing is set to True, if so and the user has not approved to continue, throw an error.
-        if legacy_yaml_present and not user_input.get(CONF_KEEP_EXISTING, False):
-            errors[CONF_KEEP_EXISTING] = "old_config_found"
 
         # Process and validate inverter ID
         try:
@@ -511,7 +471,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=generate_plant_schema(user_input,
                                                   discovered_ip=self._discovered_ip or "",
-                                                  keep_existing_alternative=bool(legacy_yaml_present),
                                                   use_inverter_device_id=True,
                                                   display_update_frq=True
                                                   ),
