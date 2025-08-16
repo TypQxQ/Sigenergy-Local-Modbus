@@ -1668,7 +1668,7 @@ class StaticSensors:
     DC_CHARGER_SENSORS = [
         SigenergySensorEntityDescription(
             key="dc_charger_vehicle_battery_voltage",
-            name="DC Charger Vehicle Battery Voltage",
+            name="Vehicle Battery Voltage",
             device_class=SensorDeviceClass.VOLTAGE,
             native_unit_of_measurement=UnitOfElectricPotential.VOLT,
             state_class=SensorStateClass.MEASUREMENT,
@@ -1676,7 +1676,7 @@ class StaticSensors:
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_charging_current",
-            name="DC Charger Charging Current",
+            name="Charging Current",
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -1684,7 +1684,7 @@ class StaticSensors:
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_output_power",
-            name="DC Charger Output Power",
+            name="Output Power",
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
@@ -1692,7 +1692,7 @@ class StaticSensors:
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_vehicle_soc",
-            name="DC Charger Vehicle SOC",
+            name="Vehicle SOC",
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -1700,7 +1700,7 @@ class StaticSensors:
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_current_charging_capacity",
-            name="DC Charger Current Charging Capacity (Single Time)",
+            name="Current Charging Capacity (Single Time)",
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
@@ -1708,7 +1708,7 @@ class StaticSensors:
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_current_charging_duration",
-            name="DC Charger Current Charging Duration (Single Time)",
+            name="Current Charging Duration (Single Time)",
             icon="mdi:timer",
             state_class=SensorStateClass.MEASUREMENT,
         ),

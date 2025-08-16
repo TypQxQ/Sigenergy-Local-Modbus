@@ -897,7 +897,7 @@ class SigenergyModbusHub:
                         **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
                            if reg.register_type != RegisterType.WRITE_ONLY}
                     }
-                    _LOGGER.debug("Attempting to probe plant registers...")
+                    _LOGGER.debug("Attempting to probe plant registers on %s...", plant_info)
                     self.plant_register_intervals = await self.async_probe_registers(
                         plant_info, all_plant_registers
                     )
@@ -951,7 +951,7 @@ class SigenergyModbusHub:
                         **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
                            if reg.register_type != RegisterType.WRITE_ONLY}
                     }
-                    _LOGGER.debug("Attempting to probe inverter '%s' registers...", inverter_name)
+                    _LOGGER.debug("Attempting to probe inverter '%s' registers on %s...", inverter_name, inverter_info)
                     self.inverter_register_intervals[inverter_name] = await self.async_probe_registers(
                         inverter_info, all_inverter_registers
                     )
@@ -1001,7 +1001,7 @@ class SigenergyModbusHub:
                         **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
                            if reg.register_type != RegisterType.WRITE_ONLY}
                     }
-                    _LOGGER.debug("Attempting to probe DC charger '%s' registers...", inverter_name)
+                    _LOGGER.debug("Attempting to probe DC charger '%s' registers on %s...", inverter_name, inverter_info)
                     self.dc_charger_register_intervals[inverter_name] = await self.async_probe_registers(
                         inverter_info, all_dc_charger_registers
                     )

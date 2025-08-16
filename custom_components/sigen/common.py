@@ -79,7 +79,6 @@ def generate_sigen_entity(
             else:
                 sensor_id = f"{device_name} DC Charger"
             sensor_name = f"{sensor_id} {description.name}"
-            # Keep device_type as DEVICE_TYPE_DC_CHARGER, don't change it to DEVICE_TYPE_INVERTER
         else:
             sensor_name = f"{device_name} {description.name}"
             sensor_id = sensor_name

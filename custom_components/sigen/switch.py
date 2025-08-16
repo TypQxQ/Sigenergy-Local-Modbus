@@ -113,7 +113,7 @@ DC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         key="dc_charging",
         name="DC Charging",
         icon="mdi:ev-station",
-        is_on_fn=lambda data, identifier: data.get("dc_chargers", {}).get(identifier, {}).get("output_power", 0) > 0,
+        is_on_fn=lambda data, identifier: data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_output_power", 0) > 0,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
     ),
@@ -131,7 +131,8 @@ async def async_setup_entry(
     entities_to_add = []
 
     # Helper to add entities to the list
-    def add_entities_for_device(device_name, device_conn, entity_descriptions, device_type, **kwargs):
+    def add_entities_for_device(device_name, device_conn,
+                                entity_descriptions, device_type, **kwargs):
         entities_to_add.extend(
             generate_sigen_entity(
                 plant_name,

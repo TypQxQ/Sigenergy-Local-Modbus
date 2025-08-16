@@ -63,7 +63,8 @@ async def async_setup_entry(
     entities_to_add = []
 
     # Helper to add entities to the list
-    def add_entities_for_device(device_name, device_conn, entity_descriptions, entity_class, device_type, **kwargs):
+    def add_entities_for_device(device_name, device_conn,
+                                entity_descriptions, entity_class, device_type, **kwargs):
         entities_to_add.extend(
             generate_sigen_entity(
                 plant_name,
@@ -126,7 +127,7 @@ async def async_setup_entry(
                 model="DC Charger",
                 via_device=(DOMAIN, parent_inverter_id),
             )
-            add_entities_for_device(dc_name, device_conn, SS.DC_CHARGER_SENSORS, SigenergySensor, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
+            add_entities_for_device(device_name, device_conn, SS.DC_CHARGER_SENSORS, SigenergySensor, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
 
     # AC Charger Sensors
     for ac_charger_name, ac_details in coordinator.hub.ac_charger_connections.items():
