@@ -535,14 +535,51 @@ class SigenergyCalculations:
         )
 
     @staticmethod
+    def _construct_source_entity_id(register_name: str, coordinator, hass) -> Optional[str]:
+        """Construct the source entity ID from register name using entity registry lookup."""
+        from .common import get_source_entity_id
+        from .const import DEVICE_TYPE_PLANT
+        from homeassistant.const import CONF_NAME
+        
+        # For plant-level sensors, use plant device type and plant name from config
+        plant_name = coordinator.hub.config_entry.data.get(CONF_NAME, "Plant")
+        
+        return get_source_entity_id(
+            device_type=DEVICE_TYPE_PLANT,
+            device_name=plant_name,
+            source_key=register_name,
+            coordinator=coordinator,
+            hass=hass
+        )
+
+    @staticmethod
     def calculate_daily_energy_from_lifetime(
         value,
         coordinator_data: Optional[Dict[str, Any]] = None,
-    extra_params: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[Decimal]:
         """Calculate daily energy from lifetime total using register name from extra_params."""
-        # legacy no-op; lifetime lookup now done in SigenergyLifetimeDailySensor
-        return None
+        if coordinator_data is None or "plant" not in coordinator_data:
+            return None
+            
+        if extra_params is None or "register_name" not in extra_params:
+            _LOGGER.warning("[CS][Daily Energy] Missing register_name in extra_params")
+            return None
+
+        register_name = extra_params["register_name"]
+        
+        # Get the current lifetime total
+        current_lifetime = coordinator_data["plant"].get(register_name)
+        if current_lifetime is None:
+            return None
+
+        current_lifetime_dec = safe_decimal(current_lifetime)
+        if current_lifetime_dec is None:
+            return None
+
+        # The daily calculation will be handled by SigenergyLifetimeDailySensor
+        # This function just returns the current lifetime value for the sensor to use
+        return current_lifetime_dec
 
 
 class IntegrationTrigger(Enum):
@@ -621,14 +658,25 @@ class SigenergyLifetimeDailySensor(SigenergyEntity, RestoreSensor):
             if not extra_params or "register_name" not in extra_params:
                 return None
             
-            # Extract source entity ID and register name from extra_params
+            # Extract register name from extra_params and construct source entity ID
             register_name = extra_params.get("register_name")
-            source_entity_id = extra_params.get("source_entity_id")
-            if not register_name or not source_entity_id:
+            if not register_name:
                 if self.log_this_entity:
                     _LOGGER.debug(
-                        "[%s] Missing register_name or source_entity_id in extra_params: %s", 
+                        "[%s] Missing register_name in extra_params: %s", 
                         self.entity_id, extra_params
+                    )
+                return None
+            
+            # Construct the source entity ID dynamically
+            source_entity_id = SigenergyCalculations._construct_source_entity_id(
+                register_name, self.coordinator, self.hass
+            )
+            if not source_entity_id:
+                if self.log_this_entity:
+                    _LOGGER.debug(
+                        "[%s] Could not find source entity for register: %s", 
+                        self.entity_id, register_name
                     )
                 return None
             
@@ -775,13 +823,7 @@ class SigenergyLifetimeDailySensor(SigenergyEntity, RestoreSensor):
             # Get extra_fn_data flag and extra_params
             extra_fn_data = getattr(self.entity_description, 'extra_fn_data', False)
             extra_params = getattr(self.entity_description, 'extra_params', None)
-            # For lifetime-daily sensors, fetch raw lifetime from the HA integration sensor state
-            if extra_fn_data and extra_params and "source_entity_id" in extra_params:
-                source_id = extra_params.get("source_entity_id")
-                state_obj = self.hass.states.get(source_id) if self.hass else None
-                if not state_obj or state_obj.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                    return None
-                return safe_decimal(state_obj.state)
+            
             if extra_fn_data:
                 result = value_fn(None, coordinator_data, extra_params)
             else:
@@ -1510,7 +1552,6 @@ class SigenergyCalculatedSensors:
             extra_fn_data=True,
             extra_params={
                 "register_name": "plant_accumulated_grid_import_energy",
-                "source_entity_id": "sensor.sigen_plant_total_imported_energy",
             },
             suggested_display_precision=2,
             round_digits=6,
@@ -1526,7 +1567,6 @@ class SigenergyCalculatedSensors:
             extra_fn_data=True,
             extra_params={
                 "register_name": "plant_accumulated_grid_export_energy",
-                "source_entity_id": "sensor.sigen_plant_total_exported_energy",
             },
             suggested_display_precision=2,
             round_digits=6,
@@ -1542,7 +1582,6 @@ class SigenergyCalculatedSensors:
             extra_fn_data=True,
             extra_params={
                 "register_name": "plant_total_generation_of_third_party_inverter",
-                "source_entity_id": "sensor.sigen_plant_total_generation_of_third_party_inverter",
             },
             suggested_display_precision=2,
             round_digits=6,
