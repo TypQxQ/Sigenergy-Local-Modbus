@@ -1565,7 +1565,7 @@ class SigenergyCalculatedSensors:
     # Lifetime-based daily energy sensors (require special handling)
     PLANT_LIFETIME_DAILY_SENSORS = [
         SigenergySensorEntityDescription(
-            key="plant_daily_grid_import_energy_from_lifetime",
+            key="plant_daily_grid_import_energy",
             name="Daily Grid Import Energy",
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -1580,7 +1580,7 @@ class SigenergyCalculatedSensors:
             round_digits=6,
         ),
         SigenergySensorEntityDescription(
-            key="plant_daily_grid_export_energy_from_lifetime",
+            key="plant_daily_grid_export_energy",
             name="Daily Grid Export Energy",
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
