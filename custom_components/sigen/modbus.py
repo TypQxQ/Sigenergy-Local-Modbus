@@ -752,7 +752,6 @@ class SigenergyModbusHub:
     ) -> List[int]:
         """Encode value to register values based on data type."""
         # For simple U16 values like 0 or 1, just return the value directly
-        # This bypasses potential byte order issues with the BinaryPayloadBuilder
         if data_type == DataType.U16 and isinstance(value, int) and 0 <= value <= 255:
             _LOGGER.debug("Using direct value encoding for simple U16 value: %s", value)
             return [value]
