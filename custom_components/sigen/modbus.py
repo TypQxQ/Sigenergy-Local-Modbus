@@ -14,7 +14,6 @@ from homeassistant.exceptions import HomeAssistantError
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.constants import Endian
 from pymodbus.exceptions import ConnectionException, ModbusException
-from pymodbus.payload import BinaryPayloadBuilder
 from pymodbus.client.mixin import ModbusClientMixin
 from pymodbus import __version__ as pymodbus_version
 
@@ -753,13 +752,9 @@ class SigenergyModbusHub:
     ) -> List[int]:
         """Encode value to register values based on data type."""
         # For simple U16 values like 0 or 1, just return the value directly
-        # This bypasses potential byte order issues with the BinaryPayloadBuilder
         if data_type == DataType.U16 and isinstance(value, int) and 0 <= value <= 255:
             _LOGGER.debug("Using direct value encoding for simple U16 value: %s", value)
             return [value]
-
-        # For other cases, use the BinaryPayloadBuilder
-        builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.BIG)
 
         # Apply gain for numeric values
         if isinstance(value, (int, float)) and gain != 1 and data_type != DataType.STRING:
@@ -768,21 +763,32 @@ class SigenergyModbusHub:
         _LOGGER.debug("Encoding value %s with data_type %s", value, data_type)
 
         if data_type == DataType.U16:
-            builder.add_16bit_uint(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.UINT16
+            )
         elif data_type == DataType.S16:
-            builder.add_16bit_int(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.INT16
+            )
         elif data_type == DataType.U32:
-            builder.add_32bit_uint(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.UINT32
+            )
         elif data_type == DataType.S32:
-            builder.add_32bit_int(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.INT32
+            )
         elif data_type == DataType.U64:
-            builder.add_64bit_uint(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.UINT64
+            )
         elif data_type == DataType.STRING:
-            builder.add_string(str(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                str(value), data_type=ModbusClientMixin.DATATYPE.STRING
+            )
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
 
-        registers = builder.to_registers()
         _LOGGER.debug("Encoded registers: %s", registers)
         return registers
 
