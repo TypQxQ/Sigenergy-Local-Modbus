@@ -331,82 +331,40 @@ class SigenergyCalculations:
 
         total_ac_charger_power = 0.0
         ac_chargers: dict[str, Any] = coordinator_data.get("ac_chargers", {})
-        # _LOGGER.debug("AC Chargers data: %s", ac_chargers)
         for _, ac_charger_data in ac_chargers.items():
             ac_power = safe_float(ac_charger_data.get("ac_charger_charging_power"))
             if ac_power is not None:
                 total_ac_charger_power += ac_power
 
-        total_dc_charger_power = 0.0
-        dc_chargers: dict[str, Any] = coordinator_data.get("dc_chargers", {})
-        # _LOGGER.debug("DC Chargers data: %s", dc_chargers)
-        for _, dc_charger_data in dc_chargers.items():
-            dc_power = safe_float(dc_charger_data.get("dc_charger_output_power"))
-            if dc_power is not None:
-                total_dc_charger_power += dc_power
-
-        # Use the correct calculation for total PV power
-        pv_power = SigenergyCalculations.calculate_total_pv_power(
-            None, coordinator_data=coordinator_data
-        )
-
+        plant_power = plant_data.get("plant_active_power")
         grid_power = plant_data.get("plant_grid_sensor_active_power")
-
-        # Get battery power
-        battery_power = plant_data.get("plant_ess_power")
+        third_party_pv_power = plant_data.get("plant_third_party_photovoltaic_power")
 
         # Validate inputs
-        if pv_power is None or grid_power is None or battery_power is None:
+        if plant_power is None or grid_power is None or third_party_pv_power is None:
             return None
 
         # Validate input types
-        if not isinstance(pv_power, (int, float)):
-            _LOGGER.warning(
-                "[CS][Plant Consumed] PV power is not a number: %s (type: %s)",
-                pv_power,
-                type(pv_power).__name__,
-            )
-            return None
-        if not isinstance(grid_power, (int, float)):
-            _LOGGER.warning(
-                "[CS][Plant Consumed] Grid power is not a number: %s (type: %s)",
-                grid_power,
-                type(grid_power).__name__,
-            )
-            return None
-        if not isinstance(battery_power, (int, float)):
-            _LOGGER.warning(
-                "[CS][Plant Consumed] Battery power is not a number: %s (type: %s)",
-                battery_power,
-                type(battery_power).__name__,
-            )
-            return None
+        def are_numbers(*values):
+            for x in values:
+                if not isinstance(x, (int, float)):
+                    try:
+                        float(x)
+                    except (ValueError, TypeError):
+                        _LOGGER.warning(
+                            "[CS][Plant Consumed] Value is not a number: %s (type: %s)",
+                            x,
+                            type(x).__name__,
+                        )
+                        return False
+            return True
 
-        # Calculate grid import and export power
-        # Grid power is positive when importing, negative when exporting
-        grid_import = max(0, grid_power)
-        grid_export = max(0, -grid_power)
+        if not are_numbers(grid_power, plant_power, third_party_pv_power):
+            return None
 
         # Calculate plant consumed power
-        # Note: battery_power is positive when charging, negative when discharging
         try:
-            # The household consumption should include the power used by the EV chargers.
-            # The chargers are loads within the household.
-            consumed_power = pv_power + grid_import - grid_export - battery_power
-
-            # Sanity check
-            if consumed_power < 0:
-                _LOGGER.debug(
-                    "[CS][Plant Consumed] Calculated power is negative.\n" \
-                    "consumed_power = pv_power + grid_import - grid_export - battery_power:\n" \
-                    "%s kW = %s + %s - %s - %s",
-                    consumed_power,
-                    pv_power,
-                    grid_import,
-                    grid_export,
-                    battery_power
-                )
-                # Keep the negative value as it might be valid in some scenarios
+            consumed_power = max(0, float(plant_power) + float(grid_power) + float(third_party_pv_power) - total_ac_charger_power)
 
         except Exception as ex:  # pylint: disable=broad-exception-caught
             _LOGGER.error(
