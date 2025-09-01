@@ -12,7 +12,6 @@ from homeassistant.config_entries import ConfigEntry  # pylint: disable=no-name-
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from pymodbus.client import AsyncModbusTcpClient
-from pymodbus.constants import Endian
 from pymodbus.exceptions import ConnectionException, ModbusException
 from pymodbus.client.mixin import ModbusClientMixin
 from pymodbus import __version__ as pymodbus_version
