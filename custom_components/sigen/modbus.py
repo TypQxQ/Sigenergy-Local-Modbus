@@ -373,14 +373,14 @@ class SigenergyModbusHub:
                     client.read_input_registers,
                     address=register.address,
                     count=register.count,
-                    slave=slave_id
+                    device_id=slave_id
                 )
             elif register.register_type == RegisterType.HOLDING:
                 result = await _call_modbus_method_safe(
                     client.read_holding_registers,
                     address=register.address,
                     count=register.count,
-                    slave=slave_id
+                    device_id=slave_id
                 )
             else:
                 _LOGGER.debug(
@@ -580,7 +580,7 @@ class SigenergyModbusHub:
                 with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
                     result = await _call_modbus_method_safe(
                         client.read_input_registers if register_type == RegisterType.READ_ONLY else client.read_holding_registers,
-                        address=address, count=count, slave=slave_id
+                        address=address, count=count, device_id=slave_id
                     )
 
                     if result.isError():
@@ -669,14 +669,14 @@ class SigenergyModbusHub:
                                     client.write_registers,
                                     address=approach["address"],
                                     values=approach["values"],
-                                    slave=slave_id
+                                    device_id=slave_id
                                 )
                             else:  # write_register
                                 result = await _call_modbus_method_safe(
                                     client.write_register,
                                     address=approach["address"],
                                     value=approach["value"],
-                                    slave=slave_id
+                                    device_id=slave_id
                                 )
 
                             if not result.isError():
@@ -750,7 +750,7 @@ class SigenergyModbusHub:
                         address, values, slave_id
                     )
                     result = await client.write_registers(
-                        address=address, values=values, slave=slave_id
+                        address=address, values=values, device_id=slave_id
                     )
                     if result.isError():
                         _LOGGER.warning("Modbus write_registers error for %s:%s@%s (address %s): %s. Marking connection as closed.", key[0], key[1], slave_id, address, result)
