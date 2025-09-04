@@ -749,8 +749,11 @@ class SigenergyModbusHub:
                         "Trying write_registers at original address %s with values %s for slave %s",
                         address, values, slave_id
                     )
-                    result = await client.write_registers(
-                        address=address, values=values, slave=slave_id
+                    result = await _call_modbus_method_safe(
+                        client.write_registers,
+                        address=address,
+                        values=values,
+                        slave=slave_id,
                     )
                     if result.isError():
                         _LOGGER.warning("Modbus write_registers error for %s:%s@%s (address %s): %s. Marking connection as closed.", key[0], key[1], slave_id, address, result)

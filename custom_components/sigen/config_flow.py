@@ -28,7 +28,7 @@ from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
     async_entries_for_device,
 )
-from .modbus import _suppress_pymodbus_logging
+from .modbus import _suppress_pymodbus_logging, _call_modbus_method_safe
 from .const import (
     DOMAIN,
     DEFAULT_PORT,
@@ -538,10 +538,11 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
                 _LOGGER.debug("Modbus connected to %s:%s. Checking device type...", host, port)
 
-                result = await client.read_input_registers(
+                result = await _call_modbus_method_safe(
+                    client.read_input_registers,
                     address=register_address,
                     count=1,
-                    slave=slave_id
+                    slave=slave_id,
                 )
                 if result and not result.isError():
                     _LOGGER.debug("Modbus read successful for register %s on %s:%s, slave %s.",
