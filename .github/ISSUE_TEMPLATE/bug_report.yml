@@ -60,16 +60,16 @@ body:
     id: logs
     attributes:
       label: "Logs"
-      description: "Attach relevant log excerpts. See the discussion below for how to collect logs. https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/54"
+      description: "Attach relevant log excerpts. See here how to collect logs: https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/54"
       placeholder: |
         Paste logs here or attach files below.
     validations:
       required: false
 
-  - type: markdown
-    attributes:
-      value: |
-        How to get logs: https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/54
+  # - type: markdown
+  #   attributes:
+  #     value: |
+  #       How to get logs: https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/54
 
   - type: textarea
     id: diagnostics
