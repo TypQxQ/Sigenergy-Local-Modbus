@@ -60,7 +60,7 @@ body:
     id: logs
     attributes:
       label: "Logs"
-      description: "Attach relevant log excerpts. See the discussion below for how to collect logs."
+      description: "Attach relevant log excerpts. See the discussion below for how to collect logs. https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/54"
       placeholder: |
         Paste logs here or attach files below.
     validations:
