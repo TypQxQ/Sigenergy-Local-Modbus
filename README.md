@@ -39,6 +39,11 @@ More add-ons and enhancements are coming; stay tuned!
 ## Installation
 ### HACS (Recommended)
 
+
+The [Home Assistant Community Store (HACS)](https://www.hacs.xyz/) is a custom integration that provides a UI to manage custom elements such as Sigenergy ESS in Home Assistant.
+You first need to [install and configure](https://www.hacs.xyz/docs/use/) it before following these instructions below.
+
+
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TypQxQ&repository=Sigenergy-Local-Modbus&category=Integration)
 
 1. Go to **HACS > Integrations** in Home Assistant
