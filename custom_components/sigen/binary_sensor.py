@@ -20,7 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, DEVICE_TYPE_PLANT
 from .coordinator import SigenergyDataUpdateCoordinator
 from .sigen_entity import SigenergyEntity
-from .common import generate_sigen_entity
+from .common import generate_sigen_entity, safe_decimal
 from .calculated_sensor import SigenergyCalculations
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class SigenergyBinarySensorEntityDescription(
     source_key: Optional[str] = None
 
 # Define the calculated binary sensors
-PLANT_BINARY_SENSORS = [
+PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
     SigenergyBinarySensorEntityDescription(
         key="plant_pv_generating",
         name="PV Generating",
@@ -60,8 +60,7 @@ PLANT_BINARY_SENSORS = [
         device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
         icon="mdi:battery-positive", # Standard HA icon
         source_key="plant_ess_power",
-        value_fn=lambda data: (val := data.get("plant_ess_power")) \
-            is not None and Decimal(str(val)) > Decimal("0.01"),
+        value_fn=lambda data: (dec_val := safe_decimal(data.get("plant_ess_power"))) is not None and dec_val > Decimal("0.01"),
     ),
     SigenergyBinarySensorEntityDescription(
         key="plant_battery_discharging",
@@ -70,8 +69,7 @@ PLANT_BINARY_SENSORS = [
         device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:battery-negative", # Standard HA icon
         source_key="plant_ess_power",
-        value_fn=lambda data: (val := data.get("plant_ess_power")) \
-            is not None and Decimal(str(val)) < Decimal("-0.01"),
+        value_fn=lambda data: (dec_val := safe_decimal(data.get("plant_ess_power"))) is not None and dec_val < Decimal("-0.01"),
     ),
     SigenergyBinarySensorEntityDescription(
         key="plant_exporting_to_grid",
@@ -80,8 +78,7 @@ PLANT_BINARY_SENSORS = [
         icon="mdi:transmission-tower-export",
         source_key="plant_grid_sensor_active_power",
         # Exporting is when grid power is positive (Sigenergy convention)
-        value_fn=lambda data: (val := data.get("plant_grid_sensor_active_power")) \
-            is not None and Decimal(str(val)) < Decimal("-0.01"),
+        value_fn=lambda data: (dec_val := safe_decimal(data.get("plant_grid_sensor_active_power"))) is not None and dec_val < Decimal("-0.01"),
     ),
     SigenergyBinarySensorEntityDescription(
         key="plant_importing_from_grid",
@@ -90,8 +87,7 @@ PLANT_BINARY_SENSORS = [
         icon="mdi:transmission-tower-import",
         source_key="plant_grid_sensor_active_power",
         # Importing is when grid power is negative (Sigenergy convention)
-        value_fn=lambda data: (val := data.get("plant_grid_sensor_active_power")) \
-            is not None and Decimal(str(val)) > Decimal("0.01"),
+        value_fn=lambda data: (dec_val := safe_decimal(data.get("plant_grid_sensor_active_power"))) is not None and dec_val > Decimal("0.01"),
     ),
 ]
 
@@ -101,35 +97,26 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Sigenergy binary sensor platform."""
-    coordinator: SigenergyDataUpdateCoordinator = \
-        hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    coordinator: SigenergyDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     plant_name = config_entry.data[CONF_NAME]
 
-    entities_to_add: list[SigenergyBinarySensor] = []
-
     try:
-        # Make sure coordinator and hub are properly initialized
-        if not coordinator or not hasattr(coordinator, "hub") or not coordinator.hub:
-            _LOGGER.error("Coordinator or hub not properly initialized")
-            return
-
-        # Ensure config_entry is set on the hub
-        if not hasattr(coordinator.hub, "config_entry") or not coordinator.hub.config_entry:
-            coordinator.hub.config_entry = config_entry
-
         entities_to_add = generate_sigen_entity(
-            plant_name, None, None, coordinator,
-            SigenergyBinarySensor,
-            PLANT_BINARY_SENSORS,
-            DEVICE_TYPE_PLANT,
-            hass=hass # Pass hass object here
+            plant_name=plant_name,
+            device_name=None,
+            device_conn=None,
+            coordinator=coordinator,
+            entity_class=SigenergyBinarySensor,
+            entity_description=PLANT_BINARY_SENSORS,
+            device_type=DEVICE_TYPE_PLANT,
+            hass=hass
         )
 
         if entities_to_add:
             async_add_entities(entities_to_add)
             _LOGGER.debug("Added %d plant binary sensors", len(entities_to_add))
     except Exception as ex:
-        _LOGGER.exception("Error setting up binary sensors: %s", ex)
+        _LOGGER.exception("Error setting up Sigenergy binary sensors: %s", ex)
 
 
 class SigenergyBinarySensor(SigenergyEntity, BinarySensorEntity):
@@ -143,10 +130,11 @@ class SigenergyBinarySensor(SigenergyEntity, BinarySensorEntity):
         description: SigenergyBinarySensorEntityDescription,
         name: str,
         device_type: str,
-        device_id: Optional[str] = None, # Changed to Optional[str]
-        device_name: Optional[str] = "",
+        device_id: Optional[str] = None,
+        device_name: str = "",
         device_info: Optional[DeviceInfo] = None,
         source_entity_id: str = "",
+        pv_string_idx: Optional[int] = None,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(
@@ -157,6 +145,7 @@ class SigenergyBinarySensor(SigenergyEntity, BinarySensorEntity):
             device_id=device_id,
             device_name=device_name,
             device_info=device_info,
+            pv_string_idx=pv_string_idx,
         )
         self._source_entity_id = source_entity_id
 
@@ -164,41 +153,24 @@ class SigenergyBinarySensor(SigenergyEntity, BinarySensorEntity):
     def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
         if self.coordinator.data is None or "plant" not in self.coordinator.data:
-            _LOGGER.debug("[%s] No coordinator data available", self.entity_id)
-            return None # Or False, depending on desired behavior for unavailable data
+            return None
 
         plant_data = self.coordinator.data["plant"]
 
-        # If a source key is defined, check if it exists in the plant data
-        if (
-            self.entity_description.source_key is not None
-            and self.entity_description.source_key not in plant_data
-        ):
-            _LOGGER.debug(
-                "[%s] Source key '%s' not found in plant data",
-                self.entity_id,
-                self.entity_description.source_key,
-            )
-            return None  # Source data missing
-
-        # Check if value_fn is defined
         if self.entity_description.value_fn is None:
-            _LOGGER.error("[%s] value_fn is not defined for description", self.entity_id)
+            _LOGGER.error("[%s] value_fn is not defined", self.entity_id)
             return None
 
         try:
-            # Execute the value_fn with the plant data
-            state = self.entity_description.value_fn(plant_data)
-            # _LOGGER.debug("[%s] Calculated state: %s", self.entity_id, state)
-            return state
+            return self.entity_description.value_fn(plant_data)
         except (InvalidOperation, TypeError, ValueError) as ex:
             _LOGGER.warning(
-                "[%s] Error calculating state for source key '%s': %s",
+                "[%s] Could not calculate state for key '%s': %s",
                 self.entity_id,
                 self.entity_description.source_key,
-                ex
+                ex,
             )
-            return None # Error during calculation
+            return None
         except Exception as ex:
             _LOGGER.exception(
                 "[%s] Unexpected error calculating state: %s", self.entity_id, ex

@@ -14,10 +14,7 @@ CONF_PORT = "port"
 CONF_SLAVE_ID = "slave_id"
 CONF_PLANT_ID = "plant_id"
 CONF_PLANT_CONNECTION = "plant_connection"
-CONF_SCAN_INTERVAL_HIGH = "scan_interval_high"
-CONF_SCAN_INTERVAL_MEDIUM = "scan_interval_medium"
-CONF_SCAN_INTERVAL_LOW = "scan_interval_low"
-CONF_SCAN_INTERVAL_ALARM = "scan_interval_alarm"
+CONF_SCAN_INTERVAL = "scan_interval"
 CONF_INVERTER_COUNT = "inverter_count"
 CONF_INVERTER_SLAVE_ID = "inverter_slave_ids"
 CONF_INVERTER_CONNECTIONS = "inverter_connections"
@@ -26,7 +23,6 @@ CONF_AC_CHARGER_CONNECTIONS = "ac_charger_connections"
 CONF_DC_CHARGER_CONNECTIONS = "dc_charger_connections"
 CONF_DEVICE_TYPE = "device_type"
 CONF_PARENT_DEVICE_ID = "parent_device_id"
-CONF_KEEP_EXISTING = "keep_existing"
 CONF_VALUES_TO_INIT = "values_to_initialize"
 STEP_ACCUMULATED_ENERGY_CONFIG = "accumulated_energy_config"
 
@@ -63,10 +59,7 @@ CONF_REMOVE_DEVICE = "remove_device"
 DEFAULT_PORT = 502
 DEFAULT_PLANT_SLAVE_ID = 247  # Plant address
 DEFAULT_INVERTER_SLAVE_ID = 1  # Default Inverter address
-DEFAULT_SCAN_INTERVAL_HIGH = 5
-DEFAULT_SCAN_INTERVAL_ALARM = 30
-DEFAULT_SCAN_INTERVAL_MEDIUM = 30
-DEFAULT_SCAN_INTERVAL_LOW = 600
+DEFAULT_SCAN_INTERVAL = 5
 DEFAULT_INVERTER_COUNT = 1
 DEFAULT_READ_ONLY = True  # Default to read-only mode
 DEFAULT_MIN_INTEGRATION_TIME = 1  # Minimum integration time in seconds
@@ -101,7 +94,7 @@ LEGACY_SENSOR_MIGRATION_MAP = {
     "sensor.sigen_plant_accumulated_grid_export_energy": "sensor.sigen_accumulated_grid_energy_export",
 }
 
-RESETABLE_SENSORS =  {
+RESETTABLE_SENSORS =  {
     "sensor.sigen_plant_accumulated_pv_energy": "Plant Accumulated PV Energy",
     "sensor.sigen_plant_accumulated_consumed_energy": "Plant Accumulated Consumed Energy",
     "sensor.sigen_plant_accumulated_grid_import_energy": "Plant Accumulated Grid Import Energy",

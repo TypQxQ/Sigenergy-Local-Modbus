@@ -13,5 +13,7 @@
         "--ignore=Reference/core-dev",
         "--ignore=Reference/pymodbus",
         "--init-hook=import sys; sys.path.append('Reference/core-dev')",
-      ]
+      ],
+      "python-envs.defaultEnvManager": "ms-python.python:system",
+      "python-envs.pythonProjects": []
     }

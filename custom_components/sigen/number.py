@@ -26,8 +26,8 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import SigenergyDataUpdateCoordinator # Import coordinator
-from .modbus import SigenergyModbusError
-from .common import(generate_sigen_entity, generate_unique_entity_id, generate_device_id) # Added generate_device_id
+# from .modbus import SigenergyModbusError
+from .common import(generate_sigen_entity) # Added generate_device_id
 from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
@@ -371,6 +371,47 @@ PLANT_NUMBERS = [
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
     ),
+    # Additions for Modbus specification v2.7
+        SigenergyNumberEntityDescription(
+        key="plant_backup_soc",
+        name="ESS Backup State of Charge",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_backup_soc", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_backup_soc", value),
+        entity_registry_enabled_default=False,
+    ),
+        SigenergyNumberEntityDescription(
+        key="plant_charge_cut_off_soc",
+        name="ESS Charge Cut-Off State of Charge",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_charge_cut_off_soc", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_charge_cut_off_soc", value),
+        entity_registry_enabled_default=False,
+    ),
+        SigenergyNumberEntityDescription(
+        key="plant_discharge_cut_off_soc",
+        name="ESS Discharge Cut-Off State of Charge",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_discharge_cut_off_soc", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_discharge_cut_off_soc", value),
+        entity_registry_enabled_default=False,
+    ),
+
 ]
 
 INVERTER_NUMBERS = [
@@ -497,7 +538,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class SigenergyNumber(SigenergyEntity, NumberEntity):
+class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract-method
     """Representation of a Sigenergy number."""
 
     entity_description: SigenergyNumberEntityDescription
@@ -523,7 +564,7 @@ class SigenergyNumber(SigenergyEntity, NumberEntity):
             name=name,
             device_type=device_type,
             device_id=device_id,
-            device_name=device_name,
+            device_name=device_name or "",
             device_info=device_info,
             pv_string_idx=pv_string_idx,
         )
@@ -542,7 +583,12 @@ class SigenergyNumber(SigenergyEntity, NumberEntity):
             # Ensure the value is a float
             return float(value) if value is not None else 0.0
         except (TypeError, ValueError, KeyError) as e:
-            _LOGGER.error(f"Error getting native value for {self.entity_id} (identifier: {identifier}): {e}")
+            _LOGGER.error(
+                "Error getting native value for %s (identifier: %s): %s",
+                self.entity_id,
+                identifier,
+                e,
+            )
             return 0.0
 
 

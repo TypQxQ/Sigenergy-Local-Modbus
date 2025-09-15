@@ -28,17 +28,14 @@ from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
     async_entries_for_device,
 )
-from .modbus import _suppress_pymodbus_logging
+from .modbus import _suppress_pymodbus_logging, _call_modbus_method_safe
 from .const import (
     DOMAIN,
     DEFAULT_PORT,
     DEFAULT_INVERTER_SLAVE_ID,
     DEFAULT_PLANT_SLAVE_ID,
     DEFAULT_READ_ONLY,
-    DEFAULT_SCAN_INTERVAL_HIGH,
-    DEFAULT_SCAN_INTERVAL_MEDIUM,
-    DEFAULT_SCAN_INTERVAL_LOW,
-    DEFAULT_SCAN_INTERVAL_ALARM,
+    DEFAULT_SCAN_INTERVAL,
     CONF_HOST,
     CONF_PORT,
     CONF_SLAVE_ID,
@@ -50,19 +47,14 @@ from .const import (
     CONF_PARENT_PLANT_ID,
     CONF_INVERTER_HAS_DCCHARGER,
     CONF_READ_ONLY,
-    CONF_KEEP_EXISTING,
     CONF_REMOVE_DEVICE,
-    CONF_SCAN_INTERVAL_HIGH,
-    CONF_SCAN_INTERVAL_MEDIUM,
-    CONF_SCAN_INTERVAL_LOW,
-    CONF_SCAN_INTERVAL_ALARM,
+    CONF_SCAN_INTERVAL,
     DEVICE_TYPE_NEW_PLANT,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_PLANT,
     DEVICE_TYPE_UNKNOWN,
-    LEGACY_SENSOR_MIGRATION_MAP,
     STEP_DHCP_PLANT_CONFIG,
     STEP_DEVICE_TYPE,
     STEP_PLANT_CONFIG,
@@ -75,7 +67,7 @@ from .const import (
     CONF_PARENT_INVERTER_ID,
     STEP_SELECT_DEVICE,
     STEP_ACCUMULATED_ENERGY_CONFIG,
-    RESETABLE_SENSORS,
+    RESETTABLE_SENSORS,
     CONF_VALUES_TO_INIT,
 )
 from .common import (safe_decimal, safe_float)
@@ -86,10 +78,7 @@ DEFAULT_PLANT_CONNECTION = {
                 CONF_HOST: "",
                 CONF_PORT: DEFAULT_PORT,
                 CONF_INVERTER_SLAVE_ID: DEFAULT_INVERTER_SLAVE_ID,
-                CONF_SCAN_INTERVAL_HIGH: DEFAULT_SCAN_INTERVAL_HIGH,
-                CONF_SCAN_INTERVAL_ALARM: DEFAULT_SCAN_INTERVAL_ALARM, 
-                CONF_SCAN_INTERVAL_MEDIUM: DEFAULT_SCAN_INTERVAL_MEDIUM,
-                CONF_SCAN_INTERVAL_LOW: DEFAULT_SCAN_INTERVAL_LOW,
+                CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
 }
 
 # Schema definitions for each step
@@ -117,7 +106,6 @@ def generate_plant_schema(
         user_input,
         discovered_ip = "",
         use_inverter_device_id = False,
-        keep_existing_alternative = False,
         display_update_frq = False
     ) -> vol.Schema:
     """Dynamically create schema using the determined prefill_host
@@ -126,7 +114,6 @@ def generate_plant_schema(
         user_input (_type_, optional): _description_. Defaults to None.
         discovered_ip (str, optional): _description_. Defaults to "".
         use_inverter_device_id (bool, optional): _description_. Defaults to False.
-        keep_existing_alternative (bool, optional): _description_. Defaults to False.
         display_update_frq (bool, optional): _description_. Defaults to False.
 
     Returns:
@@ -144,18 +131,9 @@ def generate_plant_schema(
     validation_schema[vol.Required(CONF_READ_ONLY,
                                    default=user_input.get(CONF_READ_ONLY, DEFAULT_READ_ONLY))] = bool
 
-    if keep_existing_alternative:
-        validation_schema[vol.Required(CONF_KEEP_EXISTING,
-                                       default=user_input.get(CONF_KEEP_EXISTING, False))] = bool
     if display_update_frq:
-        validation_schema[vol.Required(CONF_SCAN_INTERVAL_HIGH,
-                                       default=user_input.get(CONF_SCAN_INTERVAL_HIGH,DEFAULT_SCAN_INTERVAL_HIGH))] = vol.All(vol.Coerce(int))
-        validation_schema[vol.Required(CONF_SCAN_INTERVAL_ALARM,
-                                       default=user_input.get(CONF_SCAN_INTERVAL_ALARM,DEFAULT_SCAN_INTERVAL_ALARM))] = vol.All(vol.Coerce(int))
-        validation_schema[vol.Required(CONF_SCAN_INTERVAL_MEDIUM,
-                                       default=user_input.get(CONF_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_MEDIUM))] = vol.All(vol.Coerce(int))
-        validation_schema[vol.Required(CONF_SCAN_INTERVAL_LOW,
-                                       default=user_input.get(CONF_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_LOW))] = vol.All(vol.Coerce(int))
+        validation_schema[vol.Required(CONF_SCAN_INTERVAL,
+                                       default=user_input.get(CONF_SCAN_INTERVAL,DEFAULT_SCAN_INTERVAL))] = vol.All(vol.Coerce(int))
 
     schema = vol.Schema(validation_schema)
     return schema
@@ -300,20 +278,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
 
         # Check if the accumulated energy consumption sensor exists
-        keep_existing = self.hass.states.get(next(iter(LEGACY_SENSOR_MIGRATION_MAP.values())))
-        if keep_existing:
-            _LOGGER.debug(
-            "Found old yaml integration."
-            )
-            # Give an error that it is recommended to remove the old integration.
-        else:
-            _LOGGER.debug("Old yaml integration does not exist.")
-
-        validation_schema = {vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool}
-        if keep_existing:
-            validation_schema[vol.Required(CONF_KEEP_EXISTING, default=False)] = bool
-
-        schema = vol.Schema(validation_schema)
+        schema = vol.Schema({vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool})
 
         if user_input is None:
             return self.async_show_form(
@@ -321,10 +286,6 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 data_schema=schema,
                 description_placeholders={"ip_address": self._discovered_ip},
             )
-
-        # Check if keep_existing is set to True, if so and the user has not approved to continue, throw an error.
-        if keep_existing and not user_input.get(CONF_KEEP_EXISTING, False):
-            errors[CONF_KEEP_EXISTING] = "old_config_found"
 
         if errors:
             return self.async_show_form(
@@ -335,7 +296,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             )
 
         # Create the plant connection dictionary
-        new_plant_connection = DEFAULT_PLANT_CONNECTION
+        new_plant_connection = DEFAULT_PLANT_CONNECTION.copy()
         new_plant_connection[CONF_HOST] = self._discovered_ip
         new_plant_connection[CONF_PORT] = DEFAULT_PORT
         new_plant_connection[CONF_SLAVE_ID] = DEFAULT_PLANT_SLAVE_ID
@@ -472,32 +433,17 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
         has_dc_charger = False
 
-        # Check if the accumulated energy consumption sensor exists
-        legacy_yaml_present = self.hass.states.get(next(iter(LEGACY_SENSOR_MIGRATION_MAP.values())))
-        if legacy_yaml_present:
-            _LOGGER.debug(
-            "Found old yaml integration."
-            )
-            # Store or use accumulatedEnergyState.state if needed for setup logic
-        else:
-            _LOGGER.debug("Old yaml integration does not exist.")
-
-
         if user_input is None:
             schema = generate_plant_schema(DEFAULT_PLANT_CONNECTION,
                                            discovered_ip=self._discovered_ip or "",
-                                           keep_existing_alternative=bool(legacy_yaml_present),
-                                           use_inverter_device_id=True
+                                           use_inverter_device_id=True,
+                                           display_update_frq=True
             )
 
             return self.async_show_form(
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=schema,
             )
-
-        # Check if keep_existing is set to True, if so and the user has not approved to continue, throw an error.
-        if legacy_yaml_present and not user_input.get(CONF_KEEP_EXISTING, False):
-            errors[CONF_KEEP_EXISTING] = "old_config_found"
 
         # Process and validate inverter ID
         try:
@@ -525,16 +471,18 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=generate_plant_schema(user_input,
                                                   discovered_ip=self._discovered_ip or "",
-                                                  keep_existing_alternative=bool(legacy_yaml_present),
-                                                  use_inverter_device_id=True
+                                                  use_inverter_device_id=True,
+                                                  display_update_frq=True
                                                   ),
                                             errors=errors,
             )
 
         # Create the plant connection dictionary
-        new_plant_connection = DEFAULT_PLANT_CONNECTION
+        new_plant_connection = DEFAULT_PLANT_CONNECTION.copy()
         new_plant_connection[CONF_HOST] = user_input[CONF_HOST]
         new_plant_connection[CONF_PORT] = user_input[CONF_PORT]
+        new_plant_connection[CONF_SLAVE_ID] = DEFAULT_PLANT_SLAVE_ID
+        new_plant_connection[CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
         self._data[CONF_PLANT_CONNECTION] = new_plant_connection
 
         # Create the inverter connections dictionary for the implicit first inverter
@@ -590,10 +538,11 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
                 _LOGGER.debug("Modbus connected to %s:%s. Checking device type...", host, port)
 
-                result = await client.read_input_registers(
+                result = await _call_modbus_method_safe(
+                    client.read_input_registers,
                     address=register_address,
                     count=1,
-                    slave=slave_id
+                    slave=slave_id,
                 )
                 if result and not result.isError():
                     _LOGGER.debug("Modbus read successful for register %s on %s:%s, slave %s.",
@@ -1039,22 +988,24 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
     @callback
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
-        return SigenergyOptionsFlowHandler(config_entry)
+        return SigenergyOptionsFlowHandler()
 
 
 class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle Sigenergy options for reconfiguring existing devices."""
 
-    def __init__(self, config_entry):
+    def __init__(self):
         """Initialize options flow."""
-        self.config_entry = config_entry
-        self.options = dict(config_entry.options)
-        self._data = dict(config_entry.data)
         self._plants = {}
         self._devices = {}
         self._inverters = {}
         self._selected_device = None
         self._temp_config = {}
+
+    @property
+    def _data(self) -> dict[str, Any]:
+        """Return a copy of the config entry data."""
+        return dict(self.config_entry.data)
 
     async def _async_load_devices(self) -> None:
         """Load all existing devices for reconfiguration selection."""
@@ -1171,7 +1122,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         def generate_accumulated_energy_schema(data_source: Dict):
             # Define the schema for the accumulated energy sensor configuration
             schema = {}
-            for sensor, sensor_name in RESETABLE_SENSORS.items():
+            for sensor, sensor_name in RESETTABLE_SENSORS.items():
                 current_value = self.hass.states.get(sensor)
                 if not current_value:
                     _LOGGER.debug("Sensor %s not found in states", sensor)
@@ -1199,7 +1150,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
         # Validate the user input and update the configuration
         errors = {}
-        for sensor in RESETABLE_SENSORS.keys():
+        for sensor in RESETTABLE_SENSORS.keys():
             if user_input.get(sensor) == "":
                 errors[sensor] = "required value"
             elif not isinstance(user_input.get(sensor), float):
@@ -1216,7 +1167,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # If chose to reset values, save sensor values to reset.
         values_to_initialize = {}
         for sensor, value in user_input.items():
-            if sensor in RESETABLE_SENSORS:
+            if sensor in RESETTABLE_SENSORS:
                 values_to_initialize[sensor] = value * 1000000.0  # Convert to MW
                 _LOGGER.debug("Adding %s as init value for %s", value, sensor)
 
@@ -1260,30 +1211,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
 
         # Validate scan intervals
-        high_interval = user_input.get(CONF_SCAN_INTERVAL_HIGH, DEFAULT_SCAN_INTERVAL_HIGH)
-        medium_interval = user_input.get(CONF_SCAN_INTERVAL_MEDIUM, DEFAULT_SCAN_INTERVAL_MEDIUM)
-        low_interval = user_input.get(CONF_SCAN_INTERVAL_LOW, DEFAULT_SCAN_INTERVAL_LOW)
-        alarm_interval = user_input.get(CONF_SCAN_INTERVAL_ALARM, DEFAULT_SCAN_INTERVAL_ALARM)
+        scan_interval = user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
-        if high_interval < 1:
-            errors[CONF_SCAN_INTERVAL_HIGH] = "must_be_at_least_1"
-
-        # Validate divisibility
-        for interval in [CONF_SCAN_INTERVAL_MEDIUM, CONF_SCAN_INTERVAL_LOW, CONF_SCAN_INTERVAL_ALARM]:
-            if high_interval > 0 and user_input[interval] % high_interval != 0:
-                errors[interval] = "must_be_divisible_by_high"
-
-        # Validate Medium Interval
-        if not errors.get(CONF_SCAN_INTERVAL_MEDIUM) and medium_interval < high_interval:
-            errors[CONF_SCAN_INTERVAL_MEDIUM] = "cannot_be_lower_than_high"
-
-        # Validate Low Interval
-        if not errors.get(CONF_SCAN_INTERVAL_LOW) and low_interval < medium_interval:
-            errors[CONF_SCAN_INTERVAL_LOW] = "cannot_be_lower_than_medium"
-
-        # Validate Alarm Interval
-        if not errors.get(CONF_SCAN_INTERVAL_ALARM) and alarm_interval < high_interval:
-            errors[CONF_SCAN_INTERVAL_ALARM] = "cannot_be_lower_than_high"
+        if scan_interval < 1:
+            errors[CONF_SCAN_INTERVAL] = "must_be_at_least_1"
 
         if errors:
             # Re-create schema with user input values for error display
@@ -1300,13 +1231,9 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         new_data[CONF_PLANT_CONNECTION][CONF_HOST] = user_input[CONF_HOST]
         new_data[CONF_PLANT_CONNECTION][CONF_PORT] = user_input[CONF_PORT]
         new_data[CONF_PLANT_CONNECTION][CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_HIGH] = high_interval
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_ALARM] = alarm_interval
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_MEDIUM] = medium_interval
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_LOW] = low_interval
+        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL] = scan_interval
 
-        _LOGGER.debug("Update intervals:")
-        _LOGGER.debug(f"High: {high_interval}, Medium: {medium_interval}, Low: {low_interval}, Alarm: {alarm_interval}")
+        _LOGGER.debug("Update interval: %s", scan_interval)
 
         # Update data if changed (optional check, keeping existing behavior for now)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)

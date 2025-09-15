@@ -3,7 +3,7 @@
   "name": "Sigenergy ESS",
   "codeowners": ["@TypQxQ"],
   "config_flow": true,
-  "dependencies": ["modbus", "integration"],
+  "dependencies": ["modbus", "integration", "recorder"],
   "dhcp": [
     {
       "macaddress": "0C47A99*",
@@ -20,6 +20,6 @@
   "issue_tracker": "https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues",
   "loggers": ["custom_components.sigen"],
   "quality_scale": "custom",
-  "requirements": ["pymodbus>=3.0.0"],
-  "version": "1.0.10"
+  "requirements": ["pymodbus>=3.8.3"],
+  "version": "1.1.9"
 }

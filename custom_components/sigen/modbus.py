@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
@@ -11,10 +12,9 @@ from homeassistant.config_entries import ConfigEntry  # pylint: disable=no-name-
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from pymodbus.client import AsyncModbusTcpClient
-from pymodbus.constants import Endian
 from pymodbus.exceptions import ConnectionException, ModbusException
-from pymodbus.payload import BinaryPayloadBuilder
 from pymodbus.client.mixin import ModbusClientMixin
+from pymodbus import __version__ as pymodbus_version
 
 from .const import (
     CONF_INVERTER_CONNECTIONS,
@@ -31,7 +31,6 @@ from .const import (
 from .modbusregisterdefinitions import (
     DataType,
     RegisterType,
-    UpdateFrequencyType,
     ModbusRegisterDefinition,
     PLANT_RUNNING_INFO_REGISTERS,
     PLANT_PARAMETER_REGISTERS,
@@ -44,6 +43,88 @@ from .modbusregisterdefinitions import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Pymodbus version compatibility handling
+def _get_pymodbus_version_info():
+    """Get pymodbus version information for compatibility handling."""
+    try:
+        # Parse version string like "3.6.8" or "3.10.0"
+        version_parts = pymodbus_version.split('.')
+        major = int(version_parts[0])
+        minor = int(version_parts[1])
+        return major, minor
+    except (ValueError, IndexError):
+        # Fallback to assuming older version if parsing fails
+        _LOGGER.warning("Could not parse pymodbus version '%s', assuming < 3.10", pymodbus_version)
+        return 3, 0
+
+# Check if we need to use 'device_id' instead of 'slave'
+_PYMODBUS_MAJOR, _PYMODBUS_MINOR = _get_pymodbus_version_info()
+_USE_DEVICE_ID = (_PYMODBUS_MAJOR > 3) or (_PYMODBUS_MAJOR == 3 and _PYMODBUS_MINOR >= 10)
+
+def _call_modbus_method_safe(client_method, *args, **kwargs):
+    """
+    Call a pymodbus client method with version-compatible parameter handling.
+
+    This function handles the parameter name change from 'slave' to 'device_id'
+    that occurred in pymodbus 3.10+.
+
+    Args:
+        client_method: The pymodbus client method to call
+        *args: Positional arguments
+        **kwargs: Keyword arguments, including 'slave' or 'device_id'
+
+    Returns:
+        The result of the client method call
+
+    Raises:
+        TypeError: If the method call fails due to parameter incompatibility
+        Other exceptions from the underlying method
+    """
+    if _USE_DEVICE_ID:
+        # For pymodbus >= 3.10, use 'device_id' parameter
+        if 'slave' in kwargs:
+            kwargs['device_id'] = kwargs.pop('slave')
+
+        try:
+            return client_method(*args, **kwargs)
+        except TypeError as e:
+            if 'device_id' in str(e):
+                # If device_id also fails, try falling back to positional args
+                _LOGGER.debug("device_id parameter failed, trying positional arguments")
+                # Remove device_id and try with positional args if possible
+                kwargs_copy = kwargs.copy()
+                if 'device_id' in kwargs_copy:
+                    device_id = kwargs_copy.pop('device_id')
+                    # Try calling with device_id as positional argument
+                    try:
+                        return client_method(*args, device_id, **kwargs_copy)
+                    except TypeError as inner_e:
+                        # If positional also fails, re-raise original error
+                        raise e from inner_e
+                else:
+                    raise e
+            else:
+                raise e
+    else:
+        # For pymodbus < 3.10, use 'slave' parameter
+        try:
+            return client_method(*args, **kwargs)
+        except TypeError as e:
+            if 'slave' in str(e):
+                # If slave fails, try falling back to positional args
+                _LOGGER.debug("slave parameter failed, trying positional arguments")
+                kwargs_copy = kwargs.copy()
+                if 'slave' in kwargs_copy:
+                    slave = kwargs_copy.pop('slave')
+                    try:
+                        return client_method(*args, slave, **kwargs_copy)
+                    except TypeError as inner_e:
+                        raise e from inner_e
+                else:
+                    raise e
+            else:
+                raise e
 
 @dataclass
 class ModbusConnectionConfig:
@@ -86,6 +167,9 @@ class SigenergyModbusHub:
         self.hass = hass
         self.config_entry = config_entry
 
+        # Log to dev logger the version of pymodbus being used
+        _LOGGER.debug("Using pymodbus version: %s", pymodbus_version)
+
         # Dictionary to store Modbus clients for different connections
         # Key is (host, port) tuple, value is the client instance
         self._clients: Dict[Tuple[str, int], AsyncModbusTcpClient] = {}
@@ -113,15 +197,50 @@ class SigenergyModbusHub:
 
         # Other slave IDs and their connection details
 
-        # Initialize register support status
-        self.plant_registers_probed = False
-        self.inverter_registers_probed = set()
-        self.ac_charger_registers_probed = set()
-        self.dc_charger_registers_probed = set()
+        # Initialize register support status and intervals
+        self.plant_register_intervals: Dict[RegisterType, List[Tuple[int, int]]] = {}
+        self.inverter_register_intervals: Dict[str, Dict[RegisterType, List[Tuple[int, int]]]] = {}
+        self.ac_charger_register_intervals: Dict[str, Dict[RegisterType, List[Tuple[int, int]]]] = {}
+        self.dc_charger_register_intervals: Dict[str, Dict[RegisterType, List[Tuple[int, int]]]] = {}
+        
+        # Track last failed probe times for retry logic (1 minute retry delay)
+        self.plant_last_probe_failure: Optional[float] = None
+        self.inverter_last_probe_failure: Dict[str, float] = {}
+        self.dc_charger_last_probe_failure: Dict[str, float] = {}
+        self.probe_retry_delay: float = 60.0  # 1 minute retry delay
 
     def _get_connection_key(self, device_info: dict) -> Tuple[str, int]:
         """Get the connection key (host, port) for a device_info dict."""
         return (device_info[CONF_HOST], device_info[CONF_PORT])
+    
+    def _should_retry_probe(self, device_type: str, device_name: Optional[str] = None) -> bool:
+        """Check if enough time has passed since last probe failure to retry."""
+        current_time = time.time()
+        
+        if device_type == "plant":
+            if self.plant_last_probe_failure is None:
+                return True
+            return (current_time - self.plant_last_probe_failure) >= self.probe_retry_delay
+        elif device_type == "inverter" and device_name:
+            if device_name not in self.inverter_last_probe_failure:
+                return True
+            return (current_time - self.inverter_last_probe_failure[device_name]) >= self.probe_retry_delay
+        elif device_type == "dc_charger" and device_name:
+            if device_name not in self.dc_charger_last_probe_failure:
+                return True
+            return (current_time - self.dc_charger_last_probe_failure[device_name]) >= self.probe_retry_delay
+        return True
+    
+    def _record_probe_failure(self, device_type: str, device_name: Optional[str] = None) -> None:
+        """Record the timestamp of a probe failure for retry delay."""
+        current_time = time.time()
+        
+        if device_type == "plant":
+            self.plant_last_probe_failure = current_time
+        elif device_type == "inverter" and device_name:
+            self.inverter_last_probe_failure[device_name] = current_time
+        elif device_type == "dc_charger" and device_name:
+            self.dc_charger_last_probe_failure[device_name] = current_time
 
     async def _get_client(self, device_info: dict) -> AsyncModbusTcpClient:
         """Get or create a Modbus client for the given device_info dict."""
@@ -250,13 +369,15 @@ class SigenergyModbusHub:
 
         with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
             if register.register_type == RegisterType.READ_ONLY:
-                result = await client.read_input_registers(
+                result = await _call_modbus_method_safe(
+                    client.read_input_registers,
                     address=register.address,
                     count=register.count,
                     slave=slave_id
                 )
             elif register.register_type == RegisterType.HOLDING:
-                result = await client.read_holding_registers(
+                result = await _call_modbus_method_safe(
+                    client.read_holding_registers,
                     address=register.address,
                     count=register.count,
                     slave=slave_id
@@ -281,8 +402,14 @@ class SigenergyModbusHub:
         self,
         device_info: Dict[str, str | int],
         register_defs: Dict[str, ModbusRegisterDefinition]
-    ) -> None:
-        """Probe registers concurrently to determine which ones are supported."""
+    ) -> Dict[RegisterType, List[Tuple[int, int]]]:
+        """
+        Probe registers to determine support and create optimal read intervals.
+
+        Returns:
+            A dictionary mapping RegisterType to a list of (start_address, count) tuples
+            for contiguous and supported register blocks.
+        """
         slave_id_value = device_info.get(CONF_SLAVE_ID)
         if slave_id_value is None:
             raise ValueError(f"Slave ID is missing in device info: {device_info}")
@@ -308,78 +435,127 @@ class SigenergyModbusHub:
             for name, register in register_defs.items():
                 if register.is_supported is None:
                     register.is_supported = False
-            return
+            return {}
 
         if not tasks:
             _LOGGER.debug("No registers need probing for %s.", device_info_log)
-            return # Nothing to probe
+            # If no probing is needed, still generate intervals from already known registers
+            # This handles the case where probing was already done in a previous run.
+        else:
+            _LOGGER.debug("Probing %d registers concurrently for %s...", len(tasks), device_info_log)
 
-        _LOGGER.debug("Probing %d registers concurrently for %s...", len(tasks), device_info_log)
+            # Run probing tasks concurrently within the lock for this connection
+            results = []
+            try:
+                async with self._locks[key]:
+                    # Use return_exceptions=True to prevent one failure from stopping others
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+            except asyncio.CancelledError:
+                _LOGGER.warning("Register probing for %s was cancelled due to timeout or communication error. Will retry after 1 minute.", device_info_log)
+                # Don't mark registers as unsupported when cancelled - allow retry after delay
+                raise # Re-raise CancelledError
+            except Exception as ex:
+                _LOGGER.error("Unexpected error during concurrent register probing for %s: %s",
+                              device_info_log, ex)
+                # Mark all probed registers as potentially unsupported due to the gather error
+                for name, register in register_defs.items():
+                    if register.is_supported is None: # Only update those that were being probed
+                        register.is_supported = False
+                self._connected[key] = False # Assume connection issue
+                return {} # Exit probing on major error
 
-        # Run probing tasks concurrently within the lock for this connection
-        results = []
-        try:
-            async with self._locks[key]:
-                # Use return_exceptions=True to prevent one failure from stopping others
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-        except asyncio.CancelledError:
-            _LOGGER.warning("Register probing for %s was cancelled.", device_info_log)
-            # Mark remaining unknown registers as potentially unsupported due to cancellation
-            for name, register in register_defs.items():
-                if register.is_supported is None:
-                    register.is_supported = False # Assume unsupported if probe was cancelled
-            raise # Re-raise CancelledError
-        except Exception as ex:
-            _LOGGER.error("Unexpected error during concurrent register probing for %s: %s",
-                          device_info_log, ex)
-            # Mark all probed registers as potentially unsupported due to the gather error
-            for name, register in register_defs.items():
-                if register.is_supported is None: # Only update those that were being probed
-                    register.is_supported = False
-            self._connected[key] = False # Assume connection issue
-            return # Exit probing on major error
+            _LOGGER.debug("Finished probing for %s. Processing %d results.",
+                          device_info_log, len(results))
 
-        _LOGGER.debug("Finished probing for %s. Processing %d results.",
-                      device_info_log, len(results))
+            # Process results
+            connection_error_occurred = False
+            for result in results:
+                if isinstance(result, Exception):
+                    # Handle exceptions raised by gather itself or _probe_single_register
+                    _LOGGER.error("Error during register probe task for %s: %s",
+                                  device_info_log, result)
+                    # If it's a connection error, mark the connection as potentially bad
+                    if isinstance(result, (ConnectionException, asyncio.TimeoutError,
+                                           SigenergyModbusError)):
+                        connection_error_occurred = True
+                    # We don't know which register failed here, so we can't mark it specifically.
+                    # The registers remain is_supported=None and will be retried on read.
+                    continue # Skip to next result
 
-        # Process results
-        connection_error_occurred = False
-        for result in results:
-            if isinstance(result, Exception):
-                # Handle exceptions raised by gather itself or _probe_single_register
-                _LOGGER.error("Error during register probe task for %s: %s",
-                              device_info_log, result)
-                # If it's a connection error, mark the connection as potentially bad
-                if isinstance(result, (ConnectionException, asyncio.TimeoutError,
-                                       SigenergyModbusError)):
-                    connection_error_occurred = True
-                # We don't know which register failed here, so we can't mark it specifically.
-                # The registers remain is_supported=None and will be retried on read.
-                continue # Skip to next result
+                # Unpack successful results
+                if isinstance(result, tuple) and len(result) == 3:
+                    name, is_supported, probe_exception = result
+                    if name in register_defs:
+                        register_defs[name].is_supported = is_supported
+                        if probe_exception:
+                            # Log the specific exception caught by _probe_single_register
+                            _LOGGER.debug("Probe failed for register %s on %s: %s",
+                                          name, device_info_log, probe_exception)
+                            if isinstance(probe_exception, (ConnectionException, asyncio.TimeoutError,
+                                                            SigenergyModbusError)):
+                                connection_error_occurred = True
 
-            # Unpack successful results
-            if isinstance(result, tuple) and len(result) == 3:
-                name, is_supported, probe_exception = result
-                if name in register_defs:
-                    register_defs[name].is_supported = is_supported
-                    if probe_exception:
-                        # Log the specific exception caught by _probe_single_register
-                        _LOGGER.debug("Probe failed for register %s on %s: %s",
-                                      name, device_info_log, probe_exception)
-                        if isinstance(probe_exception, (ConnectionException, asyncio.TimeoutError,
-                                                        SigenergyModbusError)):
-                            connection_error_occurred = True
-
-        # If any connection-related error occurred during probing, mark the connection state
-        if connection_error_occurred:
-            _LOGGER.warning("Connection errors encountered during probing for %s. "
-                            "Marking connection as potentially disconnected.", device_info_log)
-            self._connected[key] = False
+            # If any connection-related error occurred during probing, mark the connection state
+            if connection_error_occurred:
+                _LOGGER.warning("Connection errors encountered during probing for %s. "
+                                "Marking connection as potentially disconnected.", device_info_log)
+                self._connected[key] = False
 
 
         _LOGGER.debug("Probing completed for %s. Supported registers: %s", device_info_log,
                       {name: register.is_supported for name, register in register_defs.items() \
-                       if register.is_supported is not None})
+                       if register.is_supported})
+
+        # Create address intervals for optimized reading
+        supported_registers = [reg for reg in register_defs.values() if reg.is_supported]
+
+        registers_by_type: Dict[RegisterType, List[ModbusRegisterDefinition]] = {}
+        for reg in supported_registers:
+            registers_by_type.setdefault(reg.register_type, []).append(reg)
+
+        all_intervals: Dict[RegisterType, List[Tuple[int, int]]] = {}
+
+        for reg_type, regs in registers_by_type.items():
+            if not regs:
+                continue
+
+            # Sort registers by address to find contiguous blocks
+            regs.sort(key=lambda r: r.address)
+
+            intervals = []
+            if not regs:
+                all_intervals[reg_type] = []
+                continue
+
+            # Start with the first register
+            current_interval_start = regs[0].address
+            current_interval_end_addr = regs[0].address + regs[0].count
+
+            for i in range(1, len(regs)):
+                current_reg = regs[i]
+
+                # Check if contiguous and within Modbus read limits (123 registers is safe)
+                if (current_reg.address == current_interval_end_addr and
+                        (current_interval_end_addr - current_interval_start + current_reg.count) <= 123):
+                    # Extend the current interval
+                    current_interval_end_addr += current_reg.count
+                else:
+                    # Finalize the previous interval
+                    count = current_interval_end_addr - current_interval_start
+                    intervals.append((current_interval_start, count))
+                    
+                    # Start a new interval
+                    current_interval_start = current_reg.address
+                    current_interval_end_addr = current_reg.address + current_reg.count
+            
+            # Add the last interval
+            count = current_interval_end_addr - current_interval_start
+            intervals.append((current_interval_start, count))
+            all_intervals[reg_type] = intervals
+
+        _LOGGER.debug("Created register intervals for %s: %s", device_info_log, all_intervals)
+
+        return all_intervals
 
     async def async_read_registers(
         self,
@@ -402,10 +578,8 @@ class SigenergyModbusHub:
 
             async with self._locks[key]:
                 with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
-                    result = await client.read_input_registers(
-                        address=address, count=count, slave=slave_id
-                    ) if register_type == RegisterType.READ_ONLY \
-                        else await client.read_holding_registers(
+                    result = await _call_modbus_method_safe(
+                        client.read_input_registers if register_type == RegisterType.READ_ONLY else client.read_holding_registers,
                         address=address, count=count, slave=slave_id
                     )
 
@@ -491,13 +665,15 @@ class SigenergyModbusHub:
                             )
 
                             if approach["function"] == "write_registers":
-                                result = await client.write_registers(
+                                result = await _call_modbus_method_safe(
+                                    client.write_registers,
                                     address=approach["address"],
                                     values=approach["values"],
                                     slave=slave_id
                                 )
                             else:  # write_register
-                                result = await client.write_register(
+                                result = await _call_modbus_method_safe(
+                                    client.write_register,
                                     address=approach["address"],
                                     value=approach["value"],
                                     slave=slave_id
@@ -573,8 +749,11 @@ class SigenergyModbusHub:
                         "Trying write_registers at original address %s with values %s for slave %s",
                         address, values, slave_id
                     )
-                    result = await client.write_registers(
-                        address=address, values=values, slave=slave_id
+                    result = await _call_modbus_method_safe(
+                        client.write_registers,
+                        address=address,
+                        values=values,
+                        slave=slave_id,
                     )
                     if result.isError():
                         _LOGGER.warning("Modbus write_registers error for %s:%s@%s (address %s): %s. Marking connection as closed.", key[0], key[1], slave_id, address, result)
@@ -652,13 +831,9 @@ class SigenergyModbusHub:
     ) -> List[int]:
         """Encode value to register values based on data type."""
         # For simple U16 values like 0 or 1, just return the value directly
-        # This bypasses potential byte order issues with the BinaryPayloadBuilder
         if data_type == DataType.U16 and isinstance(value, int) and 0 <= value <= 255:
             _LOGGER.debug("Using direct value encoding for simple U16 value: %s", value)
             return [value]
-
-        # For other cases, use the BinaryPayloadBuilder
-        builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.BIG)
 
         # Apply gain for numeric values
         if isinstance(value, (int, float)) and gain != 1 and data_type != DataType.STRING:
@@ -667,132 +842,183 @@ class SigenergyModbusHub:
         _LOGGER.debug("Encoding value %s with data_type %s", value, data_type)
 
         if data_type == DataType.U16:
-            builder.add_16bit_uint(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.UINT16
+            )
         elif data_type == DataType.S16:
-            builder.add_16bit_int(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.INT16
+            )
         elif data_type == DataType.U32:
-            builder.add_32bit_uint(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.UINT32
+            )
         elif data_type == DataType.S32:
-            builder.add_32bit_int(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.INT32
+            )
         elif data_type == DataType.U64:
-            builder.add_64bit_uint(int(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                value, data_type=ModbusClientMixin.DATATYPE.UINT64
+            )
         elif data_type == DataType.STRING:
-            builder.add_string(str(value))
+            registers = ModbusClientMixin.convert_to_registers(
+                str(value), data_type=ModbusClientMixin.DATATYPE.STRING
+            )
         else:
             raise SigenergyModbusError(f"Unsupported data type: {data_type}")
 
-        registers = builder.to_registers()
         _LOGGER.debug("Encoded registers: %s", registers)
         return registers
 
     async def _async_read_device_data_core(
         self,
-        device_info: Dict[str, Any], # Changed from slave_id
+        device_info: Dict[str, Any],
         device_name: str,
         device_type_log_prefix: str,
-        registers_to_read: Dict[str, ModbusRegisterDefinition]
+        registers_to_read: Dict[str, ModbusRegisterDefinition],
+        read_intervals: Dict[RegisterType, List[Tuple[int, int]]]
     ) -> Dict[str, Any]:
-        """Core logic for reading device data registers."""
+        """Core logic for reading device data using optimized intervals."""
 
-        data = {}
-        for register_name, register_def in registers_to_read.items():
-            if register_def.is_supported is not False:  # Read if supported or unknown
+        all_read_data: Dict[int, List[int]] = {} # Maps start_address to raw register data
+
+        # 1. Read all data from the device using the optimized intervals
+        for reg_type, intervals in read_intervals.items():
+            for start_address, count in intervals:
                 try:
-                    registers = await self.async_read_registers(
+                    raw_regs = await self.async_read_registers(
                         device_info=device_info,
-                        address=register_def.address,
-                        count=register_def.count,
-                        register_type=register_def.register_type,
+                        address=start_address,
+                        count=count,
+                        register_type=reg_type,
                     )
-
-                    if registers is None:
-                        data[register_name] = None
-                        # If probing failed or wasn't done, and read fails, mark as unsupported
-                        if register_def.is_supported is None:
-                            register_def.is_supported = False
-                        continue
-
-                    value = self._decode_value(
-                        registers=registers,
-                        data_type=register_def.data_type,
-                        gain=register_def.gain,
+                    if raw_regs:
+                        all_read_data[start_address] = raw_regs
+                    else:
+                        _LOGGER.debug(
+                            "Reading interval starting at %s for %s '%s' returned no data.",
+                            start_address, device_type_log_prefix, device_name
+                        )
+                except SigenergyModbusError as ex:
+                    _LOGGER.warning(
+                        "Modbus error reading interval at %s for %s '%s': %s",
+                        start_address, device_type_log_prefix, device_name, ex
                     )
-
-                    data[register_name] = value
-                    # _LOGGER.debug("Read register %s = %s from %s '%s'",
-                    # register_name, value, device_type_log_prefix, device_name)
-
-                    # If we successfully read a register that wasn't probed/confirmed,
-                    # mark it as supported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = True
-
                 except Exception as ex:
                     _LOGGER.error(
-                        "Error reading %s '%s' register %s: %s",
-                        device_type_log_prefix, device_name, register_name, ex
+                        "Unexpected error reading interval at %s for %s '%s': %s",
+                        start_address, device_type_log_prefix, device_name, ex
                     )
-                    # Check if the exception indicates a connection issue
-                    if isinstance(ex, (ConnectionException, SigenergyModbusError)) and 'connect' in str(ex).lower():
-                        key = self._get_connection_key(device_info)
-                        if self._connected.get(key, True): # Only log if not already marked disconnected
-                            _LOGGER.warning("Connection error detected during data read for %s '%s'. Marking connection as closed.", device_type_log_prefix, device_name)
-                            self._connected[key] = False
+
+        data = {}
+        # 2. Decode the read data for each specific register
+        for register_name, register_def in registers_to_read.items():
+            # Skip unsupported or disabled registers
+            if not register_def.is_supported:
+                continue
+
+            # Find the interval data that contains this register
+            containing_interval_start = -1
+            interval_data = None
+
+            # Find the correct interval from the intervals we were given
+            intervals_for_type = read_intervals.get(register_def.register_type, [])
+            for start, count in intervals_for_type:
+                if start <= register_def.address < start + count:
+                    containing_interval_start = start
+                    break
+
+            if containing_interval_start != -1:
+                interval_data = all_read_data.get(containing_interval_start)
+
+            if not interval_data:
+                data[register_name] = None
+                # _LOGGER.debug("No data read for interval containing register '%s'", register_name)
+                continue
+
+            try:
+                # Calculate the position of our register's data within the interval's data
+                start_offset = register_def.address - containing_interval_start
+                end_offset = start_offset + register_def.count
+
+                # Extract the specific registers for this definition
+                register_values = interval_data[start_offset:end_offset]
+
+                if len(register_values) != register_def.count:
+                    _LOGGER.warning(
+                        "Could not extract enough data for register '%s' from interval starting at %s. "
+                        "Expected %d registers, got %d.",
+                        register_name, containing_interval_start, register_def.count, len(register_values)
+                    )
                     data[register_name] = None
-                    # If this is the first time we fail to read this register,
-                    # mark it as unsupported
-                    if register_def.is_supported is None:
-                        register_def.is_supported = False
+                    continue
+
+                # Decode the value
+                value = self._decode_value(
+                    registers=register_values,
+                    data_type=register_def.data_type,
+                    gain=register_def.gain,
+                )
+                data[register_name] = value
+            except Exception as ex:
+                _LOGGER.error(
+                    "Error decoding register %s from read data: %s", register_name, ex
+                )
+                data[register_name] = None
+
         return data
 
-    async def async_read_plant_data(self, update_frequency:
-                                    UpdateFrequencyType=UpdateFrequencyType.LOW
-                                    ) -> Dict[str, Any]:
+    async def async_read_plant_data(self) -> Dict[str, Any]:
         """Read all supported plant data."""
         # Probe registers if not done yet
-        if not self.plant_registers_probed:
-            try:
-                plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
-                await self.async_probe_registers(plant_info, PLANT_RUNNING_INFO_REGISTERS)
-                # Also probe parameter registers that can be read
-                await self.async_probe_registers(plant_info, {
-                    name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
-                    if reg.register_type != RegisterType.WRITE_ONLY
-                })
-                self.plant_registers_probed = True
-            except Exception as ex:
-                _LOGGER.error("Failed to probe plant registers: %s", ex)
-                # Continue with reading, some registers might still work
+        if not self.plant_register_intervals:
+            if self._should_retry_probe("plant"):
+                try:
+                    plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
+                    # Combine all readable registers for one probe call
+                    all_plant_registers = {
+                        **PLANT_RUNNING_INFO_REGISTERS,
+                        **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+                           if reg.register_type != RegisterType.WRITE_ONLY}
+                    }
+                    _LOGGER.debug("Attempting to probe plant registers on %s...", plant_info)
+                    self.plant_register_intervals = await self.async_probe_registers(
+                        plant_info, all_plant_registers
+                    )
+                    _LOGGER.info("Plant register probing successful")
+                except asyncio.CancelledError:
+                    _LOGGER.warning("Plant register probing was cancelled, will retry in 1 minute")
+                    self._record_probe_failure("plant")
+                    raise  # Re-raise to allow coordinator timeout handling
+                except Exception as ex:
+                    _LOGGER.error("Failed to probe plant registers: %s", ex)
+                    self._record_probe_failure("plant")
+            else:
+                _LOGGER.debug("Skipping plant register probing - waiting for retry delay")
 
-        # Filter running info registers
-        running_regs = {
-            name: reg for name, reg in PLANT_RUNNING_INFO_REGISTERS.items()
-            if reg.update_frequency >= update_frequency
+        # Read all running info and parameter registers
+        registers_to_read = {
+            **PLANT_RUNNING_INFO_REGISTERS,
+            **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+               if reg.register_type != RegisterType.WRITE_ONLY}
         }
-        # Filter parameter registers
-        param_regs = {
-            name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-               reg.update_frequency >= update_frequency
-        }
-        # Merge the dictionaries
-        registers_to_read = {**running_regs, **param_regs}
-        _LOGGER.debug("Reading %s Plant registers. update_frequency is %s",
-                      len(registers_to_read), update_frequency)
+        # _LOGGER.debug("Reading %s Plant registers.", len(registers_to_read))
 
         # Use the core reading logic
         plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
         plant_info.setdefault(CONF_SLAVE_ID, self.plant_id)
+        from homeassistant.const import CONF_NAME
+        plant_name = self.config_entry.data.get(CONF_NAME, "plant")
         return await self._async_read_device_data_core(
             device_info=plant_info,
-            device_name="plant",
+            device_name=plant_name,
             device_type_log_prefix="plant",
-            registers_to_read=registers_to_read
+            registers_to_read=registers_to_read,
+            read_intervals=self.plant_register_intervals
         )
 
-    async def async_read_inverter_data(self, inverter_name: str, update_frequency:
-                                       UpdateFrequencyType=UpdateFrequencyType.LOW
-                                       ) -> Dict[str, Any]:
+    async def async_read_inverter_data(self, inverter_name: str) -> Dict[str, Any]:
         """Read all supported inverter data."""
         # Look up inverter details by name
         if inverter_name not in self.inverter_connections:
@@ -801,49 +1027,48 @@ class SigenergyModbusHub:
         inverter_info = self.inverter_connections[inverter_name]
 
         # Probe registers if not done yet for this inverter
-        if inverter_name not in self.inverter_registers_probed:
-            try:
-                await self.async_probe_registers(inverter_info, INVERTER_RUNNING_INFO_REGISTERS)
-                # Also probe parameter registers that can be read
-                await self.async_probe_registers(inverter_info, {
-                    name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
-                    if reg.register_type != RegisterType.WRITE_ONLY
-                })
-                self.inverter_registers_probed.add(inverter_name)
-            except Exception as ex:
-                _LOGGER.error("Failed to probe inverter '%s' registers: %s", inverter_name, ex)
-                # Continue with reading, some registers might still work
+        if inverter_name not in self.inverter_register_intervals:
+            if self._should_retry_probe("inverter", inverter_name):
+                try:
+                    # Combine all readable registers for one probe call
+                    all_inverter_registers = {
+                        **INVERTER_RUNNING_INFO_REGISTERS,
+                        **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
+                           if reg.register_type != RegisterType.WRITE_ONLY}
+                    }
+                    _LOGGER.debug("Attempting to probe inverter '%s' registers on %s...", inverter_name, inverter_info)
+                    self.inverter_register_intervals[inverter_name] = await self.async_probe_registers(
+                        inverter_info, all_inverter_registers
+                    )
+                    _LOGGER.info("Inverter '%s' register probing successful", inverter_name)
+                except asyncio.CancelledError:
+                    _LOGGER.warning("Inverter '%s' register probing was cancelled, will retry in 1 minute", inverter_name)
+                    self._record_probe_failure("inverter", inverter_name)
+                    raise  # Re-raise to allow coordinator timeout handling
+                except Exception as ex:
+                    _LOGGER.error("Failed to probe inverter '%s' registers: %s", inverter_name, ex)
+                    self._record_probe_failure("inverter", inverter_name)
+            else:
+                _LOGGER.debug("Skipping inverter '%s' register probing - waiting for retry delay", inverter_name)
 
-        # Read registers from both running info and parameter registers
-        registers_to_read = {}
+        # Read all running info and parameter registers
         registers_to_read = {
-            **{name: reg for name, reg in INVERTER_RUNNING_INFO_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
+            **INVERTER_RUNNING_INFO_REGISTERS,
             **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
-            **{name: reg for name, reg in DC_CHARGER_RUNNING_INFO_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
-            **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
+               if reg.register_type != RegisterType.WRITE_ONLY}
         }
-        _LOGGER.debug("Reading %s Inverter registers. update_frequency is %s",
-                      len(registers_to_read), update_frequency)
+        # _LOGGER.debug("Reading %s Inverter registers.", len(registers_to_read))
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
             device_info=inverter_info,
             device_name=inverter_name,
             device_type_log_prefix="inverter",
-            registers_to_read=registers_to_read
+            registers_to_read=registers_to_read,
+            read_intervals=self.inverter_register_intervals.get(inverter_name, {})
         )
 
-    async def async_read_dc_charger_data(self, inverter_name: str, update_frequency:
-                                       UpdateFrequencyType=UpdateFrequencyType.LOW
-                                       ) -> Dict[str, Any]:
+    async def async_read_dc_charger_data(self, inverter_name: str) -> Dict[str, Any]:
         """Read all supported DC charger data."""
         # Look up inverter details by name
         if inverter_name not in self.inverter_connections:
@@ -852,49 +1077,48 @@ class SigenergyModbusHub:
         inverter_info = self.inverter_connections[inverter_name]
 
         # Probe registers if not done yet for this inverter
-        if inverter_name not in self.inverter_registers_probed:
-            try:
-                await self.async_probe_registers(inverter_info, INVERTER_RUNNING_INFO_REGISTERS)
-                # Also probe parameter registers that can be read
-                await self.async_probe_registers(inverter_info, {
-                    name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
-                    if reg.register_type != RegisterType.WRITE_ONLY
-                })
-                self.inverter_registers_probed.add(inverter_name)
-            except Exception as ex:
-                _LOGGER.error("Failed to probe inverter '%s' registers: %s", inverter_name, ex)
-                # Continue with reading, some registers might still work
+        if inverter_name not in self.dc_charger_register_intervals:
+            if self._should_retry_probe("dc_charger", inverter_name):
+                try:
+                    # Combine all readable registers for one probe call
+                    all_dc_charger_registers = {
+                        **DC_CHARGER_RUNNING_INFO_REGISTERS,
+                        **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
+                           if reg.register_type != RegisterType.WRITE_ONLY}
+                    }
+                    _LOGGER.debug("Attempting to probe DC charger '%s' registers on %s...", inverter_name, inverter_info)
+                    self.dc_charger_register_intervals[inverter_name] = await self.async_probe_registers(
+                        inverter_info, all_dc_charger_registers
+                    )
+                    _LOGGER.info("DC charger '%s' register probing successful", inverter_name)
+                except asyncio.CancelledError:
+                    _LOGGER.warning("DC charger '%s' register probing was cancelled, will retry in 1 minute", inverter_name)
+                    self._record_probe_failure("dc_charger", inverter_name)
+                    raise  # Re-raise to allow coordinator timeout handling
+                except Exception as ex:
+                    _LOGGER.error("Failed to probe DC charger '%s' registers: %s", inverter_name, ex)
+                    self._record_probe_failure("dc_charger", inverter_name)
+            else:
+                _LOGGER.debug("Skipping DC charger '%s' register probing - waiting for retry delay", inverter_name)
 
-        # Read registers from both running info and parameter registers
-        registers_to_read = {}
+        # Read all running info and parameter registers
         registers_to_read = {
-            **{name: reg for name, reg in INVERTER_RUNNING_INFO_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
-            **{name: reg for name, reg in INVERTER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
-            **{name: reg for name, reg in DC_CHARGER_RUNNING_INFO_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
+            **DC_CHARGER_RUNNING_INFO_REGISTERS,
             **{name: reg for name, reg in DC_CHARGER_PARAMETER_REGISTERS.items()
-            if reg.register_type != RegisterType.WRITE_ONLY and
-            reg.update_frequency >= update_frequency },
+               if reg.register_type != RegisterType.WRITE_ONLY}
         }
-        _LOGGER.debug("Reading %s Inverter registers. update_frequency is %s",
-                      len(registers_to_read), update_frequency)
+        # _LOGGER.debug("Reading %s DC charger registers.", len(registers_to_read))
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
             device_info=inverter_info,
             device_name=inverter_name,
-            device_type_log_prefix="inverter",
-            registers_to_read=registers_to_read
+            device_type_log_prefix="dc charger",
+            registers_to_read=registers_to_read,
+            read_intervals=self.dc_charger_register_intervals.get(inverter_name, {})
         )
 
-    async def async_read_ac_charger_data(self, ac_charger_name: str, update_frequency:
-                                          UpdateFrequencyType=UpdateFrequencyType.LOW
-                                          ) -> Dict[str, Any]:
+    async def async_read_ac_charger_data(self, ac_charger_name: str) -> Dict[str, Any]:
         """Read all supported AC charger data."""
         # Look up AC charger details by name
         if ac_charger_name not in self.ac_charger_connections:
@@ -904,38 +1128,36 @@ class SigenergyModbusHub:
         ac_charger_info = self.ac_charger_connections[ac_charger_name]
 
         # Probe registers if not done yet for this AC charger
-        if ac_charger_name not in self.ac_charger_registers_probed:
+        if ac_charger_name not in self.ac_charger_register_intervals:
             try:
-                await self.async_probe_registers(ac_charger_info, AC_CHARGER_RUNNING_INFO_REGISTERS)
-                # Also probe parameter registers that can be read
-                await self.async_probe_registers(ac_charger_info, {
-                    name: reg for name, reg in AC_CHARGER_PARAMETER_REGISTERS.items()
-                    if reg.register_type != RegisterType.WRITE_ONLY
-                })
-                self.ac_charger_registers_probed.add(ac_charger_name)
+                # Combine all readable registers for one probe call
+                all_ac_charger_registers = {
+                    **AC_CHARGER_RUNNING_INFO_REGISTERS,
+                    **{name: reg for name, reg in AC_CHARGER_PARAMETER_REGISTERS.items()
+                       if reg.register_type != RegisterType.WRITE_ONLY}
+                }
+                self.ac_charger_register_intervals[ac_charger_name] = await self.async_probe_registers(
+                    ac_charger_info, all_ac_charger_registers
+                )
             except Exception as ex:
                 _LOGGER.error("Failed to probe AC charger '%s' registers: %s", ac_charger_name, ex)
                 # Continue with reading, some registers might still work
 
-        # Read registers from both running info and parameter registers
-        registers_to_read = {}
+        # Read all running info and parameter registers
         registers_to_read = {
-            **{name: reg for name, reg in AC_CHARGER_RUNNING_INFO_REGISTERS.items()
-               if reg.register_type != RegisterType.WRITE_ONLY and
-               reg.update_frequency >= update_frequency},
+            **AC_CHARGER_RUNNING_INFO_REGISTERS,
             **{name: reg for name, reg in AC_CHARGER_PARAMETER_REGISTERS.items()
-               if reg.register_type != RegisterType.WRITE_ONLY and
-               reg.update_frequency >= update_frequency}
+               if reg.register_type != RegisterType.WRITE_ONLY}
         }
-        _LOGGER.debug("Reading %s AC charger registers. update_frequency is %s",
-                      len(registers_to_read), update_frequency)
+        # _LOGGER.debug("Reading %s AC charger registers.", len(registers_to_read))
 
         # Use the core reading logic
         return await self._async_read_device_data_core(
             device_info=ac_charger_info,
             device_name=ac_charger_name,
             device_type_log_prefix="AC charger",
-            registers_to_read=registers_to_read
+            registers_to_read=registers_to_read,
+            read_intervals=self.ac_charger_register_intervals.get(ac_charger_name, {})
         )
 
     async def async_write_parameter(

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Optional
 
+from dataclasses import field
+
 # Import needed Home Assistant constants
 from homeassistant.const import (
     PERCENTAGE,
@@ -43,6 +45,7 @@ class RunningState(IntEnum):
     RUNNING = 1
     FAULT = 2
     SHUTDOWN = 3
+    ENVIRONMENTAL_ABNORMALITY = 7
 
 # Alarm code mappings based on Sigenergy Modbus Protocol appendices
 ALARM_CODES = {
@@ -135,8 +138,9 @@ class EMSWorkMode(IntEnum):
     MAX_SELF_CONSUMPTION = 0
     AI_MODE = 1
     TOU = 2
+    FULL_FEED_IN_TO_GRID = 5
     REMOTE_EMS = 7
-    TIME_BASED_CONTROL = 9
+    CUSTOM = 9
 
 # Remote EMS control modes (Appendix 6)
 class RemoteEMSControlMode(IntEnum):
@@ -172,15 +176,6 @@ class ACChargerSystemState(IntEnum):
     F = 6
     E = 7
 
-class UpdateFrequencyType(IntEnum):
-    """Update frequency types for Modbus registers.
-    This is used in coordinator when fetching from Modbus."""
-
-    HIGH = 4
-    ALARM = 3
-    MEDIUM = 2
-    LOW = 1
-
 # Register definitions
 @dataclass
 class ModbusRegisterDefinition:
@@ -193,9 +188,8 @@ class ModbusRegisterDefinition:
     gain: float
     unit: Optional[str] = None
     description: Optional[str] = None
-    applicable_to: Optional[list[str]] = None
+    applicable_to: Optional[list[str]] = field(default_factory=lambda: ["hybrid_inverter", "pv_inverter"])
     is_supported: Optional[bool] = None  # Tracks whether register is supported by device
-    update_frequency: UpdateFrequencyType = UpdateFrequencyType.MEDIUM
 
 # Define register definitions based on PLANT_RUNNING_INFO_REGISTERS.csv
 PLANT_RUNNING_INFO_REGISTERS = {
@@ -207,7 +201,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1,
         unit="s",
         description="System time (Epoch seconds)",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_system_timezone": ModbusRegisterDefinition(
         address=30002,
@@ -217,7 +210,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1,
         unit="min",
         description="System timezone",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_ems_work_mode": ModbusRegisterDefinition(
         address=30003,
@@ -234,7 +226,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Grid Sensor Status (0: not connected, 1: connected)",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_grid_sensor_active_power": ModbusRegisterDefinition(
         address=30005,
@@ -244,7 +235,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Grid Active Power (>0 buy from grid; <0 sell to grid)",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_grid_sensor_reactive_power": ModbusRegisterDefinition(
         address=30007,
@@ -254,7 +244,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Grid Reactive Power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_on_off_grid_status": ModbusRegisterDefinition(
         address=30009,
@@ -263,7 +252,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="On/Off Grid status (0: ongrid, 1: offgrid(auto), 2: offgrid(manual))",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_max_active_power": ModbusRegisterDefinition(
         address=30010,
@@ -273,7 +261,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Max active power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_max_apparent_power": ModbusRegisterDefinition(
         address=30012,
@@ -283,7 +270,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Max apparent power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_ess_soc": ModbusRegisterDefinition(
         address=30014,
@@ -302,7 +288,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Plant phase A active power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_phase_b_active_power": ModbusRegisterDefinition(
         address=30017,
@@ -312,7 +297,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Plant phase B active power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_phase_c_active_power": ModbusRegisterDefinition(
         address=30019,
@@ -322,7 +306,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Plant phase C active power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_phase_a_reactive_power": ModbusRegisterDefinition(
         address=30021,
@@ -332,7 +315,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Plant phase A reactive power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_phase_b_reactive_power": ModbusRegisterDefinition(
         address=30023,
@@ -342,7 +324,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Plant phase B reactive power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_phase_c_reactive_power": ModbusRegisterDefinition(
         address=30025,
@@ -352,7 +333,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Plant phase C reactive power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_general_alarm1": ModbusRegisterDefinition(
         address=30027,
@@ -361,7 +341,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="General Alarm1 (Refer to Appendix2)",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "plant_general_alarm2": ModbusRegisterDefinition(
         address=30028,
@@ -370,7 +349,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="General Alarm2 (Refer to Appendix3)",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "plant_general_alarm3": ModbusRegisterDefinition(
         address=30029,
@@ -379,7 +357,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="General Alarm3 (Refer to Appendix4)",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "plant_general_alarm4": ModbusRegisterDefinition(
         address=30030,
@@ -388,7 +365,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="General Alarm4 (Refer to Appendix5)",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "plant_active_power": ModbusRegisterDefinition(
         address=30031,
@@ -398,7 +374,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Plant active power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_reactive_power": ModbusRegisterDefinition(
         address=30033,
@@ -408,7 +383,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Plant reactive power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_sigen_photovoltaic_power": ModbusRegisterDefinition(
         address=30035,
@@ -418,17 +392,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Photovoltaic power",
-        update_frequency=UpdateFrequencyType.HIGH,
-    ),
-    "plant_third_party_photovoltaic_power": ModbusRegisterDefinition(
-        address=30194,
-        count=2,
-        register_type=RegisterType.READ_ONLY,
-        data_type=DataType.S32,
-        gain=1000,
-        unit=UnitOfPower.KILO_WATT,
-        description="Photovoltaic power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_ess_power": ModbusRegisterDefinition(
         address=30037,
@@ -438,7 +401,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="ESS power (<0: discharging, >0: charging)",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_available_max_active_power": ModbusRegisterDefinition(
         address=30039,
@@ -448,7 +410,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Available max active power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_available_min_active_power": ModbusRegisterDefinition(
         address=30041,
@@ -458,7 +419,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Available min active power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_available_max_reactive_power": ModbusRegisterDefinition(
         address=30043,
@@ -468,7 +428,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Available max reactive power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_available_min_reactive_power": ModbusRegisterDefinition(
         address=30045,
@@ -478,7 +437,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Available min reactive power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_ess_available_max_charging_power": ModbusRegisterDefinition(
         address=30047,
@@ -505,7 +463,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Plant running state (Refer to Appendix1)",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_grid_sensor_phase_a_active_power": ModbusRegisterDefinition(
         address=30052,
@@ -515,7 +472,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Grid sensor Phase A active power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_grid_sensor_phase_b_active_power": ModbusRegisterDefinition(
         address=30054,
@@ -525,7 +481,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Grid sensor Phase B active power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_grid_sensor_phase_c_active_power": ModbusRegisterDefinition(
         address=30056,
@@ -535,7 +490,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Grid sensor Phase C active power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_grid_sensor_phase_a_reactive_power": ModbusRegisterDefinition(
         address=30058,
@@ -545,7 +499,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Grid sensor Phase A reactive power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_grid_sensor_phase_b_reactive_power": ModbusRegisterDefinition(
         address=30060,
@@ -555,7 +508,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Grid sensor Phase B reactive power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_grid_sensor_phase_c_reactive_power": ModbusRegisterDefinition(
         address=30062,
@@ -565,7 +517,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Grid sensor Phase C reactive power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "plant_ess_available_max_charging_capacity": ModbusRegisterDefinition(
         address=30064,
@@ -593,7 +544,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="ESS Rated charging power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_ess_rated_discharging_power": ModbusRegisterDefinition(
         address=30070,
@@ -603,7 +553,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="ESS Rated discharging power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_general_alarm5": ModbusRegisterDefinition(
         address=30072,
@@ -612,7 +561,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="General Alarm5 (Refer to Appendix11)",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "plant_ess_rated_energy_capacity": ModbusRegisterDefinition(
         address=30083,
@@ -622,7 +570,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="ESS rated energy capacity",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_ess_charge_cut_off_soc": ModbusRegisterDefinition(
         address=30085,
@@ -632,7 +579,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=PERCENTAGE,
         description="ESS charge Cut-Off SOC",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_ess_discharge_cut_off_soc": ModbusRegisterDefinition(
         address=30086,
@@ -642,7 +588,6 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=PERCENTAGE,
         description="ESS discharge Cut-Off SOC",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_ess_soh": ModbusRegisterDefinition(
         address=30087,
@@ -652,20 +597,649 @@ PLANT_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=PERCENTAGE,
         description="Battery State of Health (weighted average of all ESS devices)",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
-    "inverter_ess_daily_charge_energy": ModbusRegisterDefinition(
-        address=30566,
+
+    # Following fields have been added in v.2.7
+    "plant_accumulated_pv_energy": ModbusRegisterDefinition(
+        address=30088,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Plant PV total generation",
+    ),
+    "plant_daily_consumed_energy": ModbusRegisterDefinition(
+        address=30092,
         count=2,
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.U32,
         gain=100,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
-        description="ESS Daily Charge Energy",
-        applicable_to=["hybrid_inverter"],
+        description="Total load daily consumption",
+    ),
+    "plant_accumulated_consumed_energy": ModbusRegisterDefinition(
+        address=30094,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total load consumption",
+    ),
+    "plant_smart_load_1_total_consumption": ModbusRegisterDefinition(
+        address=30098,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 1] Total consumption",
+    ),
+    "plant_smart_load_2_total_consumption": ModbusRegisterDefinition(
+        address=30100,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 2] Total consumption",
+    ),
+    "plant_smart_load_3_total_consumption": ModbusRegisterDefinition(
+        address=30102,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 3] Total consumption",
+    ),
+    "plant_smart_load_4_total_consumption": ModbusRegisterDefinition(
+        address=30104,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 4] Total consumption",
+    ),
+    "plant_smart_load_5_total_consumption": ModbusRegisterDefinition(
+        address=30106,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 5] Total consumption",
+    ),
+    "plant_smart_load_6_total_consumption": ModbusRegisterDefinition(
+        address=30108,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 6] Total consumption",
+    ),
+    "plant_smart_load_7_total_consumption": ModbusRegisterDefinition(
+        address=30110,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 7] Total consumption",
+    ),
+    "plant_smart_load_8_total_consumption": ModbusRegisterDefinition(
+        address=30112,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 8] Total consumption",
+    ),
+    "plant_smart_load_9_total_consumption": ModbusRegisterDefinition(
+        address=30114,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 9] Total consumption",
+    ),
+    "plant_smart_load_10_total_consumption": ModbusRegisterDefinition(
+        address=30116,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 10] Total consumption",
+    ),
+    "plant_smart_load_11_total_consumption": ModbusRegisterDefinition(
+        address=30118,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 11] Total consumption",
+    ),
+    "plant_smart_load_12_total_consumption": ModbusRegisterDefinition(
+        address=30120,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 12] Total consumption",
+    ),
+    "plant_smart_load_13_total_consumption": ModbusRegisterDefinition(
+        address=30122,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 13] Total consumption",
+    ),
+    "plant_smart_load_14_total_consumption": ModbusRegisterDefinition(
+        address=30124,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 14] Total consumption",
+    ),
+    "plant_smart_load_15_total_consumption": ModbusRegisterDefinition(
+        address=30126,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 15] Total consumption",
+    ),
+    "plant_smart_load_16_total_consumption": ModbusRegisterDefinition(
+        address=30128,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 16] Total consumption",
+    ),
+    "plant_smart_load_17_total_consumption": ModbusRegisterDefinition(
+        address=30130,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 17] Total consumption",
+    ),
+    "plant_smart_load_18_total_consumption": ModbusRegisterDefinition(
+        address=30132,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 18] Total consumption",
+    ),
+    "plant_smart_load_19_total_consumption": ModbusRegisterDefinition(
+        address=30134,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 19] Total consumption",
+    ),
+    "plant_smart_load_20_total_consumption": ModbusRegisterDefinition(
+        address=30136,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 20] Total consumption",
+    ),
+    "plant_smart_load_21_total_consumption": ModbusRegisterDefinition(
+        address=30138,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 21] Total consumption",
+    ),
+    "plant_smart_load_22_total_consumption": ModbusRegisterDefinition(
+        address=30140,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 22] Total consumption",
+    ),
+    "plant_smart_load_23_total_consumption": ModbusRegisterDefinition(
+        address=30142,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 23] Total consumption",
+    ),
+    "plant_smart_load_24_total_consumption": ModbusRegisterDefinition(
+        address=30144,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="[Smart load 24] Total consumption",
+    ),
+    "plant_smart_load_1_power": ModbusRegisterDefinition(
+        address=30146,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 1] Power",
+    ),
+    "plant_smart_load_2_power": ModbusRegisterDefinition(
+        address=30148,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 2] Power",
+    ),
+    "plant_smart_load_3_power": ModbusRegisterDefinition(
+        address=30150,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 3] Power",
+    ),
+    "plant_smart_load_4_power": ModbusRegisterDefinition(
+        address=30152,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 4] Power",
+    ),
+    "plant_smart_load_5_power": ModbusRegisterDefinition(
+        address=30154,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 5] Power",
+    ),
+    "plant_smart_load_6_power": ModbusRegisterDefinition(
+        address=30156,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 6] Power",
+    ),
+    "plant_smart_load_7_power": ModbusRegisterDefinition(
+        address=30158,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 7] Power",
+    ),
+    "plant_smart_load_8_power": ModbusRegisterDefinition(
+        address=30160,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 8] Power",
+    ),
+    "plant_smart_load_9_power": ModbusRegisterDefinition(
+        address=30162,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 9] Power",
+    ),
+    "plant_smart_load_10_power": ModbusRegisterDefinition(
+        address=30164,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 10] Power",
+    ),
+    "plant_smart_load_11_power": ModbusRegisterDefinition(
+        address=30166,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 11] Power",
+    ),
+    "plant_smart_load_12_power": ModbusRegisterDefinition(
+        address=30168,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 12] Power",
+    ),
+    "plant_smart_load_13_power": ModbusRegisterDefinition(
+        address=30170,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 13] Power",
+    ),
+    "plant_smart_load_14_power": ModbusRegisterDefinition(
+        address=30172,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 14] Power",
+    ),
+    "plant_smart_load_15_power": ModbusRegisterDefinition(
+        address=30174,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 15] Power",
+    ),
+    "plant_smart_load_16_power": ModbusRegisterDefinition(
+        address=30176,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 15] Power",
+    ),
+    "plant_smart_load_17_power": ModbusRegisterDefinition(
+        address=30178,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 17] Power",
+    ),
+    "plant_smart_load_18_power": ModbusRegisterDefinition(
+        address=30180,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 18] Power",
+    ),
+    "plant_smart_load_19_power": ModbusRegisterDefinition(
+        address=30182,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 19] Power",
+    ),
+    "plant_smart_load_20_power": ModbusRegisterDefinition(
+        address=30184,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 20] Power",
+    ),
+    "plant_smart_load_21_power": ModbusRegisterDefinition(
+        address=30186,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 21] Power",
+    ),
+    "plant_smart_load_22_power": ModbusRegisterDefinition(
+        address=30188,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 22] Power",
+    ),
+    "plant_smart_load_23_power": ModbusRegisterDefinition(
+        address=30190,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 23] Power",
+    ),
+    "plant_smart_load_24_power": ModbusRegisterDefinition(
+        address=30192,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="[Smart load 24] Power",
+    ),
+    "plant_third_party_photovoltaic_power": ModbusRegisterDefinition(
+        address=30194,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Third Party inverter active power",
+    ),
+    "plant_total_generation_of_third_party_inverter": ModbusRegisterDefinition(
+        address=30196,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total generation of third party inverter",
+    ),
+    "plant_accumulated_battery_charge_energy": ModbusRegisterDefinition(
+        address=30200,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total charged energy of the ESS",
+    ),
+    "plant_accumulated_battery_discharge_energy": ModbusRegisterDefinition(
+        address=30204,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total discharged energy of the ESS",
+    ),
+    "plant_total_charged_energy_of_the_evdc": ModbusRegisterDefinition(
+        address=30208,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total charged energy of the EVDC",
+    ),
+    "plant_total_discharged_energy_of_the_evdc": ModbusRegisterDefinition(
+        address=30212,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total discharged energy of the EVDC",
+    ),
+    "plant_accumulated_grid_import_energy": ModbusRegisterDefinition(
+        address=30216,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total imported energy",
+    ),
+    "plant_accumulated_grid_export_energy": ModbusRegisterDefinition(
+        address=30220,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total exported energy",
+    ),
+    "plant_total_energy_output_of_oil_fueled_generator": ModbusRegisterDefinition(
+        address=30224,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total energy output of oil-fueled generator",
+    ),
+    "plant_total_energy_consumption_of_common_loads": ModbusRegisterDefinition(
+        address=30228,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total energy consumption of common loads",
+    ),
+    "plant_total_charged_energy_of_the_evac": ModbusRegisterDefinition(
+        address=30232,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total charged energy of the EVAC",
+    ),
+    "plant_total_generation_of_self_pv": ModbusRegisterDefinition(
+        address=30236,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total generation of self PV",
+    ),
+    "plant_total_generation_of_third_party_inverter_2": ModbusRegisterDefinition(
+        address=30240,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total generation of third party inverter",
     ),
 
-
+    "plant_total_charged_energy_of_the_ess_2": ModbusRegisterDefinition(
+        address=30244,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total charged energy of the ESS",
+    ),
+    "plant_total_discharged_energy_of_the_ess_2": ModbusRegisterDefinition(
+        address=30248,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total discharged energy of the ESS",
+    ),
+    "plant_total_charged_energy_of_the_evdc_2": ModbusRegisterDefinition(
+        address=30252,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total charged energy of the EVDC",
+    ),
+    "plant_total_discharged_energy_of_the_evdc_2": ModbusRegisterDefinition(
+        address=30256,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total discharged energy of the EVDC",
+    ),
+    "plant_total_imported_energy_2": ModbusRegisterDefinition(
+        address=30260,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total imported energy",
+    ),
+    "plant_total_exported_energy_2": ModbusRegisterDefinition(
+        address=30264,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total exported energy",
+    ),
+    "plant_total_energy_output_of_oil_fueled_generator_2": ModbusRegisterDefinition(
+        address=30268,
+        count=4,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U64,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total energy output of oil-fueled generator",
+    ),
 }
 
 PLANT_PARAMETER_REGISTERS = {
@@ -676,7 +1250,6 @@ PLANT_PARAMETER_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Start/Stop (0: Stop 1: Start)",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "plant_active_power_fixed_target": ModbusRegisterDefinition(
         address=40001,
@@ -686,8 +1259,6 @@ PLANT_PARAMETER_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Active power fixed adjustment target value",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_reactive_power_fixed_target": ModbusRegisterDefinition(
         address=40003,
@@ -697,8 +1268,6 @@ PLANT_PARAMETER_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Reactive power fixed adjustment target value. Range: [-60.00 * base value, 60.00 * base value]. Takes effect globally regardless of the EMS operating mode.",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_active_power_percentage_target": ModbusRegisterDefinition(
         address=40005,
@@ -708,8 +1277,6 @@ PLANT_PARAMETER_REGISTERS = {
         gain=100,
         unit=PERCENTAGE,
         description="Active power percentage adjustment target value. Range: [-100.00, 100.00]",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_qs_ratio_target": ModbusRegisterDefinition(
         address=40006,
@@ -719,8 +1286,6 @@ PLANT_PARAMETER_REGISTERS = {
         gain=100,
         unit=PERCENTAGE,
         description="Q/S adjustment target value",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_power_factor_target": ModbusRegisterDefinition(
         address=40007,
@@ -729,8 +1294,6 @@ PLANT_PARAMETER_REGISTERS = {
         data_type=DataType.S16,
         gain=1000,
         description="Power factor adjustment target value",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_a_active_power_fixed_target": ModbusRegisterDefinition(
         address=40008,
@@ -741,7 +1304,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="Phase A active power fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_b_active_power_fixed_target": ModbusRegisterDefinition(
         address=40010,
@@ -752,7 +1314,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="Phase B active power fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_c_active_power_fixed_target": ModbusRegisterDefinition(
         address=40012,
@@ -763,7 +1324,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="Phase C active power fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_a_reactive_power_fixed_target": ModbusRegisterDefinition(
         address=40014,
@@ -774,7 +1334,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit="kvar",
         description="Phase A reactive power fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_b_reactive_power_fixed_target": ModbusRegisterDefinition(
         address=40016,
@@ -785,7 +1344,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit="kvar",
         description="Phase B reactive power fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_c_reactive_power_fixed_target": ModbusRegisterDefinition(
         address=40018,
@@ -796,7 +1354,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit="kvar",
         description="Phase C reactive power fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_a_active_power_percentage_target": ModbusRegisterDefinition(
         address=40020,
@@ -807,7 +1364,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit=PERCENTAGE,
         description="Phase A Active power percentage adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_b_active_power_percentage_target": ModbusRegisterDefinition(
         address=40021,
@@ -818,7 +1374,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit=PERCENTAGE,
         description="Phase B Active power percentage adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_c_active_power_percentage_target": ModbusRegisterDefinition(
         address=40022,
@@ -829,7 +1384,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit=PERCENTAGE,
         description="Phase C Active power percentage adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_a_qs_ratio_target": ModbusRegisterDefinition(
         address=40023,
@@ -840,7 +1394,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit=PERCENTAGE,
         description="Phase A Q/S fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_b_qs_ratio_target": ModbusRegisterDefinition(
         address=40024,
@@ -851,7 +1404,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit=PERCENTAGE,
         description="Phase B Q/S fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_phase_c_qs_ratio_target": ModbusRegisterDefinition(
         address=40025,
@@ -862,7 +1414,6 @@ PLANT_PARAMETER_REGISTERS = {
         unit=PERCENTAGE,
         description="Phase C Q/S fixed adjustment target value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "plant_remote_ems_enable": ModbusRegisterDefinition(
         address=40029,
@@ -871,7 +1422,6 @@ PLANT_PARAMETER_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Remote EMS enable (0: disabled 1: enabled). When enabled, the plant's EMS work mode (30003) will switch to remote EMS.",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "plant_independent_phase_power_control_enable": ModbusRegisterDefinition(
         address=40030,
@@ -889,7 +1439,6 @@ PLANT_PARAMETER_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Remote EMS control mode",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "plant_ess_max_charging_limit": ModbusRegisterDefinition(
         address=40032,
@@ -927,9 +1476,8 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.U32,
         gain=1000,
-        unit=UnitOfPower.KILO_WATT,
+        # unit=UnitOfPower.KILO_WATT,
         description="Grid Point Maximum export limitation",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "plant_grid_maximum_import_limitation": ModbusRegisterDefinition(
         address=40040,
@@ -937,9 +1485,8 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.U32,
         gain=1000,
-        unit=UnitOfPower.KILO_WATT,
+        # unit=UnitOfPower.KILO_WATT,
         description="Grid Point Maximum import limitation",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "plant_pcs_maximum_export_limitation": ModbusRegisterDefinition(
         address=40042,
@@ -947,9 +1494,8 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.U32,
         gain=1000,
-        unit=UnitOfPower.KILO_WATT,
+        # unit=UnitOfPower.KILO_WATT,
         description="PCS maximum export limitation. Range: [0, 0xFFFFFFFE]. With value 0xFFFFFFFF, register is not valid. Takes effect globally.",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
     "plant_pcs_maximum_import_limitation": ModbusRegisterDefinition(
         address=40044,
@@ -957,9 +1503,40 @@ PLANT_PARAMETER_REGISTERS = {
         register_type=RegisterType.HOLDING,
         data_type=DataType.U32,
         gain=1000,
-        unit=UnitOfPower.KILO_WATT,
+        # unit=UnitOfPower.KILO_WATT,
         description="PCS maximum import limitation. Range: [0, 0xFFFFFFFE]. With value 0xFFFFFFFF, register is not valid. Takes effect globally.",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
+    ),
+
+    # Additions for Modbus specification v2.7
+    "plant_backup_soc": ModbusRegisterDefinition(
+        address=40046,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=10,
+        unit=PERCENTAGE,
+        description="[ESS]Backup SOC. Range: [0,100.0]",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "plant_charge_cut_off_soc": ModbusRegisterDefinition(
+        address=40047,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=10,
+        unit=PERCENTAGE,
+        description="[ESS]Charge Cut-Off SOC. Range: [0,100.0]",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "plant_discharge_cut_off_soc": ModbusRegisterDefinition(
+        address=40048,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=10,
+        unit=PERCENTAGE,
+        description="[ESS]Discharge Cut-Off SOC. Range: [0,100.0]",
+        applicable_to=["hybrid_inverter"],
     ),
 }
 
@@ -971,7 +1548,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.STRING,
         gain=1,
         description="Model Type",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_serial_number": ModbusRegisterDefinition(
         address=30515,
@@ -980,7 +1556,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.STRING,
         gain=1,
         description="Serial Number",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_machine_firmware_version": ModbusRegisterDefinition(
         address=30525,
@@ -989,7 +1564,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.STRING,
         gain=1,
         description="Firmware Version",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_rated_active_power": ModbusRegisterDefinition(
         address=30540,
@@ -999,7 +1573,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Rated Active Power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_max_apparent_power": ModbusRegisterDefinition(
         address=30542,
@@ -1009,7 +1582,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kVA",
         description="Max. Apparent Power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_max_active_power": ModbusRegisterDefinition(
         address=30544,
@@ -1019,7 +1591,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Max. Active Power",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_max_absorption_power": ModbusRegisterDefinition(
         address=30546,
@@ -1030,7 +1601,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="Max. Absorption Power",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_rated_battery_capacity": ModbusRegisterDefinition(
         address=30548,
@@ -1041,7 +1611,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         description="Rated Battery Capacity",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_rated_charge_power": ModbusRegisterDefinition(
         address=30550,
@@ -1052,7 +1621,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="ESS Rated Charge Power",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_rated_discharge_power": ModbusRegisterDefinition(
         address=30552,
@@ -1063,7 +1631,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="ESS Rated Discharge Power",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_daily_charge_energy": ModbusRegisterDefinition(
         address=30566,
@@ -1112,7 +1679,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Running State (Refer to Appendix 1)",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_max_active_power_adjustment_value": ModbusRegisterDefinition(
         address=30579,
@@ -1122,7 +1688,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Max. Active Power Adjustment Value",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_min_active_power_adjustment_value": ModbusRegisterDefinition(
         address=30581,
@@ -1133,7 +1698,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="Min. Active Power Adjustment Value",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_max_reactive_power_adjustment_value_fed": ModbusRegisterDefinition(
         address=30583,
@@ -1143,7 +1707,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Max. Reactive Power Adjustment Value Fed to AC Terminal",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_max_reactive_power_adjustment_value_absorbed": ModbusRegisterDefinition(
         address=30585,
@@ -1153,7 +1716,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Max. Reactive Power Adjustment Value Absorbed from AC Terminal",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_active_power": ModbusRegisterDefinition(
         address=30587,
@@ -1163,7 +1725,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Active Power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_reactive_power": ModbusRegisterDefinition(
         address=30589,
@@ -1173,7 +1734,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit="kvar",
         description="Reactive Power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_ess_max_battery_charge_power": ModbusRegisterDefinition(
         address=30591,
@@ -1184,7 +1744,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="ESS Max. Battery Charge Power",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_max_battery_discharge_power": ModbusRegisterDefinition(
         address=30593,
@@ -1195,7 +1754,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="ESS Max. Battery Discharge Power",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_available_battery_charge_energy": ModbusRegisterDefinition(
         address=30595,
@@ -1246,7 +1804,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=PERCENTAGE,
         description="Battery State of Health",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_average_cell_temperature": ModbusRegisterDefinition(
         address=30603,
@@ -1257,7 +1814,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfTemperature.CELSIUS,
         description="Battery Average Cell Temperature",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_average_cell_voltage": ModbusRegisterDefinition(
         address=30604,
@@ -1268,7 +1824,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfElectricPotential.VOLT,
         description="Battery Average Cell Voltage",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_alarm1": ModbusRegisterDefinition(
         address=30605,
@@ -1277,7 +1832,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Alarm1 (Refer to Appendix 2)",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "inverter_alarm2": ModbusRegisterDefinition(
         address=30606,
@@ -1286,7 +1840,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Alarm2 (Refer to Appendix 3)",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "inverter_alarm3": ModbusRegisterDefinition(
         address=30607,
@@ -1296,7 +1849,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1,
         description="Alarm3 (Refer to Appendix 4)",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "inverter_alarm4": ModbusRegisterDefinition(
         address=30608,
@@ -1305,7 +1857,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Alarm4 (Refer to Appendix 5)",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "inverter_alarm5": ModbusRegisterDefinition(
         address=30609,
@@ -1315,7 +1866,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1,
         description="Alarm5 (Refer to Appendix 11)",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "inverter_ess_maximum_battery_temperature": ModbusRegisterDefinition(
         address=30620,
@@ -1326,7 +1876,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfTemperature.CELSIUS,
         description="Battery Maximum Temperature",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_minimum_battery_temperature": ModbusRegisterDefinition(
         address=30621,
@@ -1337,7 +1886,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfTemperature.CELSIUS,
         description="Battery Minimum Temperature",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_maximum_battery_cell_voltage": ModbusRegisterDefinition(
         address=30622,
@@ -1348,7 +1896,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfElectricPotential.VOLT,
         description="Battery Maximum Cell Voltage",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ess_minimum_battery_cell_voltage": ModbusRegisterDefinition(
         address=30623,
@@ -1359,7 +1906,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfElectricPotential.VOLT,
         description="Battery Minimum Cell Voltage",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_rated_grid_voltage": ModbusRegisterDefinition(
         address=31000,
@@ -1369,7 +1915,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="Rated Grid Voltage",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_rated_grid_frequency": ModbusRegisterDefinition(
         address=31001,
@@ -1379,7 +1924,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfFrequency.HERTZ,
         description="Rated Grid Frequency",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_grid_frequency": ModbusRegisterDefinition(
         address=31002,
@@ -1389,7 +1933,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfFrequency.HERTZ,
         description="Grid Frequency",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pcs_internal_temperature": ModbusRegisterDefinition(
         address=31003,
@@ -1399,7 +1942,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfTemperature.CELSIUS,
         description="PCS Internal Temperature",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_output_type": ModbusRegisterDefinition(
         address=31004,
@@ -1408,7 +1950,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Output Type (0: L/N, 1: L1/L2/L3, 2: L1/L2/L3/N, 3: L1/L2/N)",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_ab_line_voltage": ModbusRegisterDefinition(
         address=31005,
@@ -1515,7 +2056,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="PV String Count",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_mppt_count": ModbusRegisterDefinition(
         address=31026,
@@ -1524,7 +2064,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="MPPT Count",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_pv1_voltage": ModbusRegisterDefinition(
         address=31027,
@@ -1534,7 +2073,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV1 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv1_current": ModbusRegisterDefinition(
         address=31028,
@@ -1544,7 +2082,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV1 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv2_voltage": ModbusRegisterDefinition(
         address=31029,
@@ -1554,7 +2091,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV2 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv2_current": ModbusRegisterDefinition(
         address=31030,
@@ -1564,7 +2100,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV2 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv3_voltage": ModbusRegisterDefinition(
         address=31031,
@@ -1574,7 +2109,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV3 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv3_current": ModbusRegisterDefinition(
         address=31032,
@@ -1584,7 +2118,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV3 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv4_voltage": ModbusRegisterDefinition(
         address=31033,
@@ -1594,7 +2127,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV4 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv4_current": ModbusRegisterDefinition(
         address=31034,
@@ -1604,7 +2136,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV4 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv_power": ModbusRegisterDefinition(
         address=31035,
@@ -1614,7 +2145,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="PV Power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_insulation_resistance": ModbusRegisterDefinition(
         address=31037,
@@ -1633,7 +2163,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1,
         unit="s",
         description="Startup Time",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_shutdown_time": ModbusRegisterDefinition(
         address=31040,
@@ -1643,7 +2172,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=1,
         unit="s",
         description="Shutdown Time",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_pv5_voltage": ModbusRegisterDefinition(
         address=31042,
@@ -1653,7 +2181,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV5 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv5_current": ModbusRegisterDefinition(
         address=31043,
@@ -1663,7 +2190,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV5 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv6_voltage": ModbusRegisterDefinition(
         address=31044,
@@ -1673,7 +2199,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV6 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv6_current": ModbusRegisterDefinition(
         address=31045,
@@ -1683,7 +2208,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV6 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv7_voltage": ModbusRegisterDefinition(
         address=31046,
@@ -1693,7 +2217,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV7 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv7_current": ModbusRegisterDefinition(
         address=31047,
@@ -1703,7 +2226,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV7 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv8_voltage": ModbusRegisterDefinition(
         address=31048,
@@ -1713,7 +2235,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV8 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv8_current": ModbusRegisterDefinition(
         address=31049,
@@ -1723,7 +2244,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV8 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv9_voltage": ModbusRegisterDefinition(
         address=31050,
@@ -1733,7 +2253,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV9 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv9_current": ModbusRegisterDefinition(
         address=31051,
@@ -1743,7 +2262,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV9 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv10_voltage": ModbusRegisterDefinition(
         address=31052,
@@ -1753,7 +2271,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV10 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv10_current": ModbusRegisterDefinition(
         address=31053,
@@ -1763,7 +2280,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV10 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv11_voltage": ModbusRegisterDefinition(
         address=31054,
@@ -1773,7 +2289,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV11 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv11_current": ModbusRegisterDefinition(
         address=31055,
@@ -1783,7 +2298,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV11 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv12_voltage": ModbusRegisterDefinition(
         address=31056,
@@ -1793,7 +2307,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV12 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv12_current": ModbusRegisterDefinition(
         address=31057,
@@ -1803,7 +2316,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV12 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv13_voltage": ModbusRegisterDefinition(
         address=31058,
@@ -1813,7 +2325,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV13 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv13_current": ModbusRegisterDefinition(
         address=31059,
@@ -1823,7 +2334,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV13 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv14_voltage": ModbusRegisterDefinition(
         address=31060,
@@ -1833,7 +2343,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV14 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv14_current": ModbusRegisterDefinition(
         address=31061,
@@ -1843,7 +2352,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV14 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv15_voltage": ModbusRegisterDefinition(
         address=31062,
@@ -1853,7 +2361,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV15 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv15_current": ModbusRegisterDefinition(
         address=31063,
@@ -1863,7 +2370,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV15 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv16_voltage": ModbusRegisterDefinition(
         address=31064,
@@ -1873,7 +2379,6 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="PV16 Voltage",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "inverter_pv16_current": ModbusRegisterDefinition(
         address=31065,
@@ -1883,46 +2388,72 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="PV16 Current",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
-    # This sensors are quite unkonown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
-    # They are undocumented.
-    # "daily_export_energy": ModbusRegisterDefinition(
-    #     address=30554,
-    #     count=2,
-    #     register_type=RegisterType.READ_ONLY,
-    #     data_type=DataType.U32,
-    #     gain=100,
-    #     unit=UnitOfEnergy.KILO_WATT_HOUR,
-    #     description="Daily Export Energy",
-    # ),
-    # "accumulated_export_energy": ModbusRegisterDefinition(
-    #     address=30556,
-    #     count=4,
-    #     register_type=RegisterType.READ_ONLY,
-    #     data_type=DataType.U64,
-    #     gain=100,
-    #     unit=UnitOfEnergy.KILO_WATT_HOUR,
-    #     description="Accumulated Export Energy",
-    # ),
-    # "daily_import_energy": ModbusRegisterDefinition(
-    #     address=30560,
-    #     count=2,
-    #     register_type=RegisterType.READ_ONLY,
-    #     data_type=DataType.U32,
-    #     gain=100,
-    #     unit=UnitOfEnergy.KILO_WATT_HOUR,
-    #     description="Daily Import Energy",
-    # ),
-    # "accumulated_import_energy": ModbusRegisterDefinition(
-    #     address=30562,
-    #     count=4,
-    #     register_type=RegisterType.READ_ONLY,
-    #     data_type=DataType.U64,
-    #     gain=100,
-    #     unit=UnitOfEnergy.KILO_WATT_HOUR,
-    #     description="Accumulated Import Energy",
-    # ),
+
+    # Additions for Modbus specification v2.7
+    "inverter_active_power_fixed_value_adjustment_feedback": ModbusRegisterDefinition(
+        address=30613,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Active power fixed value adjustment feedback",
+    ),
+    "inverter_reactive_power_fixed_value_adjustment_feedback": ModbusRegisterDefinition(
+        address=30615,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S32,
+        gain=1000,
+        unit="kvar",
+        description="Reactive power fixed value adjustment feedback",
+    ),
+    "inverter_active_power_percentage_adjustment_feedback": ModbusRegisterDefinition(
+        address=30617,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S16,
+        gain=100,
+        unit=PERCENTAGE,
+        description="Active power percentage adjustment feedback",
+    ),
+    "inverter_reactive_power_qs_adjustment_feedback": ModbusRegisterDefinition(
+        address=30618,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S16,
+        gain=100,
+        unit=PERCENTAGE,
+        description="Reactive power Q/S adjustment feedback",
+    ),
+    "inverter_power_factor_adjustment_feedback": ModbusRegisterDefinition(
+        address=30619,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.S16,
+        gain=1000,
+        description="Power factor adjustment feedback",
+    ),
+    "inverter_daily_pv_energy": ModbusRegisterDefinition(
+        address=31509,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="PV daily generation",
+    ),
+    "inverter_accumulated_pv_energy": ModbusRegisterDefinition(
+        address=31511,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="PV total generation",
+    ),
+
 }
 
 INVERTER_PARAMETER_REGISTERS = {
@@ -1933,18 +2464,17 @@ INVERTER_PARAMETER_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Start/Stop inverter (0: Stop 1: Start)",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
     ),
-    "inverter_grid_code": ModbusRegisterDefinition(
-        address=40501,
-        count=1,
-        register_type=RegisterType.HOLDING,
-        data_type=DataType.U16,
-        gain=1,
-        description="Grid code setting",
-        applicable_to=["hybrid_inverter", "pv_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
-    ),
+    # This register is deprecated in Modbus v. 2.7 and is now marked as reserved.
+    # "inverter_grid_code": ModbusRegisterDefinition(
+    #     address=40501,
+    #     count=1,
+    #     register_type=RegisterType.HOLDING,
+    #     data_type=DataType.U16,
+    #     gain=1,
+    #     description="Grid code setting",
+    #     applicable_to=["hybrid_inverter", "pv_inverter"],
+    # ),
     "inverter_remote_ems_dispatch_enable": ModbusRegisterDefinition(
         address=41500,
         count=1,
@@ -1963,7 +2493,6 @@ INVERTER_PARAMETER_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="Active power fixed value adjustment",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_reactive_power_fixed_adjustment": ModbusRegisterDefinition(
         address=41503,
@@ -1974,7 +2503,6 @@ INVERTER_PARAMETER_REGISTERS = {
         unit="kvar",
         description="Reactive power fixed value adjustment",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_active_power_percentage_adjustment": ModbusRegisterDefinition(
         address=41505,
@@ -1985,7 +2513,6 @@ INVERTER_PARAMETER_REGISTERS = {
         unit=PERCENTAGE,
         description="Active power percentage adjustment",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_reactive_power_qs_adjustment": ModbusRegisterDefinition(
         address=41506,
@@ -1996,7 +2523,6 @@ INVERTER_PARAMETER_REGISTERS = {
         unit=PERCENTAGE,
         description="Reactive power Q/S adjustment",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "inverter_power_factor_adjustment": ModbusRegisterDefinition(
         address=41507,
@@ -2006,7 +2532,6 @@ INVERTER_PARAMETER_REGISTERS = {
         gain=1000,
         description="Power factor adjustment",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.LOW,
     ),
 }
 
@@ -2018,7 +2543,6 @@ AC_CHARGER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="System states according to IEC61851-1 definition",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "ac_charger_total_energy_consumed": ModbusRegisterDefinition(
         address=32001,
@@ -2037,7 +2561,6 @@ AC_CHARGER_RUNNING_INFO_REGISTERS = {
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
         description="Charging power",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "ac_charger_rated_power": ModbusRegisterDefinition(
         address=32005,
@@ -2056,7 +2579,6 @@ AC_CHARGER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="Rated current",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "ac_charger_rated_voltage": ModbusRegisterDefinition(
         address=32009,
@@ -2066,7 +2588,6 @@ AC_CHARGER_RUNNING_INFO_REGISTERS = {
         gain=10,
         unit=UnitOfElectricPotential.VOLT,
         description="Rated voltage",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "ac_charger_input_breaker_rated_current": ModbusRegisterDefinition(
         address=32010,
@@ -2076,7 +2597,6 @@ AC_CHARGER_RUNNING_INFO_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="AC-Charger input breaker rated current",
-        update_frequency=UpdateFrequencyType.LOW,
     ),
     "ac_charger_alarm1": ModbusRegisterDefinition(
         address=32012,
@@ -2085,7 +2605,6 @@ AC_CHARGER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Alarm1",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "ac_charger_alarm2": ModbusRegisterDefinition(
         address=32013,
@@ -2094,7 +2613,6 @@ AC_CHARGER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Alarm2",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
     "ac_charger_alarm3": ModbusRegisterDefinition(
         address=32014,
@@ -2103,7 +2621,6 @@ AC_CHARGER_RUNNING_INFO_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="Alarm3",
-        update_frequency=UpdateFrequencyType.ALARM,
     ),
 }
 
@@ -2124,7 +2641,6 @@ AC_CHARGER_PARAMETER_REGISTERS = {
         gain=100,
         unit=UnitOfElectricCurrent.AMPERE,
         description="Charger output current ([6, X] X is the smaller value between the rated current and the AC-Charger input breaker rated current.)",
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
 }
 
@@ -2139,7 +2655,6 @@ DC_CHARGER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfElectricPotential.VOLT,
         description="DC Charger Vehicle Battery Voltage",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "dc_charger_charging_current": ModbusRegisterDefinition(
         address=31501,
@@ -2150,7 +2665,6 @@ DC_CHARGER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfElectricCurrent.AMPERE,
         description="DC Charger Charging Current",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "dc_charger_output_power": ModbusRegisterDefinition(
         address=31502,
@@ -2161,7 +2675,6 @@ DC_CHARGER_RUNNING_INFO_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="DC Charger Output Power",
         applicable_to=["hybrid_inverter"],
-        update_frequency=UpdateFrequencyType.HIGH,
     ),
     "dc_charger_vehicle_soc": ModbusRegisterDefinition(
         address=31504,

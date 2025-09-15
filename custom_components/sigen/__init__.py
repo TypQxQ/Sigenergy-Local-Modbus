@@ -11,14 +11,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import (
-    CONF_SCAN_INTERVAL_HIGH,
-    CONF_SCAN_INTERVAL_ALARM,
-    CONF_SCAN_INTERVAL_MEDIUM,
-    CONF_SCAN_INTERVAL_LOW,
-    DEFAULT_SCAN_INTERVAL_HIGH,
-    DEFAULT_SCAN_INTERVAL_ALARM,
-    DEFAULT_SCAN_INTERVAL_MEDIUM,
-    DEFAULT_SCAN_INTERVAL_LOW,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     PLATFORMS,
 )
@@ -33,58 +27,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Sigenergy ESS from a config entry."""
     _LOGGER.debug("async_setup_entry: Starting setup for entry: %s", entry.title)
     scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
-                                    {}).get(CONF_SCAN_INTERVAL_HIGH, 
-                                            DEFAULT_SCAN_INTERVAL_HIGH)
-    alarm_scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
-                                    {}).get(CONF_SCAN_INTERVAL_ALARM, 
-                                            DEFAULT_SCAN_INTERVAL_ALARM)
-    medium_scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
-                                    {}).get(CONF_SCAN_INTERVAL_MEDIUM, 
-                                            DEFAULT_SCAN_INTERVAL_MEDIUM)
-    low_scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
-                                    {}).get(CONF_SCAN_INTERVAL_LOW, 
-                                            DEFAULT_SCAN_INTERVAL_LOW)
+                                    {}).get(CONF_SCAN_INTERVAL, 
+                                            DEFAULT_SCAN_INTERVAL)
     host = entry.data[CONF_PLANT_CONNECTION][CONF_HOST]
     port = entry.data[CONF_PLANT_CONNECTION][CONF_PORT]
 
     _LOGGER.debug("async_setup_entry: Scan interval set to %s seconds", scan_interval)
-    _LOGGER.debug("async_setup_entry: Alarm scan interval set to %s seconds", alarm_scan_interval)
-    _LOGGER.debug("async_setup_entry: Medium scan interval set to %s seconds", medium_scan_interval)
-    _LOGGER.debug("async_setup_entry: Low scan interval set to %s seconds", low_scan_interval)
     _LOGGER.debug("async_setup_entry: CONF_PLANT_CONNECTION: %s", entry.data[CONF_PLANT_CONNECTION])
 
     hub = SigenergyModbusHub(hass, entry)
     _LOGGER.debug("async_setup_entry: SigenergyModbusHub created: %s", hub)
-
-    try:
-        _LOGGER.debug("async_setup_entry: Connecting to Modbus hub...")
-        await hub.async_connect(entry.data[CONF_PLANT_CONNECTION])
-        _LOGGER.debug("async_setup_entry: Modbus hub connected successfully")
-    except Exception as ex:
-        _LOGGER.error(
-            "async_setup_entry: Error connecting to Sigenergy system at %s:%s - %s",
-            host,
-            port,
-            ex
-        )
-        raise ConfigEntryNotReady(f"Error connecting to Sigenergy system: {ex}") from ex
 
     coordinator = SigenergyDataUpdateCoordinator(
         hass,
         _LOGGER,
         hub=hub,
         name=f"{DOMAIN}_{host}_{port}",
-        update_interval=timedelta(seconds=scan_interval),
-        high_scan_interval=scan_interval,
-        alarm_scan_interval=alarm_scan_interval,
-        medium_scan_interval=medium_scan_interval,
-        low_scan_interval=low_scan_interval,
+        scan_interval=scan_interval,
     )
     _LOGGER.debug("async_setup_entry: SigenergyDataUpdateCoordinator created: %s", coordinator)
 
-    _LOGGER.debug("async_setup_entry: Performing first refresh of coordinator...")
-    await coordinator.async_config_entry_first_refresh()
-    _LOGGER.debug("async_setup_entry: Coordinator first refresh completed")
+    try:
+        _LOGGER.debug("async_setup_entry: Connecting to Modbus hub and performing first refresh...")
+        await coordinator.async_config_entry_first_refresh()
+        _LOGGER.debug("async_setup_entry: Modbus hub connected and coordinator first refresh completed")
+    except ConfigEntryNotReady:
+        # This exception is already logged by the coordinator
+        # We can optionally add more context here if needed
+        _LOGGER.error("async_setup_entry: Initial data fetch failed. Deferring setup for %s.", entry.title)
+        # The coordinator's first refresh will re-raise ConfigEntryNotReady, which is what we want.
+        raise
+    except Exception as ex:
+        _LOGGER.error(
+            "async_setup_entry: An unexpected error occurred during initial setup for %s: %s",
+            entry.title,
+            ex,
+            exc_info=True
+        )
+        # Disconnect the hub before raising the exception
+        await hub.async_close()
+        raise ConfigEntryNotReady(f"Unexpected error during setup: {ex}") from ex
+
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
@@ -124,20 +107,22 @@ async def async_migrate_entry(hass, entry: ConfigEntry):
         return False
 
     if entry.version == 1:
-
-        scan_interval = entry.data.get(CONF_PLANT_CONNECTION,
-                                        {}).get(CONF_SCAN_INTERVAL_HIGH, 
-                                                DEFAULT_SCAN_INTERVAL_HIGH)
-
-        # Add configuration changes for version 1.0
         new_data = {**entry.data}
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_ALARM] = DEFAULT_SCAN_INTERVAL_ALARM \
-            if DEFAULT_SCAN_INTERVAL_ALARM > scan_interval else scan_interval
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_MEDIUM] = DEFAULT_SCAN_INTERVAL_MEDIUM \
-            if DEFAULT_SCAN_INTERVAL_MEDIUM > scan_interval else scan_interval
-        new_data[CONF_PLANT_CONNECTION][CONF_SCAN_INTERVAL_LOW] = DEFAULT_SCAN_INTERVAL_LOW \
-            if DEFAULT_SCAN_INTERVAL_LOW > scan_interval else scan_interval
-
+        plant_connection = new_data.get(CONF_PLANT_CONNECTION, {}).copy()
+        
+        # Get the old high scan interval, or the default if not present
+        scan_interval = plant_connection.get("scan_interval_high", DEFAULT_SCAN_INTERVAL)
+        
+        # Set the new scan interval
+        plant_connection[CONF_SCAN_INTERVAL] = scan_interval
+        
+        # Remove old scan interval keys
+        plant_connection.pop("scan_interval_high", None)
+        plant_connection.pop("scan_interval_alarm", None)
+        plant_connection.pop("scan_interval_medium", None)
+        plant_connection.pop("scan_interval_low", None)
+        
+        new_data[CONF_PLANT_CONNECTION] = plant_connection
 
         hass.config_entries.async_update_entry(entry, data=new_data, minor_version=0, version=2)
 
