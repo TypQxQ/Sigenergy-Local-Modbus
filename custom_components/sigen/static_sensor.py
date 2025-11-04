@@ -78,7 +78,6 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_max_apparent_power",
@@ -338,7 +337,6 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_rated_discharging_power",
@@ -347,7 +345,6 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_available_max_charging_capacity",
@@ -374,7 +371,6 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
             entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_charge_cut_off_soc",
