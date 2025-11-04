@@ -1643,7 +1643,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:transmission-tower-import",
+            icon="mdi:transmission-tower-export",
             value_fn=SigenergyCalculations.calculate_grid_import_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
             suggested_display_precision=3,
@@ -1655,7 +1655,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:transmission-tower-export",
+            icon="mdi:transmission-tower-import",
             value_fn=SigenergyCalculations.calculate_grid_export_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
             suggested_display_precision=3,

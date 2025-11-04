@@ -182,7 +182,7 @@ PLANT_NUMBERS = [
     SigenergyNumberEntityDescription(
         key="plant_pcs_maximum_export_limitation",
         name="PCS Export Limitation",
-        icon="mdi:transmission-tower-export",
+        icon="mdi:transmission-tower-import",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -195,7 +195,7 @@ PLANT_NUMBERS = [
     SigenergyNumberEntityDescription(
         key="plant_pcs_maximum_import_limitation",
         name="PCS Import Limitation",
-        icon="mdi:transmission-tower-import",
+        icon="mdi:transmission-tower-export",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
