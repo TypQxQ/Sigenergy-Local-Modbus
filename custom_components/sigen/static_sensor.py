@@ -1548,7 +1548,7 @@ class StaticSensors:
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
 
-        # This sensors are unkonown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
+        # This sensors are unknown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
         # They are undocumented.
         # SigenergySensorEntityDescription(
         #     key="accumulated_export_energy",
