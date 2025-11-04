@@ -113,7 +113,8 @@ DC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         key="dc_charging",
         name="DC Charging",
         icon="mdi:ev-station",
-        is_on_fn=lambda data, identifier: data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_output_power", 0) > 0,
+        # CHANGED: is_on_fn now checks != 0 to reflect both charging (positive) and discharging (negative) states
+        is_on_fn=lambda data, identifier: data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_output_power", 0) != 0,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
     ),
