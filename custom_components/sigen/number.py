@@ -154,7 +154,8 @@ PLANT_NUMBERS = [
     SigenergyNumberEntityDescription(
         key="plant_grid_point_maximum_export_limitation",
         name="Grid Export Limitation",
-        icon="mdi:transmission-tower-export",
+        # 'tower-import' icon means 'energy to grid'
+        icon="mdi:transmission-tower-import",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -167,7 +168,8 @@ PLANT_NUMBERS = [
     SigenergyNumberEntityDescription(
         key="plant_grid_maximum_import_limitation",
         name="Grid Import Limitation",
-        icon="mdi:transmission-tower-import",
+        # 'tower-export' icon means 'energy from grid'
+        icon="mdi:transmission-tower-export",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,

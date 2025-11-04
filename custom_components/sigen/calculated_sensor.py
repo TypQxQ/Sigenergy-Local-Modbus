@@ -1528,7 +1528,8 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
-            icon="mdi:transmission-tower-import",
+            # 'tower-export' icon means 'energy from grid'
+            icon="mdi:transmission-tower-export",
             value_fn=SigenergyCalculations.calculate_daily_energy_from_lifetime,
             extra_fn_data=True,
             extra_params={
@@ -1543,7 +1544,8 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
-            icon="mdi:transmission-tower-export",
+            # 'tower-import' icon means 'energy to grid'
+            icon="mdi:transmission-tower-import",
             value_fn=SigenergyCalculations.calculate_daily_energy_from_lifetime,
             extra_fn_data=True,
             extra_params={
