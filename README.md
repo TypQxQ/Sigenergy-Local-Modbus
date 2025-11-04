@@ -140,7 +140,8 @@ Contributions welcome!
 - [Issues](https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues)
 - [Discussions](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions)
 - [Add-ons & tools](https://github.com/Si-GCG/sigenergy_projects)
+- [Step-by-step guide automating a Sigenergy system with Home Assistant using EMHASS and Amber Electric in Australia](https://sigenergy.annable.me/)
 - [HACS docs](https://hacs.xyz/)
 
 ## License
-[MIT License © [Andrei Ignat]](LICENSE)
+[MIT License](LICENSE) © [Andrei Ignat]
