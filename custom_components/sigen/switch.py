@@ -54,7 +54,7 @@ PLANT_SWITCHES: list[SigenergySwitchEntityDescription] = [
     ),
     SigenergySwitchEntityDescription(
         key="plant_remote_ems_enable",
-        name="Remote EMS (Controled by Home Assistant)",
+        name="Remote EMS (Controlled by Home Assistant)",
         icon="mdi:home-assistant",
         is_on_fn=lambda data, _: data.get("plant", {}).get("plant_remote_ems_enable") == 1,
         turn_on_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_remote_ems_enable", 1),
