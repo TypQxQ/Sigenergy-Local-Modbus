@@ -29,6 +29,7 @@ Take your setup further with community add-ons and tools:
 - [Si-GCG "sigenergy_projects"](https://github.com/Si-GCG/sigenergy_projects)
 - [Energy Flow Dashboard](Dashboards/energy_flow_gauge/readme.md)
 - [Custom Enegy prices with Battery charge and Grid import](Dashboards/nordpool_energy_chart/readme.md)
+- [Step-by-step guide for EMHASS](https://sigenergy.annable.me/)
 
 More add-ons and enhancements are coming; stay tuned!
 
