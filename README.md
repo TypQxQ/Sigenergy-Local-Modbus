@@ -27,6 +27,8 @@ Monitor and control your Sigenergy Energy Storage System (ESS) from Home Assista
 ## Enhance with Add-ons
 Take your setup further with community add-ons and tools:
 - [Si-GCG "sigenergy_projects"](https://github.com/Si-GCG/sigenergy_projects)
+- [Energy Flow Dashboard](Dashboards/energy_flow_gauge/energy_flow.yaml)
+- [Custom Enegy prices with Battery charge and Grid import](Dashboards/nordpool_energy_chart/readme.md)
 
 More add-ons and enhancements are coming; stay tuned!
 
@@ -139,7 +141,7 @@ Contributions welcome!
 ## Support & Links
 - [Issues](https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues)
 - [Discussions](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions)
-- [Add-ons & tools](https://github.com/Si-GCG/sigenergy_projects)
+- [Add-ons & tools by Si-GCG](https://github.com/Si-GCG/sigenergy_projects)
 - [Step-by-step guide automating a Sigenergy system with Home Assistant using EMHASS and Amber Electric in Australia](https://sigenergy.annable.me/)
 - [HACS docs](https://hacs.xyz/)
 
