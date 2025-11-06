@@ -27,7 +27,7 @@ Monitor and control your Sigenergy Energy Storage System (ESS) from Home Assista
 ## Enhance with Add-ons
 Take your setup further with community add-ons and tools:
 - [Si-GCG "sigenergy_projects"](https://github.com/Si-GCG/sigenergy_projects)
-- [Energy Flow Dashboard](Dashboards/energy_flow_gauge/energy_flow.yaml)
+- [Energy Flow Dashboard](Dashboards/energy_flow_gauge/readme.md)
 - [Custom Enegy prices with Battery charge and Grid import](Dashboards/nordpool_energy_chart/readme.md)
 
 More add-ons and enhancements are coming; stay tuned!
