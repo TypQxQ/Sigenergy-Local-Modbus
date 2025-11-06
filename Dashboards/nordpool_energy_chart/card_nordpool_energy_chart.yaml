@@ -2,25 +2,26 @@
 # Requires the custom:config-template-card, custom:apexcharts-card, custom:nordpool-card and custom:congif-template-card to be installed. 
 
 type: custom:config-template-card
+update_interval: 60s
 variables:
-  nordpool_sensor: '''sensor.nordpool'''
-  grid_import_sensor: '''sensor.sigen_daily_grid_energy_import'''
-  battery_soc_sensor: '''sensor.sigen_energy_storage_system_soc'''
-  additional_cost_template: ''' *1 '''
+  nordpool_sensor: "'sensor.nordpool'"
+  grid_import_sensor: "'sensor.sigen_plant_filtered_daily_grid_import_energy'"
+  battery_soc_sensor: "'sensor.sigen_plant_filtered_battery_charge'"
+  additional_cost_template: "'*1.25 +(27.2 + 42.8 + 3.04 + 2.19 + 1.4) *1.25'"
   decimals_in_prices: 0
   decimals_in_energy: 1
   chart_price_cutoff_coerficient: 0.1
-  price_y_axis_unit: '''öre'''
-  energy_y_axis_unit: '''kWh'''
-  price_overview_unit: '''öre/kWh'''
-  chart_title: '''Electricity prices today'''
-  total_purchease_price_text: '''Total purchease price'''
-  grid_import_text: '''Grid Import today'''
-  battery_soc_text: '''Battery charge'''
-  lowest_price_text: '''Lowest future price'''
-  highest_price_text: '''Highest future price'''
-  price_now_text: '''Current price'''
-  now_text: ''''''
+  price_y_axis_unit: "'öre'"
+  energy_y_axis_unit: "'kWh'"
+  price_overview_unit: "'öre/kWh'"
+  chart_title: "'Electricity prices today'"
+  total_purchease_price_text: "'Total purchease price'"
+  grid_import_text: "'Grid Import today'"
+  battery_soc_text: "'Battery charge'"
+  lowest_price_text: "'Lowest future price'"
+  highest_price_text: "'Highest future price'"
+  price_now_text: "'Current price'"
+  now_text: "''"
   get_chart_cutoff: |
     (_min_price, _max_price, _coefficient) => {
       if (_min_price <= 0) {
@@ -76,8 +77,8 @@ entities:
 card:
   type: custom:apexcharts-card
   graph_span: >-
-    ${ states[nordpool_sensor].attributes.raw_today.length +
-    states[nordpool_sensor].attributes.raw_tomorrow.length + 'h' }
+    ${ (states[nordpool_sensor].attributes.raw_today.length +
+    states[nordpool_sensor].attributes.raw_tomorrow.length) / 4 + 'h' }
   yaxis:
     - id: y-price
       min: >-
@@ -140,7 +141,7 @@ card:
     - entity: ${nordpool_sensor}
       yaxis_id: y-price
       name: ${total_purchease_price_text}
-      offset: '-30min'
+      offset: "-30min"
       float_precision: ${decimals_in_prices}
       show:
         extremas: false
@@ -149,29 +150,29 @@ card:
       data_generator: ${get_total_prices(additional_cost_template)}
       color_threshold:
         - value: -1000
-          color: '#00f738'
+          color: "#00f738"
         - value: >-
             ${get_low_bottom_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
             get_total_max_nordpool_price(nordpool_sensor,additional_cost_template)
             )}
-          color: '#12A141'
+          color: "#12A141"
         - value: >-
             ${get_low_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
             get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
-          color: '#F3DC0C'
+          color: "#F3DC0C"
         - value: >-
             ${get_high_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
             get_total_max_nordpool_price(nordpool_sensor,
             additional_cost_template))}
-          color: '#E76821'
+          color: "#E76821"
         - value: >-
             ${get_high_top_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
             get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
-          color: '#DC182F'
+          color: "#DC182F"
     - entity: ${grid_import_sensor}
       yaxis_id: y-energy
       name: Grid import Chart
-      color: '#FF4646'
+      color: "#FF4646"
       curve: stepline
       float_precision: ${decimals_in_energy}
       show:
@@ -187,7 +188,7 @@ card:
         duration: 1h
     - entity: ${grid_import_sensor}
       name: ${grid_import_text}
-      color: '#FF4646'
+      color: "#FF4646"
       float_precision: ${decimals_in_energy}
       show:
         in_chart: false
@@ -196,7 +197,7 @@ card:
     - entity: ${battery_soc_sensor}
       yaxis_id: y-SOC
       name: ${battery_soc_text}
-      color: '#7a50d9'
+      color: "#7a50d9"
       float_precision: 0
       show:
         extremas: false
@@ -210,7 +211,7 @@ card:
         func: avg
         duration: 1h
     - entity: ${nordpool_sensor}
-      color: '#7bff00'
+      color: "#7bff00"
       float_precision: ${decimals_in_prices}
       name: ${lowest_price_text}
       unit: ${price_overview_unit}
@@ -233,27 +234,27 @@ card:
       data_generator: ${get_future_total_prices(additional_cost_template)}
       color_threshold:
         - value: -1000
-          color: '#00f738'
+          color: "#00f738"
         - value: >-
             ${get_low_bottom_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
             get_total_max_nordpool_price(nordpool_sensor,additional_cost_template)
             )}
-          color: '#12A141'
+          color: "#12A141"
         - value: >-
             ${get_low_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
             get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
-          color: '#F3DC0C'
+          color: "#F3DC0C"
         - value: >-
             ${get_high_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
             get_total_max_nordpool_price(nordpool_sensor,
             additional_cost_template))}
-          color: '#E76821'
+          color: "#E76821"
         - value: >-
             ${get_high_top_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
             get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
-          color: '#DC182F'
+          color: "#DC182F"
     - entity: ${nordpool_sensor}
-      color: '#DC182F'
+      color: "#DC182F"
       float_precision: ${decimals_in_prices}
       name: ${highest_price_text}
       unit: ${price_overview_unit}
