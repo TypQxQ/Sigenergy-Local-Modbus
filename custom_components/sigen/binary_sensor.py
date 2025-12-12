@@ -75,7 +75,8 @@ PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
         key="plant_exporting_to_grid",
         name="Exporting to Grid",
         device_class=BinarySensorDeviceClass.POWER,
-        icon="mdi:transmission-tower-export",
+        # 'tower-import' icon means 'energy to grid'
+        icon="mdi:transmission-tower-import",
         source_key="plant_grid_sensor_active_power",
         # Exporting is when grid power is positive (Sigenergy convention)
         value_fn=lambda data: (dec_val := safe_decimal(data.get("plant_grid_sensor_active_power"))) is not None and dec_val < Decimal("-0.01"),
@@ -84,7 +85,8 @@ PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
         key="plant_importing_from_grid",
         name="Importing from Grid",
         device_class=BinarySensorDeviceClass.POWER,
-        icon="mdi:transmission-tower-import",
+        # 'tower-export' icon means 'energy from grid'
+        icon="mdi:transmission-tower-export",
         source_key="plant_grid_sensor_active_power",
         # Importing is when grid power is negative (Sigenergy convention)
         value_fn=lambda data: (dec_val := safe_decimal(data.get("plant_grid_sensor_active_power"))) is not None and dec_val > Decimal("0.01"),

@@ -1528,7 +1528,8 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
-            icon="mdi:transmission-tower-import",
+            # 'tower-export' icon means 'energy from grid'
+            icon="mdi:transmission-tower-export",
             value_fn=SigenergyCalculations.calculate_daily_energy_from_lifetime,
             extra_fn_data=True,
             extra_params={
@@ -1543,7 +1544,8 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.ENERGY,
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL_INCREASING,
-            icon="mdi:transmission-tower-export",
+            # 'tower-import' icon means 'energy to grid'
+            icon="mdi:transmission-tower-import",
             value_fn=SigenergyCalculations.calculate_daily_energy_from_lifetime,
             extra_fn_data=True,
             extra_params={
@@ -1641,7 +1643,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:transmission-tower-import",
+            icon="mdi:transmission-tower-export",
             value_fn=SigenergyCalculations.calculate_grid_import_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
             suggested_display_precision=3,
@@ -1653,7 +1655,7 @@ class SigenergyCalculatedSensors:
             device_class=SensorDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:transmission-tower-export",
+            icon="mdi:transmission-tower-import",
             value_fn=SigenergyCalculations.calculate_grid_export_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
             suggested_display_precision=3,

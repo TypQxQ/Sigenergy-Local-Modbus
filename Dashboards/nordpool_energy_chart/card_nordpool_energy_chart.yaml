@@ -1,0 +1,269 @@
+# This code should be copy-pasted into a lovelace card.
+# Requires the custom:config-template-card, custom:apexcharts-card, custom:nordpool-card and custom:congif-template-card to be installed. 
+
+type: custom:config-template-card
+update_interval: 60s
+variables:
+  nordpool_sensor: "'sensor.nordpool'"
+  grid_import_sensor: "'sensor.sigen_plant_filtered_daily_grid_import_energy'"
+  battery_soc_sensor: "'sensor.sigen_plant_filtered_battery_charge'"
+  additional_cost_template: "'*1.25 +(27.2 + 42.8 + 3.04 + 2.19 + 1.4) *1.25'"
+  decimals_in_prices: 0
+  decimals_in_energy: 1
+  chart_price_cutoff_coerficient: 0.1
+  price_y_axis_unit: "'öre'"
+  energy_y_axis_unit: "'kWh'"
+  price_overview_unit: "'öre/kWh'"
+  chart_title: "'Electricity prices today'"
+  total_purchease_price_text: "'Total purchease price'"
+  grid_import_text: "'Grid Import today'"
+  battery_soc_text: "'Battery charge'"
+  lowest_price_text: "'Lowest future price'"
+  highest_price_text: "'Highest future price'"
+  price_now_text: "'Current price'"
+  now_text: "''"
+  get_chart_cutoff: |
+    (_min_price, _max_price, _coefficient) => {
+      if (_min_price <= 0) {
+          return "auto";
+      }
+      return _min_price - ((_max_price-_min_price) * _coefficient)
+    }
+  get_total_max_nordpool_price: |
+    (_nordpool_sensor, _additional_cost_template) => {
+      return states[_nordpool_sensor].attributes.raw_today.concat(states[_nordpool_sensor].attributes.raw_tomorrow).map(data=> eval("data.value"+_additional_cost_template)).reduce((a, b) => Math.max(a, b), -Infinity)
+    }
+  get_total_min_nordpool_price: |
+    (_nordpool_sensor, _additional_cost_template) => {
+      return states[_nordpool_sensor].attributes.raw_today.concat(states[_nordpool_sensor].attributes.raw_tomorrow).map(data=> eval("data.value"+_additional_cost_template)).reduce((a, b) => Math.min(a, b), Infinity)
+    }
+  get_low_bottom_threshold_nordpool_price: |
+    (_min, _max) => {
+      return parseFloat(_min) + parseFloat(((_max) - parseFloat(_max)) /10)
+    }
+  get_low_threshold_nordpool_price: |
+    (_min, _max) => {
+      return parseFloat(_min) + parseFloat(((_max) - parseFloat(_min)) /3)
+    }
+  get_high_threshold_nordpool_price: |
+    (_min, _max) => {
+      return parseFloat(_min) 
+      + (( parseFloat(_max) - parseFloat(_min) ) /3) * 2
+    }
+  get_high_top_threshold_nordpool_price: |
+    (_min, _max) => {
+      return parseFloat(_min) + parseFloat(((_max) - parseFloat(_min)) /10)*9
+    }
+  get_total_prices: |
+    _cost_template => {
+      return "return (entity.attributes.raw_today.map((start, index) => {return [new Date(start['start']).getTime(), entity.attributes.raw_today[index]['value']"
+      + _cost_template
+      + "];})).concat(entity.attributes.raw_tomorrow.map((start, index) => {return [new Date(start['start']).getTime(),entity.attributes.raw_tomorrow[index]['value'] "
+      + _cost_template + "];}));"
+    }
+  get_future_total_prices: |
+    _cost_template => {
+      return "const now = new Date().getTime() - 3600000;"
+      + "const futureData = entity.attributes.raw_today.concat(entity.attributes.raw_tomorrow).filter(data"
+      + " => new Date(data.start).getTime() >= now);"
+      + "return futureData.map((data, index) => {"
+      + "return [new Date(data.start).getTime(), futureData[index].value"
+      + _cost_template + "];});"
+    }
+entities:
+  - ${nordpool_sensor}
+  - ${battery_soc_sensor}
+  - ${grid_import_sensor}
+card:
+  type: custom:apexcharts-card
+  graph_span: >-
+    ${ (states[nordpool_sensor].attributes.raw_today.length +
+    states[nordpool_sensor].attributes.raw_tomorrow.length) / 4 + 'h' }
+  yaxis:
+    - id: y-price
+      min: >-
+        ${get_chart_cutoff(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),get_total_max_nordpool_price(nordpool_sensor,additional_cost_template),chart_price_cutoff_coerficient)}
+      max: auto
+      apex_config:
+        opposite: false
+        forceNiceScale: true
+        decimalsInFloat: ${decimals_in_prices}
+        labels:
+          formatter: >
+            ${"EVAL:function(value) {return value.toFixed(" + decimals_in_prices
+            + ") + ' " + price_y_axis_unit + "' }"
+    - id: y-energy
+      min: 0
+      max: auto
+      apex_config:
+        opposite: true
+        forceNiceScale: true
+        decimalsInFloat: ${decimals_in_energy}
+        labels:
+          formatter: |
+            ${"EVAL:function(value) {return value.toFixed("
+            + decimals_in_energy
+            + ") + ' " + energy_y_axis_unit + "' }"
+    - id: y-SOC
+      show: false
+      min: 0
+      max: 100
+  apex_config:
+    chart:
+      height: 340px
+    legend:
+      show: false
+    title:
+      floating: false
+      align: center
+      style:
+        fontSize: 20px
+        fontWeight: bold
+    xaxis:
+      labels:
+        datetimeFormatter:
+          hour: HH:mm
+  show:
+    last_updated: true
+  experimental:
+    color_threshold: true
+  header:
+    title: ${chart_title}
+    show: true
+    show_states: true
+    colorize_states: true
+  span:
+    start: day
+  now:
+    show: true
+    label: ${now_text}
+  series:
+    - entity: ${nordpool_sensor}
+      yaxis_id: y-price
+      name: ${total_purchease_price_text}
+      offset: "-30min"
+      float_precision: ${decimals_in_prices}
+      show:
+        extremas: false
+        in_header: false
+      type: column
+      data_generator: ${get_total_prices(additional_cost_template)}
+      color_threshold:
+        - value: -1000
+          color: "#00f738"
+        - value: >-
+            ${get_low_bottom_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+            get_total_max_nordpool_price(nordpool_sensor,additional_cost_template)
+            )}
+          color: "#12A141"
+        - value: >-
+            ${get_low_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+            get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+          color: "#F3DC0C"
+        - value: >-
+            ${get_high_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+            get_total_max_nordpool_price(nordpool_sensor,
+            additional_cost_template))}
+          color: "#E76821"
+        - value: >-
+            ${get_high_top_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+            get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+          color: "#DC182F"
+    - entity: ${grid_import_sensor}
+      yaxis_id: y-energy
+      name: Grid import Chart
+      color: "#FF4646"
+      curve: stepline
+      float_precision: ${decimals_in_energy}
+      show:
+        extremas: false
+        in_header: false
+      type: line
+      stroke_width: 3
+      opacity: 0.75
+      extend_to: false
+      unit: ${energy_y_axis_unit}
+      group_by:
+        func: delta
+        duration: 1h
+    - entity: ${grid_import_sensor}
+      name: ${grid_import_text}
+      color: "#FF4646"
+      float_precision: ${decimals_in_energy}
+      show:
+        in_chart: false
+        in_header: raw
+      unit: ${energy_y_axis_unit}
+    - entity: ${battery_soc_sensor}
+      yaxis_id: y-SOC
+      name: ${battery_soc_text}
+      color: "#7a50d9"
+      float_precision: 0
+      show:
+        extremas: false
+        in_header: raw
+        header_color_threshold: true
+      type: line
+      stroke_width: 3
+      opacity: 0.75
+      extend_to: false
+      group_by:
+        func: avg
+        duration: 1h
+    - entity: ${nordpool_sensor}
+      color: "#7bff00"
+      float_precision: ${decimals_in_prices}
+      name: ${lowest_price_text}
+      unit: ${price_overview_unit}
+      show:
+        in_chart: false
+        legend_value: false
+      group_by:
+        func: min
+        duration: 2d
+      data_generator: ${get_future_total_prices(additional_cost_template)}
+    - entity: ${nordpool_sensor}
+      name: ${price_now_text}
+      type: column
+      unit: ${price_overview_unit}
+      show:
+        in_header: before_now
+        in_chart: false
+        header_color_threshold: true
+      float_precision: ${decimals_in_prices}
+      data_generator: ${get_future_total_prices(additional_cost_template)}
+      color_threshold:
+        - value: -1000
+          color: "#00f738"
+        - value: >-
+            ${get_low_bottom_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+            get_total_max_nordpool_price(nordpool_sensor,additional_cost_template)
+            )}
+          color: "#12A141"
+        - value: >-
+            ${get_low_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+            get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+          color: "#F3DC0C"
+        - value: >-
+            ${get_high_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+            get_total_max_nordpool_price(nordpool_sensor,
+            additional_cost_template))}
+          color: "#E76821"
+        - value: >-
+            ${get_high_top_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+            get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+          color: "#DC182F"
+    - entity: ${nordpool_sensor}
+      color: "#DC182F"
+      float_precision: ${decimals_in_prices}
+      name: ${highest_price_text}
+      unit: ${price_overview_unit}
+      show:
+        in_chart: false
+        legend_value: false
+      group_by:
+        func: max
+        duration: 2d
+      data_generator: ${get_future_total_prices(additional_cost_template)}
+layout_options:
+  grid_columns: full

@@ -1,0 +1,2564 @@
+views:
+  - title: Energy Flow
+    path: new-energy-flow-29sept
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: custom:apexcharts-card
+                chart_type: donut
+                show:
+                  loading: false
+                header:
+                  show: true
+                  show_states: true
+                  colorize_states: true
+                apex_config:
+                  plotOptions:
+                    pie:
+                      startAngle: -90
+                      endAngle: 90
+                      offsetY: 0
+                      donut:
+                        labels:
+                          show: true
+                          name:
+                            offsetY: -45
+                            formatter: |
+                              EVAL:function(w) {
+                                return "home";
+                              }
+                          value:
+                            offsetY: -30
+                            fontSize: 50px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                + w.globals.series[2]
+                                ).toFixed(1) + " kW";
+                              }
+                          total:
+                            show: true
+                            color: '#8B4513'
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                + w.globals.series[2]
+                                ).toFixed(1) + " kW";
+                              }
+                  chart:
+                    height: 450px
+                    animations:
+                      enabled: true
+                      easing: easeinout
+                      speed: 800
+                      animateGradually:
+                        enabled: true
+                        delay: 150
+                      dynamicAnimation:
+                        enabled: true
+                        speed: 350
+                  stroke:
+                    show: true
+                    opacity: 0
+                  legend:
+                    show: false
+                  dataLabels:
+                    enabled: false
+                series:
+                  - entity: sensor.power_flow_gauge_consumption_from_solar
+                    name: Solar
+                    float_precision: 2
+                    color: '#FFBF00'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_consumption_from_battery
+                    name: Battery
+                    float_precision: 2
+                    color: '#7a50d9'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_consumption_from_grid
+                    name: Grid
+                    float_precision: 2
+                    color: '#FF4646'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_mean_consumption
+                    name: Mean / 24h.
+                    opacity: 0.5
+                    float_precision: 2
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(), Math.max(0,
+                      parseFloat(hass.states['sensor.power_flow_gauge_mean_consumption'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_solar'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_battery'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_grid'].state)
+                        )]];
+                  - entity: sensor.power_flow_gauge_consumption_until_max
+                    name: Diff. to max.
+                    opacity: 0.1
+                    float_precision: 2
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(),
+                      parseFloat(hass.states['sensor.power_flow_gauge_max_consumption'].state) 
+                        -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_consumption'].state),
+                          parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_solar'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_battery'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_grid'].state)
+                        )]];
+                        
+                card_mod:
+                  style: |
+                    .apexcharts-datalabel-label{
+                      font-size: 80px;
+                      font-family: Material Icons !important;
+                    }
+                    ha-card {
+                      height: 270px;
+                      --apexcharts-xaxis-labels-color: red;
+                    }
+              - show_name: true
+                show_icon: false
+                show_state: true
+                type: glance
+                entities:
+                  - entity: sensor.power_flow_gauge_mean_consumption
+                    name: Mean
+                  - entity: sensor.power_flow_gauge_max_consumption
+                    name: Max
+      - type: grid
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: custom:apexcharts-card
+                chart_type: donut
+                show:
+                  loading: false
+                header:
+                  show: true
+                  show_states: true
+                  colorize_states: true
+                apex_config:
+                  plotOptions:
+                    pie:
+                      startAngle: -90
+                      endAngle: 90
+                      offsetY: 0
+                      donut:
+                        labels:
+                          show: true
+                          name:
+                            offsetY: -50
+                            formatter: |
+                              EVAL:function(w) {
+                                return "solar_power";
+                              }
+                          value:
+                            offsetY: -30
+                            fontSize: 50px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                + w.globals.series[2]
+                                ).toFixed(1) + " kW";
+                              }
+                          total:
+                            show: true
+                            color: '#FFBF00'
+                            fontSize: 28px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                + w.globals.series[2]
+                                ).toFixed(1) + " kW";
+                              }
+                  chart:
+                    height: 450px
+                    animations:
+                      enabled: true
+                      easing: easeinout
+                      speed: 800
+                      animateGradually:
+                        enabled: true
+                        delay: 150
+                      dynamicAnimation:
+                        enabled: true
+                        speed: 350
+                  stroke:
+                    show: true
+                    opacity: 0
+                  legend:
+                    show: false
+                  dataLabels:
+                    enabled: false
+                series:
+                  - entity: sensor.power_flow_gauge_solar_to_house
+                    name: Self Consumption
+                    float_precision: 2
+                    color: '#8B4513'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_solar_to_battery
+                    name: Battery
+                    float_precision: 2
+                    color: '#7a50d9'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_solar_to_grid
+                    name: To Grid
+                    float_precision: 2
+                    color: '#80b5f8'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_mean_solar
+                    name: Mean / 24h.
+                    opacity: 0.5
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(), Math.max(0,
+                      parseFloat(hass.states['sensor.power_flow_gauge_mean_solar'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_house'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_battery'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_grid'].state)
+                        )]];
+                  - entity: sensor.power_flow_gauge_max_solar
+                    name: Diff. to max.
+                    opacity: 0.1
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(),
+                      parseFloat(hass.states['sensor.power_flow_gauge_max_solar'].state) 
+                        -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_solar'].state),
+                          parseFloat(hass.states['sensor.power_flow_gauge_solar_to_house'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_solar_to_battery'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_solar_to_grid'].state)
+                        )]];
+                card_mod:
+                  style: |
+                    .apexcharts-datalabel-label{
+                      font-size: 70px;
+                      font-family: Material Icons !important;
+                    }
+                    ha-card {
+                      height: 270px;
+                      --apexcharts-xaxis-labels-color: red;
+                    }
+              - show_name: true
+                show_icon: false
+                show_state: true
+                type: glance
+                entities:
+                  - entity: sensor.power_flow_gauge_mean_solar
+                    name: Mean 24h
+                  - entity: sensor.power_flow_gauge_max_solar
+                    name: Max 24h
+        visibility:
+          - condition: numeric_state
+            entity: sensor.sigen_plant_sigen_pv_power
+            above: 0.1
+      - type: grid
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: custom:apexcharts-card
+                chart_type: donut
+                show:
+                  loading: false
+                header:
+                  show: true
+                  show_states: true
+                  colorize_states: true
+                apex_config:
+                  plotOptions:
+                    pie:
+                      startAngle: -90
+                      endAngle: 90
+                      offsetY: 0
+                      donut:
+                        labels:
+                          show: true
+                          name:
+                            offsetY: -50
+                            formatter: |
+                              EVAL:function(w) {
+                                return "electric_meter";
+                              }
+                          value:
+                            offsetY: -30
+                            fontSize: 50px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                ).toFixed(1) + " kW";
+                              }
+                          total:
+                            show: true
+                            fontSize: 28px
+                            color: '#FF4646'
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                ).toFixed(1) + " kW";
+                              }
+                  chart:
+                    height: 450px
+                    animations:
+                      enabled: true
+                      easing: easeinout
+                      speed: 800
+                      animateGradually:
+                        enabled: true
+                        delay: 150
+                      dynamicAnimation:
+                        enabled: true
+                        speed: 350
+                  stroke:
+                    show: true
+                    opacity: 0
+                  legend:
+                    show: false
+                  dataLabels:
+                    enabled: false
+                series:
+                  - entity: sensor.power_flow_gauge_grid_to_house
+                    name: Self Consumption
+                    float_precision: 2
+                    color: '#8B4513'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_grid_to_battery
+                    name: To Battery
+                    float_precision: 2
+                    color: '#7a50d9'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_grid_import_until_mean
+                    name: Diff. to mean.
+                    opacity: 0.5
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(), Math.max(0,
+                      parseFloat(hass.states['sensor.power_flow_gauge_mean_grid_import'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_grid_to_house'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_grid_to_battery'].state)
+                        )]];
+                  - entity: sensor.power_flow_gauge_grid_import_until_max
+                    name: Diff. to max.
+                    opacity: 0.1
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(),
+                      parseFloat(hass.states['sensor.power_flow_gauge_max_grid_import'].state) 
+                        -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_grid_import'].state),
+                          parseFloat(hass.states['sensor.power_flow_gauge_grid_to_house'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_grid_to_battery'].state)
+                        )]];
+                              
+                card_mod:
+                  style: |
+                    .apexcharts-datalabel-label{
+                      font-size: 70px;
+                      font-family: Material Icons !important;
+                    }
+                    ha-card {
+                      height: 270px;
+                      --apexcharts-xaxis-labels-color: red;
+                    }
+              - show_name: true
+                show_icon: false
+                show_state: true
+                type: glance
+                entities:
+                  - entity: sensor.power_flow_gauge_mean_grid_import
+                    name: Mean / 24h
+                  - entity: sensor.power_flow_gauge_max_grid_import
+                    name: Max / 24h
+        visibility:
+          - condition: numeric_state
+            entity: sensor.sigen_plant_sigen_pv_power
+            below: 0.1001
+          - condition: numeric_state
+            entity: sensor.sigen_plant_grid_import_power
+            above: 0.1
+      - type: grid
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: custom:apexcharts-card
+                chart_type: donut
+                show:
+                  loading: false
+                header:
+                  show: true
+                  show_states: true
+                  colorize_states: true
+                apex_config:
+                  plotOptions:
+                    pie:
+                      startAngle: -90
+                      endAngle: 90
+                      offsetY: 0
+                      donut:
+                        labels:
+                          show: true
+                          name:
+                            offsetY: -50
+                            formatter: |
+                              EVAL:function(w) {
+                                  return "battery_charging_full";
+                              }
+                          value:
+                            offsetY: -30
+                            fontSize: 50px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                ).toFixed(1) + " kW";
+                              }            
+                          total:
+                            show: true
+                            fontSize: 28px
+                            color: '#7a50d9'
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                ).toFixed(1) + " kW";
+                              }
+                  chart:
+                    height: 450px
+                    animations:
+                      enabled: true
+                      easing: easeinout
+                      speed: 800
+                      animateGradually:
+                        enabled: true
+                        delay: 150
+                      dynamicAnimation:
+                        enabled: true
+                        speed: 350
+                  stroke:
+                    show: true
+                    opacity: 0
+                  legend:
+                    show: false
+                  dataLabels:
+                    enabled: false
+                series:
+                  - entity: sensor.power_flow_gauge_battery_to_house
+                    name: Self Consumption
+                    float_precision: 2
+                    color: '#8B4513'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_battery_to_grid
+                    name: To Grid
+                    float_precision: 2
+                    color: '#FF4646'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_mean_battery_discharging
+                    name: Diff. to mean.
+                    opacity: 0.5
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(), Math.max(0,
+                      parseFloat(hass.states['sensor.power_flow_gauge_mean_battery_discharging'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_battery_to_house'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_battery_to_grid'].state)
+                        )]];       
+                  - entity: sensor.power_flow_gauge_max_battery_discharging
+                    name: Diff. to max.
+                    opacity: 0.1
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(),
+                      parseFloat(hass.states['sensor.power_flow_gauge_max_battery_discharging'].state) 
+                        -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_battery_discharging'].state),
+                          parseFloat(hass.states['sensor.power_flow_gauge_battery_to_house'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_battery_to_grid'].state)
+                        )]];          
+                card_mod:
+                  style: |
+                    .apexcharts-datalabel-label{
+                      font-size: 75px;
+                      font-family: Material Icons !important;
+                    }
+                    ha-card {
+                      height: 270px;
+                      --apexcharts-xaxis-labels-color: red;
+                    }
+              - show_name: true
+                show_icon: false
+                show_state: true
+                type: glance
+                entities:
+                  - entity: sensor.power_flow_gauge_total_battery_discharging
+                    name: Mean / 24h
+                  - entity: sensor.power_flow_gauge_max_battery_discharging
+                    name: Max / 24h
+            visibility:
+              - condition: numeric_state
+                entity: sensor.sigen_plant_sigen_pv_power
+                below: 0.1
+              - condition: numeric_state
+                entity: sensor.sigen_plant_grid_import_power
+                below: 0.1
+      - type: grid
+        cards:
+          - show_name: false
+            show_icon: true
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.sigen_plant_battery_power
+                icon: mdi:arrow-right-bold
+            state_color: false
+            layout_options:
+              grid_columns: 1
+              grid_rows: auto
+            visibility:
+              - condition: numeric_state
+                entity: sensor.sigen_plant_battery_power
+                above: 0.1
+          - type: custom:bar-card
+            entities:
+              - entity: sensor.sigen_plant_battery_state_of_charge
+            name: Battery
+            positions:
+              icon: 'off'
+              indicator: outside
+              name: inside
+            width: 85%
+            height: 90px
+            severity:
+              - color: Red
+                from: 0
+                to: 19
+              - color: Orange
+                from: 20
+                to: 74
+              - color: Green
+                from: 75
+                to: 100
+            style: |-
+              bar-card-value {
+                margin-right: auto;
+                font-size: 53px;
+                font-weight: bold;
+                text-shadow: 1px 1px #0005;
+              }
+            layout_options:
+              grid_columns: 7
+              grid_rows: auto
+          - show_name: false
+            show_icon: true
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.sigen_plant_battery_power
+                icon: mdi:arrow-right-bold
+            state_color: false
+            layout_options:
+              grid_columns: 1
+              grid_rows: auto
+            visibility:
+              - condition: numeric_state
+                entity: sensor.sigen_plant_battery_power
+                below: 0.1
+        column_span: 2
+      - type: grid
+        cards:
+          - type: tile
+            entity: sensor.battery_time_remaining
+            features_position: bottom
+            vertical: false
+            grid_options:
+              columns: full
+              rows: 1
+        column_span: 1
+      - type: grid
+        cards:
+          - type: entities
+            entities:
+              - entity: sensor.p1_meter_current_phase_1
+              - entity: sensor.p1_meter_current_phase_2
+              - entity: sensor.p1_meter_current_phase_3
+          - type: entities
+            entities:
+              - entity: sensor.sigen_plant_grid_phase_a_active_power
+              - entity: sensor.sigen_plant_grid_phase_b_active_power
+              - entity: sensor.sigen_plant_grid_phase_c_active_power
+    cards: []
+  - type: sections
+    path: energipriser
+    max_columns: 2
+    title: Priser
+    sections:
+      - type: grid
+        cards:
+          - type: custom:config-template-card
+            update_interval: 60s
+            variables:
+              nordpool_sensor: '''sensor.nordpool'''
+              grid_import_sensor: '''sensor.sigen_plant_filtered_daily_grid_import_energy'''
+              battery_soc_sensor: '''sensor.sigen_plant_filtered_battery_charge'''
+              additional_cost_template: '''*1.25 +(27.2 + 42.8 + 3.04 + 2.19 + 1.4) *1.25'''
+              decimals_in_prices: 0
+              decimals_in_energy: 1
+              chart_price_cutoff_coerficient: 0.1
+              price_y_axis_unit: '''öre'''
+              energy_y_axis_unit: '''kWh'''
+              price_overview_unit: '''öre/kWh'''
+              chart_title: '''Electricity prices today'''
+              total_purchease_price_text: '''Total purchease price'''
+              grid_import_text: '''Grid Import today'''
+              battery_soc_text: '''Battery charge'''
+              lowest_price_text: '''Lowest future price'''
+              highest_price_text: '''Highest future price'''
+              price_now_text: '''Current price'''
+              now_text: ''''''
+              get_chart_cutoff: |
+                (_min_price, _max_price, _coefficient) => {
+                  if (_min_price <= 0) {
+                      return "auto";
+                  }
+                  return _min_price - ((_max_price-_min_price) * _coefficient)
+                }
+              get_total_max_nordpool_price: |
+                (_nordpool_sensor, _additional_cost_template) => {
+                  return states[_nordpool_sensor].attributes.raw_today.concat(states[_nordpool_sensor].attributes.raw_tomorrow).map(data=> eval("data.value"+_additional_cost_template)).reduce((a, b) => Math.max(a, b), -Infinity)
+                }
+              get_total_min_nordpool_price: |
+                (_nordpool_sensor, _additional_cost_template) => {
+                  return states[_nordpool_sensor].attributes.raw_today.concat(states[_nordpool_sensor].attributes.raw_tomorrow).map(data=> eval("data.value"+_additional_cost_template)).reduce((a, b) => Math.min(a, b), Infinity)
+                }
+              get_low_bottom_threshold_nordpool_price: |
+                (_min, _max) => {
+                  return parseFloat(_min) + parseFloat(((_max) - parseFloat(_max)) /10)
+                }
+              get_low_threshold_nordpool_price: |
+                (_min, _max) => {
+                  return parseFloat(_min) + parseFloat(((_max) - parseFloat(_min)) /3)
+                }
+              get_high_threshold_nordpool_price: |
+                (_min, _max) => {
+                  return parseFloat(_min) 
+                  + (( parseFloat(_max) - parseFloat(_min) ) /3) * 2
+                }
+              get_high_top_threshold_nordpool_price: |
+                (_min, _max) => {
+                  return parseFloat(_min) + parseFloat(((_max) - parseFloat(_min)) /10)*9
+                }
+              get_total_prices: |
+                _cost_template => {
+                  return "return (entity.attributes.raw_today.map((start, index) => {return [new Date(start['start']).getTime(), entity.attributes.raw_today[index]['value']"
+                  + _cost_template
+                  + "];})).concat(entity.attributes.raw_tomorrow.map((start, index) => {return [new Date(start['start']).getTime(),entity.attributes.raw_tomorrow[index]['value'] "
+                  + _cost_template + "];}));"
+                }
+              get_future_total_prices: |
+                _cost_template => {
+                  return "const now = new Date().getTime() - 3600000;"
+                  + "const futureData = entity.attributes.raw_today.concat(entity.attributes.raw_tomorrow).filter(data"
+                  + " => new Date(data.start).getTime() >= now);"
+                  + "return futureData.map((data, index) => {"
+                  + "return [new Date(data.start).getTime(), futureData[index].value"
+                  + _cost_template + "];});"
+                }
+            entities:
+              - ${nordpool_sensor}
+              - ${battery_soc_sensor}
+              - ${grid_import_sensor}
+            card:
+              type: custom:apexcharts-card
+              graph_span: >-
+                ${ (states[nordpool_sensor].attributes.raw_today.length +
+                states[nordpool_sensor].attributes.raw_tomorrow.length) / 4 +
+                'h' }
+              yaxis:
+                - id: y-price
+                  min: >-
+                    ${get_chart_cutoff(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),get_total_max_nordpool_price(nordpool_sensor,additional_cost_template),chart_price_cutoff_coerficient)}
+                  max: auto
+                  apex_config:
+                    opposite: false
+                    forceNiceScale: true
+                    decimalsInFloat: ${decimals_in_prices}
+                    labels:
+                      formatter: >
+                        ${"EVAL:function(value) {return value.toFixed(" +
+                        decimals_in_prices + ") + ' " + price_y_axis_unit + "'
+                        }"
+                - id: y-energy
+                  min: 0
+                  max: auto
+                  apex_config:
+                    opposite: true
+                    forceNiceScale: true
+                    decimalsInFloat: ${decimals_in_energy}
+                    labels:
+                      formatter: |
+                        ${"EVAL:function(value) {return value.toFixed("
+                        + decimals_in_energy
+                        + ") + ' " + energy_y_axis_unit + "' }"
+                - id: y-SOC
+                  show: false
+                  min: 0
+                  max: 100
+              apex_config:
+                chart:
+                  height: 340px
+                legend:
+                  show: false
+                title:
+                  floating: false
+                  align: center
+                  style:
+                    fontSize: 20px
+                    fontWeight: bold
+                xaxis:
+                  labels:
+                    datetimeFormatter:
+                      hour: HH:mm
+              show:
+                last_updated: true
+              experimental:
+                color_threshold: true
+              header:
+                title: ${chart_title}
+                show: true
+                show_states: true
+                colorize_states: true
+              span:
+                start: day
+              now:
+                show: true
+                label: ${now_text}
+              series:
+                - entity: ${nordpool_sensor}
+                  yaxis_id: y-price
+                  name: ${total_purchease_price_text}
+                  offset: '-30min'
+                  float_precision: ${decimals_in_prices}
+                  show:
+                    extremas: false
+                    in_header: false
+                  type: column
+                  data_generator: ${get_total_prices(additional_cost_template)}
+                  color_threshold:
+                    - value: -1000
+                      color: '#00f738'
+                    - value: >-
+                        ${get_low_bottom_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template)
+                        )}
+                      color: '#12A141'
+                    - value: >-
+                        ${get_low_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+                      color: '#F3DC0C'
+                    - value: >-
+                        ${get_high_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,
+                        additional_cost_template))}
+                      color: '#E76821'
+                    - value: >-
+                        ${get_high_top_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+                      color: '#DC182F'
+                - entity: ${grid_import_sensor}
+                  yaxis_id: y-energy
+                  name: Grid import Chart
+                  color: '#FF4646'
+                  curve: stepline
+                  float_precision: ${decimals_in_energy}
+                  show:
+                    extremas: false
+                    in_header: false
+                  type: line
+                  stroke_width: 3
+                  opacity: 0.75
+                  extend_to: false
+                  unit: ${energy_y_axis_unit}
+                  group_by:
+                    func: delta
+                    duration: 1h
+                - entity: ${grid_import_sensor}
+                  name: ${grid_import_text}
+                  color: '#FF4646'
+                  float_precision: ${decimals_in_energy}
+                  show:
+                    in_chart: false
+                    in_header: raw
+                  unit: ${energy_y_axis_unit}
+                - entity: ${battery_soc_sensor}
+                  yaxis_id: y-SOC
+                  name: ${battery_soc_text}
+                  color: '#7a50d9'
+                  float_precision: 0
+                  show:
+                    extremas: false
+                    in_header: raw
+                    header_color_threshold: true
+                  type: line
+                  stroke_width: 3
+                  opacity: 0.75
+                  extend_to: false
+                  group_by:
+                    func: avg
+                    duration: 1h
+                - entity: ${nordpool_sensor}
+                  color: '#7bff00'
+                  float_precision: ${decimals_in_prices}
+                  name: ${lowest_price_text}
+                  unit: ${price_overview_unit}
+                  show:
+                    in_chart: false
+                    legend_value: false
+                  group_by:
+                    func: min
+                    duration: 2d
+                  data_generator: ${get_future_total_prices(additional_cost_template)}
+                - entity: ${nordpool_sensor}
+                  name: ${price_now_text}
+                  type: column
+                  unit: ${price_overview_unit}
+                  show:
+                    in_header: before_now
+                    in_chart: false
+                    header_color_threshold: true
+                  float_precision: ${decimals_in_prices}
+                  data_generator: ${get_future_total_prices(additional_cost_template)}
+                  color_threshold:
+                    - value: -1000
+                      color: '#00f738'
+                    - value: >-
+                        ${get_low_bottom_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template)
+                        )}
+                      color: '#12A141'
+                    - value: >-
+                        ${get_low_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+                      color: '#F3DC0C'
+                    - value: >-
+                        ${get_high_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,
+                        additional_cost_template))}
+                      color: '#E76821'
+                    - value: >-
+                        ${get_high_top_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+                      color: '#DC182F'
+                - entity: ${nordpool_sensor}
+                  color: '#DC182F'
+                  float_precision: ${decimals_in_prices}
+                  name: ${highest_price_text}
+                  unit: ${price_overview_unit}
+                  show:
+                    in_chart: false
+                    legend_value: false
+                  group_by:
+                    func: max
+                    duration: 2d
+                  data_generator: ${get_future_total_prices(additional_cost_template)}
+            layout_options:
+              grid_columns: full
+          - type: custom:bar-card
+            entities:
+              - entity: sensor.sigen_plant_filtered_battery_charge
+                name: Battery
+                positions:
+                  icon: 'off'
+                  indicator: outside
+                  name: inside
+                width: 85%
+                severity:
+                  - color: Red
+                    from: 0
+                    to: 19
+                  - color: Orange
+                    from: 20
+                    to: 74
+                  - color: Green
+                    from: 75
+                    to: 100
+            layout_options:
+              grid_columns: full
+              grid_rows: auto
+        column_span: 2
+    cards: []
+  - title: Alla nya gauges
+    path: alla-nya-gauges
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:apexcharts-card
+            chart_type: donut
+            show:
+              loading: false
+            header:
+              show: true
+              show_states: true
+              colorize_states: true
+            apex_config:
+              plotOptions:
+                pie:
+                  startAngle: -90
+                  endAngle: 90
+                  offsetY: 0
+                  donut:
+                    labels:
+                      show: true
+                      name:
+                        offsetY: -45
+                        formatter: |
+                          EVAL:function(w) {
+                            return "home";
+                          }
+                      value:
+                        offsetY: -30
+                        fontSize: 50px
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            + w.globals.series[2]
+                            ).toFixed(1) + " kW";
+                          }
+                      total:
+                        show: true
+                        color: '#8B4513'
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            + w.globals.series[2]
+                            ).toFixed(1) + " kW";
+                          }
+              chart:
+                height: 450px
+                animations:
+                  enabled: true
+                  easing: easeinout
+                  speed: 800
+                  animateGradually:
+                    enabled: true
+                    delay: 150
+                  dynamicAnimation:
+                    enabled: true
+                    speed: 350
+              stroke:
+                show: true
+                opacity: 0
+              legend:
+                show: false
+              dataLabels:
+                enabled: false
+            series:
+              - entity: sensor.power_flow_gauge_consumption_from_solar
+                name: Solar
+                float_precision: 2
+                color: '#FFBF00'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_consumption_from_battery
+                name: Battery
+                float_precision: 2
+                color: '#7a50d9'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_consumption_from_grid
+                name: Grid
+                float_precision: 2
+                color: '#FF4646'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_mean_consumption
+                name: Mean / 24h.
+                opacity: 0.5
+                float_precision: 2
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(), Math.max(0,
+                  parseFloat(hass.states['sensor.power_flow_gauge_mean_consumption'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_solar'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_battery'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_grid'].state)
+                    )]];
+              - entity: sensor.power_flow_gauge_consumption_until_max
+                name: Diff. to max.
+                opacity: 0.1
+                float_precision: 2
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(),
+                  parseFloat(hass.states['sensor.power_flow_gauge_max_consumption'].state) 
+                    -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_consumption'].state),
+                      parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_solar'].state)
+                      + parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_battery'].state)
+                      + parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_grid'].state)
+                    )]];
+                    
+            card_mod:
+              style: |
+                .apexcharts-datalabel-label{
+                  font-size: 80px;
+                  font-family: Material Icons !important;
+                }
+                ha-card {
+                  height: 270px;
+                  --apexcharts-xaxis-labels-color: red;
+                }
+          - show_name: true
+            show_icon: false
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.power_flow_gauge_mean_consumption
+                name: Mean / 24h
+              - entity: sensor.power_flow_gauge_max_consumption
+                name: Max / 24h
+      - type: vertical-stack
+        cards:
+          - type: custom:apexcharts-card
+            chart_type: donut
+            show:
+              loading: false
+            header:
+              show: true
+              show_states: true
+              colorize_states: true
+            apex_config:
+              plotOptions:
+                pie:
+                  startAngle: -90
+                  endAngle: 90
+                  offsetY: 0
+                  donut:
+                    labels:
+                      show: true
+                      name:
+                        offsetY: -50
+                        formatter: |
+                          EVAL:function(w) {
+                            return "solar_power";
+                          }
+                      value:
+                        offsetY: -30
+                        fontSize: 50px
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            + w.globals.series[2]
+                            ).toFixed(1) + " kW";
+                          }
+                      total:
+                        show: true
+                        color: '#FFBF00'
+                        fontSize: 28px
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            + w.globals.series[2]
+                            ).toFixed(1) + " kW";
+                          }
+              chart:
+                height: 450px
+                animations:
+                  enabled: true
+                  easing: easeinout
+                  speed: 800
+                  animateGradually:
+                    enabled: true
+                    delay: 150
+                  dynamicAnimation:
+                    enabled: true
+                    speed: 350
+              stroke:
+                show: true
+                opacity: 0
+              legend:
+                show: false
+              dataLabels:
+                enabled: false
+            series:
+              - entity: sensor.power_flow_gauge_solar_to_house
+                name: Self Consumption
+                float_precision: 2
+                color: '#8B4513'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_solar_to_battery
+                name: Battery
+                float_precision: 2
+                color: '#7a50d9'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_solar_to_grid
+                name: To Grid
+                float_precision: 2
+                color: '#80b5f8'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_mean_solar
+                name: Mean / 24h.
+                opacity: 0.5
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(), Math.max(0,
+                  parseFloat(hass.states['sensor.power_flow_gauge_mean_solar'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_house'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_battery'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_grid'].state)
+                    )]];
+              - entity: sensor.power_flow_gauge_max_solar
+                name: Diff. to max.
+                opacity: 0.1
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(),
+                  parseFloat(hass.states['sensor.power_flow_gauge_max_solar'].state) 
+                    -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_solar'].state),
+                      parseFloat(hass.states['sensor.power_flow_gauge_solar_to_house'].state)
+                      + parseFloat(hass.states['sensor.power_flow_gauge_solar_to_battery'].state)
+                      + parseFloat(hass.states['sensor.power_flow_gauge_solar_to_grid'].state)
+                    )]];
+            card_mod:
+              style: |
+                .apexcharts-datalabel-label{
+                  font-size: 70px;
+                  font-family: Material Icons !important;
+                }
+                ha-card {
+                  height: 270px;
+                  --apexcharts-xaxis-labels-color: red;
+                }
+          - show_name: true
+            show_icon: false
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.power_flow_gauge_mean_solar
+                name: Mean / 24h
+              - entity: sensor.power_flow_gauge_max_solar
+                name: Max / 24h
+      - type: vertical-stack
+        cards:
+          - type: custom:apexcharts-card
+            chart_type: donut
+            show:
+              loading: false
+            header:
+              show: true
+              show_states: true
+              colorize_states: true
+            apex_config:
+              plotOptions:
+                pie:
+                  startAngle: -90
+                  endAngle: 90
+                  offsetY: 0
+                  donut:
+                    labels:
+                      show: true
+                      name:
+                        offsetY: -50
+                        formatter: |
+                          EVAL:function(w) {
+                            return "electric_meter";
+                          }
+                      value:
+                        offsetY: -30
+                        fontSize: 50px
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            ).toFixed(1) + " kW";
+                          }
+                      total:
+                        show: true
+                        fontSize: 28px
+                        color: '#FF4646'
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            ).toFixed(1) + " kW";
+                          }
+              chart:
+                height: 450px
+                animations:
+                  enabled: true
+                  easing: easeinout
+                  speed: 800
+                  animateGradually:
+                    enabled: true
+                    delay: 150
+                  dynamicAnimation:
+                    enabled: true
+                    speed: 350
+              stroke:
+                show: true
+                opacity: 0
+              legend:
+                show: false
+              dataLabels:
+                enabled: false
+            series:
+              - entity: sensor.power_flow_gauge_grid_to_house
+                name: Self Consumption
+                float_precision: 2
+                color: '#8B4513'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_grid_to_battery
+                name: To Battery
+                float_precision: 2
+                color: '#7a50d9'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_grid_import_until_mean
+                name: Diff. to mean.
+                opacity: 0.5
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(), Math.max(0,
+                  parseFloat(hass.states['sensor.power_flow_gauge_mean_grid_import'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_grid_to_house'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_grid_to_battery'].state)
+                    )]];
+              - entity: sensor.power_flow_gauge_grid_import_until_max
+                name: Diff. to max.
+                opacity: 0.1
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(),
+                  parseFloat(hass.states['sensor.power_flow_gauge_max_grid_import'].state) 
+                    -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_grid_import'].state),
+                      parseFloat(hass.states['sensor.power_flow_gauge_grid_to_house'].state)
+                      + parseFloat(hass.states['sensor.power_flow_gauge_grid_to_battery'].state)
+                    )]];
+                          
+            card_mod:
+              style: |
+                .apexcharts-datalabel-label{
+                  font-size: 70px;
+                  font-family: Material Icons !important;
+                }
+                ha-card {
+                  height: 270px;
+                  --apexcharts-xaxis-labels-color: red;
+                }
+          - show_name: true
+            show_icon: false
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.power_flow_gauge_mean_grid_import
+                name: Mean / 24h
+              - entity: sensor.power_flow_gauge_max_grid_import
+                name: Max / 24h
+      - type: vertical-stack
+        cards:
+          - type: custom:apexcharts-card
+            chart_type: donut
+            show:
+              loading: false
+            header:
+              show: true
+              show_states: true
+              colorize_states: true
+            apex_config:
+              plotOptions:
+                pie:
+                  startAngle: -90
+                  endAngle: 90
+                  offsetY: 0
+                  donut:
+                    labels:
+                      show: true
+                      name:
+                        offsetY: -50
+                        formatter: |
+                          EVAL:function(w) {
+                            return "energy_savings_leaf";
+                          }
+                      value:
+                        offsetY: -30
+                        fontSize: 50px
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            ).toFixed(1) + " kW";
+                          }            
+                      total:
+                        show: true
+                        fontSize: 28px
+                        color: '#80b5f8'
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            ).toFixed(1) + " kW";
+                          }
+              chart:
+                height: 450px
+                animations:
+                  enabled: true
+                  easing: easeinout
+                  speed: 800
+                  animateGradually:
+                    enabled: true
+                    delay: 150
+                  dynamicAnimation:
+                    enabled: true
+                    speed: 350
+              stroke:
+                show: true
+                opacity: 0
+              legend:
+                show: false
+              dataLabels:
+                enabled: false
+            series:
+              - entity: sensor.power_flow_gauge_solar_to_grid
+                name: From Solar
+                float_precision: 2
+                color: '#FFBF00'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_battery_to_grid
+                name: From Battery
+                float_precision: 2
+                color: '#7a50d9'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_mean_grid_export
+                name: Diff. to mean.
+                opacity: 0.5
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(), Math.max(0,
+                  parseFloat(hass.states['sensor.power_flow_gauge_mean_grid_export'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_grid'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_battery_to_grid'].state)
+                    )]];      
+              - entity: sensor.power_flow_gauge_grid_export_until_max
+                name: Diff. to max.
+                opacity: 0.1
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(),
+                  parseFloat(hass.states['sensor.power_flow_gauge_max_grid_export'].state) 
+                    -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_grid_export'].state),
+                      parseFloat(hass.states['sensor.power_flow_gauge_solar_to_grid'].state)
+                      + parseFloat(hass.states['sensor.power_flow_gauge_battery_to_grid'].state)
+                    )]];      
+            card_mod:
+              style: |
+                .apexcharts-datalabel-label{
+                  font-size: 75px;
+                  font-family: Material Icons !important;
+                }
+                ha-card {
+                  height: 270px;
+                  --apexcharts-xaxis-labels-color: red;
+                }
+          - show_name: true
+            show_icon: false
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.power_flow_gauge_mean_grid_export
+                name: Mean / 24h
+              - entity: sensor.power_flow_gauge_max_grid_export
+                name: Max / 24h
+      - type: vertical-stack
+        cards:
+          - type: custom:apexcharts-card
+            chart_type: donut
+            show:
+              loading: false
+            header:
+              show: true
+              show_states: true
+              colorize_states: true
+            apex_config:
+              plotOptions:
+                pie:
+                  startAngle: -90
+                  endAngle: 90
+                  offsetY: 0
+                  donut:
+                    labels:
+                      show: true
+                      name:
+                        offsetY: -50
+                        formatter: |
+                          EVAL:function(w) {
+                              return "battery_saver";
+                          }
+                      value:
+                        offsetY: -30
+                        fontSize: 50px
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            ).toFixed(1) + " kW";
+                          }            
+                      total:
+                        show: true
+                        fontSize: 28px
+                        color: '#7a50d9'
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            ).toFixed(1) + " kW";
+                          }
+              chart:
+                height: 450px
+                animations:
+                  enabled: true
+                  easing: easeinout
+                  speed: 800
+                  animateGradually:
+                    enabled: true
+                    delay: 150
+                  dynamicAnimation:
+                    enabled: true
+                    speed: 350
+              stroke:
+                show: true
+                opacity: 0
+              legend:
+                show: false
+              dataLabels:
+                enabled: false
+            series:
+              - entity: sensor.power_flow_gauge_solar_to_battery
+                name: From Solar
+                float_precision: 2
+                color: '#FFBF00'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_grid_to_battery
+                name: From Grid
+                float_precision: 2
+                color: '#FF4646'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_mean_battery_charging
+                name: Diff. to mean.
+                opacity: 0.5
+                color: rgb(50, 50, 50)
+                data_generator: >
+                  return [[new Date().getTime(), Math.max(0,
+                  parseFloat(hass.states['sensor.power_flow_gauge_mean_battery_charging'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_battery'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_grid_to_battery'].state)
+                    )]];    
+                show:
+                  in_header: false
+              - entity: sensor.power_flow_gauge_max_battery_charging
+                name: Diff. to max.
+                opacity: 0.1
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(),
+                  parseFloat(hass.states['sensor.power_flow_gauge_max_battery_charging'].state) 
+                    -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_battery_charging'].state),
+                      parseFloat(hass.states['sensor.power_flow_gauge_solar_to_battery'].state)
+                      + parseFloat(hass.states['sensor.power_flow_gauge_grid_to_battery'].state)
+                    )]];      
+            card_mod:
+              style: |
+                .apexcharts-datalabel-label{
+                  font-size: 75px;
+                  font-family: Material Icons !important;
+                }
+                ha-card {
+                  height: 270px;
+                  --apexcharts-xaxis-labels-color: red;
+                }
+          - show_name: true
+            show_icon: false
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.power_flow_gauge_total_battery_charging
+                name: Mean / 24h
+              - entity: sensor.power_flow_gauge_max_battery_charging
+                name: Max / 24h
+      - type: vertical-stack
+        cards:
+          - type: custom:apexcharts-card
+            chart_type: donut
+            show:
+              loading: false
+            header:
+              show: true
+              show_states: true
+              colorize_states: true
+            apex_config:
+              plotOptions:
+                pie:
+                  startAngle: -90
+                  endAngle: 90
+                  offsetY: 0
+                  donut:
+                    labels:
+                      show: true
+                      name:
+                        offsetY: -50
+                        formatter: |
+                          EVAL:function(w) {
+                              return "battery_charging_full";
+                          }
+                      value:
+                        offsetY: -30
+                        fontSize: 50px
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            ).toFixed(1) + " kW";
+                          }            
+                      total:
+                        show: true
+                        fontSize: 28px
+                        color: '#7a50d9'
+                        formatter: |
+                          EVAL:function(w) {
+                            return (w.globals.series[0]
+                            + w.globals.series[1]
+                            ).toFixed(1) + " kW";
+                          }
+              chart:
+                height: 450px
+                animations:
+                  enabled: true
+                  easing: easeinout
+                  speed: 800
+                  animateGradually:
+                    enabled: true
+                    delay: 150
+                  dynamicAnimation:
+                    enabled: true
+                    speed: 350
+              stroke:
+                show: true
+                opacity: 0
+              legend:
+                show: false
+              dataLabels:
+                enabled: false
+            series:
+              - entity: sensor.power_flow_gauge_battery_to_house
+                name: Self Consumption
+                float_precision: 2
+                color: '#8B4513'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_battery_to_grid
+                name: To Grid
+                float_precision: 2
+                color: '#FF4646'
+                unit: ' kW'
+              - entity: sensor.power_flow_gauge_mean_battery_discharging
+                name: Diff. to mean.
+                opacity: 0.5
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(), Math.max(0,
+                  parseFloat(hass.states['sensor.power_flow_gauge_mean_battery_discharging'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_battery_to_house'].state)
+                    - parseFloat(hass.states['sensor.power_flow_gauge_battery_to_grid'].state)
+                    )]];       
+              - entity: sensor.power_flow_gauge_max_battery_discharging
+                name: Diff. to max.
+                opacity: 0.1
+                color: rgb(50, 50, 50)
+                show:
+                  in_header: false
+                data_generator: >
+                  return [[new Date().getTime(),
+                  parseFloat(hass.states['sensor.power_flow_gauge_max_battery_discharging'].state) 
+                    -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_battery_discharging'].state),
+                      parseFloat(hass.states['sensor.power_flow_gauge_battery_to_house'].state)
+                      + parseFloat(hass.states['sensor.power_flow_gauge_battery_to_grid'].state)
+                    )]];          
+            card_mod:
+              style: |
+                .apexcharts-datalabel-label{
+                  font-size: 75px;
+                  font-family: Material Icons !important;
+                }
+                ha-card {
+                  height: 270px;
+                  --apexcharts-xaxis-labels-color: red;
+                }
+          - show_name: true
+            show_icon: false
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.power_flow_gauge_total_battery_discharging
+                name: Mean / 24h
+              - entity: sensor.power_flow_gauge_max_battery_discharging
+                name: Max / 24h
+  - type: sections
+    path: energipriser_old
+    max_columns: 2
+    title: Priser Old
+    sections:
+      - type: grid
+        cards:
+          - type: custom:config-template-card
+            variables:
+              nordpool_sensor: '''sensor.nordpool'''
+              grid_import_sensor: '''sensor.sigen_daily_grid_energy_import'''
+              battery_soc_sensor: '''sensor.sigen_energy_storage_system_soc'''
+              additional_cost_template: '''*1.25 +(27.2 + 42.8 + 3.04 + 2.19 + 1.4) *1.25'''
+              decimals_in_prices: 0
+              decimals_in_energy: 1
+              chart_price_cutoff_coerficient: 0.1
+              price_y_axis_unit: '''öre'''
+              energy_y_axis_unit: '''kWh'''
+              price_overview_unit: '''öre/kWh'''
+              chart_title: '''Electricity prices today'''
+              total_purchease_price_text: '''Total purchease price'''
+              grid_import_text: '''Grid Import today'''
+              battery_soc_text: '''Battery charge'''
+              lowest_price_text: '''Lowest future price'''
+              highest_price_text: '''Highest future price'''
+              price_now_text: '''Current price'''
+              now_text: ''''''
+              get_chart_cutoff: |
+                (_min_price, _max_price, _coefficient) => {
+                  if (_min_price <= 0) {
+                      return "auto";
+                  }
+                  return _min_price - ((_max_price-_min_price) * _coefficient)
+                }
+              get_total_max_nordpool_price: |
+                (_nordpool_sensor, _additional_cost_template) => {
+                  return states[_nordpool_sensor].attributes.raw_today.concat(states[_nordpool_sensor].attributes.raw_tomorrow).map(data=> eval("data.value"+_additional_cost_template)).reduce((a, b) => Math.max(a, b), -Infinity)
+                }
+              get_total_min_nordpool_price: |
+                (_nordpool_sensor, _additional_cost_template) => {
+                  return states[_nordpool_sensor].attributes.raw_today.concat(states[_nordpool_sensor].attributes.raw_tomorrow).map(data=> eval("data.value"+_additional_cost_template)).reduce((a, b) => Math.min(a, b), Infinity)
+                }
+              get_low_bottom_threshold_nordpool_price: |
+                (_min, _max) => {
+                  return parseFloat(_min) + parseFloat(((_max) - parseFloat(_max)) /10)
+                }
+              get_low_threshold_nordpool_price: |
+                (_min, _max) => {
+                  return parseFloat(_min) + parseFloat(((_max) - parseFloat(_min)) /3)
+                }
+              get_high_threshold_nordpool_price: |
+                (_min, _max) => {
+                  return parseFloat(_min) 
+                  + (( parseFloat(_max) - parseFloat(_min) ) /3) * 2
+                }
+              get_high_top_threshold_nordpool_price: |
+                (_min, _max) => {
+                  return parseFloat(_min) + parseFloat(((_max) - parseFloat(_min)) /10)*9
+                }
+              get_total_prices: |
+                _cost_template => {
+                  return "return (entity.attributes.raw_today.map((start, index) => {return [new Date(start['start']).getTime(), entity.attributes.raw_today[index]['value']"
+                  + _cost_template
+                  + "];})).concat(entity.attributes.raw_tomorrow.map((start, index) => {return [new Date(start['start']).getTime(),entity.attributes.raw_tomorrow[index]['value'] "
+                  + _cost_template + "];}));"
+                }
+              get_future_total_prices: |
+                _cost_template => {
+                  return "const now = new Date().getTime() - 3600000;"
+                  + "const futureData = entity.attributes.raw_today.concat(entity.attributes.raw_tomorrow).filter(data"
+                  + " => new Date(data.start).getTime() >= now);"
+                  + "return futureData.map((data, index) => {"
+                  + "return [new Date(data.start).getTime(), futureData[index].value"
+                  + _cost_template + "];});"
+                }
+            entities:
+              - ${nordpool_sensor}
+              - ${battery_soc_sensor}
+              - ${grid_import_sensor}
+            card:
+              type: custom:apexcharts-card
+              graph_span: >-
+                ${ states[nordpool_sensor].attributes.raw_today.length +
+                states[nordpool_sensor].attributes.raw_tomorrow.length + 'h' }
+              yaxis:
+                - id: y-price
+                  min: >-
+                    ${get_chart_cutoff(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),get_total_max_nordpool_price(nordpool_sensor,additional_cost_template),chart_price_cutoff_coerficient)}
+                  max: auto
+                  apex_config:
+                    opposite: false
+                    forceNiceScale: true
+                    decimalsInFloat: ${decimals_in_prices}
+                    labels:
+                      formatter: >
+                        ${"EVAL:function(value) {return value.toFixed(" +
+                        decimals_in_prices + ") + ' " + price_y_axis_unit + "'
+                        }"
+                - id: y-energy
+                  min: 0
+                  max: auto
+                  apex_config:
+                    opposite: true
+                    forceNiceScale: true
+                    decimalsInFloat: ${decimals_in_energy}
+                    labels:
+                      formatter: |
+                        ${"EVAL:function(value) {return value.toFixed("
+                        + decimals_in_energy
+                        + ") + ' " + energy_y_axis_unit + "' }"
+                - id: y-SOC
+                  show: false
+                  min: 0
+                  max: 100
+              apex_config:
+                chart:
+                  height: 340px
+                legend:
+                  show: false
+                title:
+                  floating: false
+                  align: center
+                  style:
+                    fontSize: 20px
+                    fontWeight: bold
+                xaxis:
+                  labels:
+                    datetimeFormatter:
+                      hour: HH:mm
+              show:
+                last_updated: true
+              experimental:
+                color_threshold: true
+              header:
+                title: ${chart_title}
+                show: true
+                show_states: true
+                colorize_states: true
+              span:
+                start: day
+              now:
+                show: true
+                label: ${now_text}
+              series:
+                - entity: ${nordpool_sensor}
+                  yaxis_id: y-price
+                  name: ${total_purchease_price_text}
+                  offset: '-30min'
+                  float_precision: ${decimals_in_prices}
+                  show:
+                    extremas: false
+                    in_header: false
+                  type: column
+                  data_generator: ${get_total_prices(additional_cost_template)}
+                  color_threshold:
+                    - value: -1000
+                      color: '#00f738'
+                    - value: >-
+                        ${get_low_bottom_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template)
+                        )}
+                      color: '#12A141'
+                    - value: >-
+                        ${get_low_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+                      color: '#F3DC0C'
+                    - value: >-
+                        ${get_high_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,
+                        additional_cost_template))}
+                      color: '#E76821'
+                    - value: >-
+                        ${get_high_top_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+                      color: '#DC182F'
+                - entity: ${grid_import_sensor}
+                  yaxis_id: y-energy
+                  name: Grid import Chart
+                  color: '#FF4646'
+                  curve: stepline
+                  float_precision: ${decimals_in_energy}
+                  show:
+                    extremas: false
+                    in_header: false
+                  type: line
+                  stroke_width: 3
+                  opacity: 0.75
+                  extend_to: false
+                  unit: ${energy_y_axis_unit}
+                  group_by:
+                    func: delta
+                    duration: 1h
+                - entity: ${grid_import_sensor}
+                  name: ${grid_import_text}
+                  color: '#FF4646'
+                  float_precision: ${decimals_in_energy}
+                  show:
+                    in_chart: false
+                    in_header: raw
+                  unit: ${energy_y_axis_unit}
+                - entity: ${battery_soc_sensor}
+                  yaxis_id: y-SOC
+                  name: ${battery_soc_text}
+                  color: '#7a50d9'
+                  float_precision: 0
+                  show:
+                    extremas: false
+                    in_header: raw
+                    header_color_threshold: true
+                  type: line
+                  stroke_width: 3
+                  opacity: 0.75
+                  extend_to: false
+                  group_by:
+                    func: avg
+                    duration: 1h
+                - entity: ${nordpool_sensor}
+                  color: '#7bff00'
+                  float_precision: ${decimals_in_prices}
+                  name: ${lowest_price_text}
+                  unit: ${price_overview_unit}
+                  show:
+                    in_chart: false
+                    legend_value: false
+                  group_by:
+                    func: min
+                    duration: 2d
+                  data_generator: ${get_future_total_prices(additional_cost_template)}
+                - entity: ${nordpool_sensor}
+                  name: ${price_now_text}
+                  type: column
+                  unit: ${price_overview_unit}
+                  show:
+                    in_header: before_now
+                    in_chart: false
+                    header_color_threshold: true
+                  float_precision: ${decimals_in_prices}
+                  data_generator: ${get_future_total_prices(additional_cost_template)}
+                  color_threshold:
+                    - value: -1000
+                      color: '#00f738'
+                    - value: >-
+                        ${get_low_bottom_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template)
+                        )}
+                      color: '#12A141'
+                    - value: >-
+                        ${get_low_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+                      color: '#F3DC0C'
+                    - value: >-
+                        ${get_high_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,
+                        additional_cost_template))}
+                      color: '#E76821'
+                    - value: >-
+                        ${get_high_top_threshold_nordpool_price(get_total_min_nordpool_price(nordpool_sensor,additional_cost_template),
+                        get_total_max_nordpool_price(nordpool_sensor,additional_cost_template))}
+                      color: '#DC182F'
+                - entity: ${nordpool_sensor}
+                  color: '#DC182F'
+                  float_precision: ${decimals_in_prices}
+                  name: ${highest_price_text}
+                  unit: ${price_overview_unit}
+                  show:
+                    in_chart: false
+                    legend_value: false
+                  group_by:
+                    func: max
+                    duration: 2d
+                  data_generator: ${get_future_total_prices(additional_cost_template)}
+            layout_options:
+              grid_columns: full
+          - type: custom:bar-card
+            entities:
+              - entity: sensor.sigen_energy_storage_system_soc
+                name: Battery
+                positions:
+                  icon: 'off'
+                  indicator: outside
+                  name: inside
+                width: 85%
+                severity:
+                  - color: Red
+                    from: 0
+                    to: 19
+                  - color: Orange
+                    from: 20
+                    to: 74
+                  - color: Green
+                    from: 75
+                    to: 100
+            layout_options:
+              grid_columns: full
+              grid_rows: auto
+        column_span: 2
+    cards: []
+  - type: sections
+    max_columns: 4
+    title: Jämförelse
+    path: jamforelse
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: New section
+      - cards:
+          - type: heading
+            heading: History
+          - title: History
+            type: history-graph
+            hours_to_show: 3
+            entities:
+              - sensor.sigen_plant_grid_active_power
+              - sensor.p1_meter_power
+              - sensor.sigen_plant_grid_reactive_power
+      - cards:
+          - type: heading
+            heading: History
+          - title: History
+            type: history-graph
+            hours_to_show: 15
+            entities:
+              - sensor.sigen_plant_daily_grid_import_energy
+              - sensor.p1_meter_daily_energy_import_utility
+      - cards:
+          - type: heading
+            heading: History
+          - title: History
+            type: history-graph
+            hours_to_show: 15
+            entities:
+              - sensor.p1_meter_daily_energy_export_utility
+              - sensor.sigen_plant_daily_grid_export_energy
+  - title: Energy Flow2
+    path: new-energy-flow-29sept2
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: custom:apexcharts-card
+                chart_type: donut
+                show:
+                  loading: false
+                header:
+                  show: true
+                  show_states: true
+                  colorize_states: true
+                apex_config:
+                  plotOptions:
+                    pie:
+                      startAngle: -90
+                      endAngle: 90
+                      offsetY: 0
+                      donut:
+                        labels:
+                          show: true
+                          name:
+                            offsetY: -45
+                            formatter: |
+                              EVAL:function(w) {
+                                return "home";
+                              }
+                          value:
+                            offsetY: -30
+                            fontSize: 50px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                + w.globals.series[2]
+                                ).toFixed(1) + " kW";
+                              }
+                          total:
+                            show: true
+                            color: '#8B4513'
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                + w.globals.series[2]
+                                ).toFixed(1) + " kW";
+                              }
+                  chart:
+                    height: 450px
+                    animations:
+                      enabled: true
+                      easing: easeinout
+                      speed: 800
+                      animateGradually:
+                        enabled: true
+                        delay: 150
+                      dynamicAnimation:
+                        enabled: true
+                        speed: 350
+                  stroke:
+                    show: true
+                    opacity: 0
+                  legend:
+                    show: false
+                  dataLabels:
+                    enabled: false
+                series:
+                  - entity: sensor.power_flow_gauge_consumption_from_solar
+                    name: Solar
+                    float_precision: 2
+                    color: '#FFBF00'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_consumption_from_battery
+                    name: Battery
+                    float_precision: 2
+                    color: '#7a50d9'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_consumption_from_grid
+                    name: Grid
+                    float_precision: 2
+                    color: '#FF4646'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_mean_consumption
+                    name: Mean / 24h.
+                    opacity: 0.5
+                    float_precision: 2
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(), Math.max(0,
+                      parseFloat(hass.states['sensor.power_flow_gauge_mean_consumption'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_solar'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_battery'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_grid'].state)
+                        )]];
+                  - entity: sensor.power_flow_gauge_consumption_until_max
+                    name: Diff. to max.
+                    opacity: 0.1
+                    float_precision: 2
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(),
+                      parseFloat(hass.states['sensor.power_flow_gauge_max_consumption'].state) 
+                        -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_consumption'].state),
+                          parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_solar'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_battery'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_consumption_from_grid'].state)
+                        )]];
+                        
+                card_mod:
+                  style: |
+                    .apexcharts-datalabel-label{
+                      font-size: 80px;
+                      font-family: Material Icons !important;
+                    }
+                    ha-card {
+                      height: 270px;
+                      --apexcharts-xaxis-labels-color: red;
+                    }
+              - show_name: true
+                show_icon: false
+                show_state: true
+                type: glance
+                entities:
+                  - entity: sensor.power_flow_gauge_mean_consumption
+                    name: Mean
+                  - entity: sensor.power_flow_gauge_max_consumption
+                    name: Max
+      - type: grid
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: custom:apexcharts-card
+                chart_type: donut
+                show:
+                  loading: false
+                header:
+                  show: true
+                  show_states: true
+                  colorize_states: true
+                apex_config:
+                  plotOptions:
+                    pie:
+                      startAngle: -90
+                      endAngle: 90
+                      offsetY: 0
+                      donut:
+                        labels:
+                          show: true
+                          name:
+                            offsetY: -50
+                            formatter: |
+                              EVAL:function(w) {
+                                return "solar_power";
+                              }
+                          value:
+                            offsetY: -30
+                            fontSize: 50px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                + w.globals.series[2]
+                                ).toFixed(1) + " kW";
+                              }
+                          total:
+                            show: true
+                            color: '#FFBF00'
+                            fontSize: 28px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                + w.globals.series[2]
+                                ).toFixed(1) + " kW";
+                              }
+                  chart:
+                    height: 450px
+                    animations:
+                      enabled: true
+                      easing: easeinout
+                      speed: 800
+                      animateGradually:
+                        enabled: true
+                        delay: 150
+                      dynamicAnimation:
+                        enabled: true
+                        speed: 350
+                  stroke:
+                    show: true
+                    opacity: 0
+                  legend:
+                    show: false
+                  dataLabels:
+                    enabled: false
+                series:
+                  - entity: sensor.power_flow_gauge_solar_to_house
+                    name: Self Consumption
+                    float_precision: 2
+                    color: '#8B4513'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_solar_to_battery
+                    name: Battery
+                    float_precision: 2
+                    color: '#7a50d9'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_solar_to_grid
+                    name: To Grid
+                    float_precision: 2
+                    color: '#80b5f8'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_mean_solar
+                    name: Mean / 24h.
+                    opacity: 0.5
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(), Math.max(0,
+                      parseFloat(hass.states['sensor.power_flow_gauge_mean_solar'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_house'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_battery'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_solar_to_grid'].state)
+                        )]];
+                  - entity: sensor.power_flow_gauge_max_solar
+                    name: Diff. to max.
+                    opacity: 0.1
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(),
+                      parseFloat(hass.states['sensor.power_flow_gauge_max_solar'].state) 
+                        -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_solar'].state),
+                          parseFloat(hass.states['sensor.power_flow_gauge_solar_to_house'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_solar_to_battery'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_solar_to_grid'].state)
+                        )]];
+                card_mod:
+                  style: |
+                    .apexcharts-datalabel-label{
+                      font-size: 70px;
+                      font-family: Material Icons !important;
+                    }
+                    ha-card {
+                      height: 270px;
+                      --apexcharts-xaxis-labels-color: red;
+                    }
+              - show_name: true
+                show_icon: false
+                show_state: true
+                type: glance
+                entities:
+                  - entity: sensor.power_flow_gauge_mean_solar
+                    name: Mean 24h
+                  - entity: sensor.power_flow_gauge_max_solar
+                    name: Max 24h
+        visibility:
+          - condition: numeric_state
+            entity: sensor.sigen_plant_sigen_pv_power
+            above: 0.1
+      - type: grid
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: custom:apexcharts-card
+                chart_type: donut
+                show:
+                  loading: false
+                header:
+                  show: true
+                  show_states: true
+                  colorize_states: true
+                apex_config:
+                  plotOptions:
+                    pie:
+                      startAngle: -90
+                      endAngle: 90
+                      offsetY: 0
+                      donut:
+                        labels:
+                          show: true
+                          name:
+                            offsetY: -50
+                            formatter: |
+                              EVAL:function(w) {
+                                return "electric_meter";
+                              }
+                          value:
+                            offsetY: -30
+                            fontSize: 50px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                ).toFixed(1) + " kW";
+                              }
+                          total:
+                            show: true
+                            fontSize: 28px
+                            color: '#FF4646'
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                ).toFixed(1) + " kW";
+                              }
+                  chart:
+                    height: 450px
+                    animations:
+                      enabled: true
+                      easing: easeinout
+                      speed: 800
+                      animateGradually:
+                        enabled: true
+                        delay: 150
+                      dynamicAnimation:
+                        enabled: true
+                        speed: 350
+                  stroke:
+                    show: true
+                    opacity: 0
+                  legend:
+                    show: false
+                  dataLabels:
+                    enabled: false
+                series:
+                  - entity: sensor.power_flow_gauge_grid_to_house
+                    name: Self Consumption
+                    float_precision: 2
+                    color: '#8B4513'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_grid_to_battery
+                    name: To Battery
+                    float_precision: 2
+                    color: '#7a50d9'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_grid_import_until_mean
+                    name: Diff. to mean.
+                    opacity: 0.5
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(), Math.max(0,
+                      parseFloat(hass.states['sensor.power_flow_gauge_mean_grid_import'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_grid_to_house'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_grid_to_battery'].state)
+                        )]];
+                  - entity: sensor.power_flow_gauge_grid_import_until_max
+                    name: Diff. to max.
+                    opacity: 0.1
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(),
+                      parseFloat(hass.states['sensor.power_flow_gauge_max_grid_import'].state) 
+                        -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_grid_import'].state),
+                          parseFloat(hass.states['sensor.power_flow_gauge_grid_to_house'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_grid_to_battery'].state)
+                        )]];
+                              
+                card_mod:
+                  style: |
+                    .apexcharts-datalabel-label{
+                      font-size: 70px;
+                      font-family: Material Icons !important;
+                    }
+                    ha-card {
+                      height: 270px;
+                      --apexcharts-xaxis-labels-color: red;
+                    }
+              - show_name: true
+                show_icon: false
+                show_state: true
+                type: glance
+                entities:
+                  - entity: sensor.power_flow_gauge_mean_grid_import
+                    name: Mean / 24h
+                  - entity: sensor.power_flow_gauge_max_grid_import
+                    name: Max / 24h
+        visibility:
+          - condition: numeric_state
+            entity: sensor.sigen_plant_sigen_pv_power
+            below: 0.1001
+          - condition: numeric_state
+            entity: sensor.sigen_plant_grid_import_power
+            above: 0.1
+      - type: grid
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: custom:apexcharts-card
+                chart_type: donut
+                show:
+                  loading: false
+                header:
+                  show: true
+                  show_states: true
+                  colorize_states: true
+                apex_config:
+                  plotOptions:
+                    pie:
+                      startAngle: -90
+                      endAngle: 90
+                      offsetY: 0
+                      donut:
+                        labels:
+                          show: true
+                          name:
+                            offsetY: -50
+                            formatter: |
+                              EVAL:function(w) {
+                                  return "battery_charging_full";
+                              }
+                          value:
+                            offsetY: -30
+                            fontSize: 50px
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                ).toFixed(1) + " kW";
+                              }            
+                          total:
+                            show: true
+                            fontSize: 28px
+                            color: '#7a50d9'
+                            formatter: |
+                              EVAL:function(w) {
+                                return (w.globals.series[0]
+                                + w.globals.series[1]
+                                ).toFixed(1) + " kW";
+                              }
+                  chart:
+                    height: 450px
+                    animations:
+                      enabled: true
+                      easing: easeinout
+                      speed: 800
+                      animateGradually:
+                        enabled: true
+                        delay: 150
+                      dynamicAnimation:
+                        enabled: true
+                        speed: 350
+                  stroke:
+                    show: true
+                    opacity: 0
+                  legend:
+                    show: false
+                  dataLabels:
+                    enabled: false
+                series:
+                  - entity: sensor.power_flow_gauge_battery_to_house
+                    name: Self Consumption
+                    float_precision: 2
+                    color: '#8B4513'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_battery_to_grid
+                    name: To Grid
+                    float_precision: 2
+                    color: '#FF4646'
+                    unit: ' kW'
+                  - entity: sensor.power_flow_gauge_mean_battery_discharging
+                    name: Diff. to mean.
+                    opacity: 0.5
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(), Math.max(0,
+                      parseFloat(hass.states['sensor.power_flow_gauge_mean_battery_discharging'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_battery_to_house'].state)
+                        - parseFloat(hass.states['sensor.power_flow_gauge_battery_to_grid'].state)
+                        )]];       
+                  - entity: sensor.power_flow_gauge_max_battery_discharging
+                    name: Diff. to max.
+                    opacity: 0.1
+                    color: rgb(50, 50, 50)
+                    show:
+                      in_header: false
+                    data_generator: >
+                      return [[new Date().getTime(),
+                      parseFloat(hass.states['sensor.power_flow_gauge_max_battery_discharging'].state) 
+                        -Math.max(parseFloat(hass.states['sensor.power_flow_gauge_mean_battery_discharging'].state),
+                          parseFloat(hass.states['sensor.power_flow_gauge_battery_to_house'].state)
+                          + parseFloat(hass.states['sensor.power_flow_gauge_battery_to_grid'].state)
+                        )]];          
+                card_mod:
+                  style: |
+                    .apexcharts-datalabel-label{
+                      font-size: 75px;
+                      font-family: Material Icons !important;
+                    }
+                    ha-card {
+                      height: 270px;
+                      --apexcharts-xaxis-labels-color: red;
+                    }
+              - show_name: true
+                show_icon: false
+                show_state: true
+                type: glance
+                entities:
+                  - entity: sensor.power_flow_gauge_total_battery_discharging
+                    name: Mean / 24h
+                  - entity: sensor.power_flow_gauge_max_battery_discharging
+                    name: Max / 24h
+            visibility:
+              - condition: numeric_state
+                entity: sensor.sigen_plant_sigen_pv_power
+                below: 0.1
+              - condition: numeric_state
+                entity: sensor.sigen_plant_grid_import_power
+                below: 0.1
+      - type: grid
+        cards:
+          - show_name: false
+            show_icon: true
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.sigen_plant_battery_power
+                icon: mdi:arrow-right-bold
+            state_color: false
+            layout_options:
+              grid_columns: 1
+              grid_rows: auto
+            visibility:
+              - condition: numeric_state
+                entity: sensor.sigen_plant_battery_power
+                above: 0.1
+          - type: custom:bar-card
+            entities:
+              - entity: sensor.sigen_plant_battery_state_of_charge
+            name: Battery
+            positions:
+              icon: 'off'
+              indicator: outside
+              name: inside
+            width: 85%
+            height: 90px
+            severity:
+              - color: Red
+                from: 0
+                to: 19
+              - color: Orange
+                from: 20
+                to: 74
+              - color: Green
+                from: 75
+                to: 100
+            style: |-
+              bar-card-value {
+                margin-right: auto;
+                font-size: 53px;
+                font-weight: bold;
+                text-shadow: 1px 1px #0005;
+              }
+            layout_options:
+              grid_columns: 7
+              grid_rows: auto
+          - show_name: false
+            show_icon: true
+            show_state: true
+            type: glance
+            entities:
+              - entity: sensor.sigen_plant_battery_power
+                icon: mdi:arrow-right-bold
+            state_color: false
+            layout_options:
+              grid_columns: 1
+              grid_rows: auto
+            visibility:
+              - condition: numeric_state
+                entity: sensor.sigen_plant_battery_power
+                below: 0.1
+        column_span: 2
+    cards: []

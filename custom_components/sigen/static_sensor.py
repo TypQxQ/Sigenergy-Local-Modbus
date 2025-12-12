@@ -78,7 +78,6 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_max_apparent_power",
@@ -338,7 +337,6 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_rated_discharging_power",
@@ -347,7 +345,6 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_available_max_charging_capacity",
@@ -374,7 +371,6 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
             state_class=SensorStateClass.TOTAL,
             entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
         ),
         SigenergySensorEntityDescription(
             key="plant_ess_charge_cut_off_soc",
@@ -953,7 +949,7 @@ class StaticSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.TOTAL,
             round_digits=6,
-            icon="mdi:transmission-tower-import",
+            icon="mdi:transmission-tower-export",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
         ),
         SigenergySensorEntityDescription(
@@ -964,7 +960,7 @@ class StaticSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.TOTAL,
             round_digits=6,
-            icon="mdi:transmission-tower-export",
+            icon="mdi:transmission-tower-import",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
         ),
         SigenergySensorEntityDescription(
@@ -975,7 +971,7 @@ class StaticSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.TOTAL,
             round_digits=6,
-            icon="mdi:transmission-tower-export",
+            icon="mdi:generator-stationary",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
             entity_registry_enabled_default=False,
         ),
@@ -987,7 +983,7 @@ class StaticSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.TOTAL,
             round_digits=6,
-            icon="mdi:transmission-tower-export",
+            icon="mdi:ev-station",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
             entity_registry_enabled_default=False,
         ),
@@ -999,7 +995,7 @@ class StaticSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.TOTAL,
             round_digits=6,
-            icon="mdi:transmission-tower-export",
+            icon="mdi:ev-station",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
             entity_registry_enabled_default=False,
         ),
@@ -1011,7 +1007,7 @@ class StaticSensors:
             suggested_display_precision=2,
             state_class=SensorStateClass.TOTAL,
             round_digits=6,
-            icon="mdi:transmission-tower-export",
+            icon="mdi:ev-station",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
             entity_registry_enabled_default=False,
         ),
@@ -1552,7 +1548,7 @@ class StaticSensors:
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR
         ),
 
-        # This sensors are unkonown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
+        # This sensors are unknown in what they do. The import kind of follows the PV production but it's a bit higher and begins earlier.
         # They are undocumented.
         # SigenergySensorEntityDescription(
         #     key="accumulated_export_energy",
