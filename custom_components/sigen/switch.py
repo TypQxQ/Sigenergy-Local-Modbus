@@ -102,7 +102,7 @@ AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         name="AC Charger Power",
         icon="mdi:ev-station",
         # identifier here will be ac_charger_name
-        is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") not in ("Initializing", "Fault", "Error", "Not Connected"),
+        is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") in (3,4,5),
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
     ),
