@@ -139,6 +139,7 @@ class EMSWorkMode(IntEnum):
     AI_MODE = 1
     TOU = 2
     FULL_FEED_IN_TO_GRID = 5
+    VPP_SCHEDULING = 6
     REMOTE_EMS = 7
     CUSTOM = 9
 

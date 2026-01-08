@@ -1621,6 +1621,7 @@ class SigenergyCalculatedSensors:
                 EMSWorkMode.AI_MODE: "AI Mode",
                 EMSWorkMode.TOU: "Time of Use",
                 EMSWorkMode.FULL_FEED_IN_TO_GRID: "Full Feed-In to Grid",
+                EMSWorkMode.VPP_SCHEDULING: "VPP Scheduling",
                 EMSWorkMode.REMOTE_EMS: "Remote EMS",
                 EMSWorkMode.CUSTOM: "Custom",
             }.get(value, f"Unknown: ({value})"), # Fallback to original value
