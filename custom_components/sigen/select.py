@@ -152,14 +152,35 @@ PLANT_SELECTS = [
         key="plant_lvrt_mode",
         name="[Grid Code] LVRT Mode",
         icon="mdi:cog",
-        options=["Mode 0", "Mode 2", "Mode 3", "Mode 4", "Mode 5"],
+        options=[
+            "Reactive power compensation current, active zero-current mode",
+            "Zero-current mode",
+            "Constant current mode",
+            "Reactive dynamic current, active zero-current mode",
+            "Reactive power compensation current, active constant-current mode",
+        ],
         entity_category=EntityCategory.CONFIG,
-        current_option_fn=lambda data, _: {0: "Mode 0", 2: "Mode 2", 3: "Mode 3", 4: "Mode 4", 5: "Mode 5"}.get(
-            data["plant"].get("plant_lvrt_mode"), "Mode 0"
+        current_option_fn=lambda data, _: {
+            0: "Reactive power compensation current, active zero-current mode",
+            2: "Zero-current mode",
+            3: "Constant current mode",
+            4: "Reactive dynamic current, active zero-current mode",
+            5: "Reactive power compensation current, active constant-current mode",
+        }.get(
+            data["plant"].get("plant_lvrt_mode"),
+            "Reactive power compensation current, active zero-current mode",
         ),
         select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            # fmt: off
             "plant", None, "plant_lvrt_mode",
-            {"Mode 0": 0, "Mode 2": 2, "Mode 3": 3, "Mode 4": 4, "Mode 5": 5}.get(option, 0)
+            {
+                "Reactive power compensation current, active zero-current mode": 0,
+                "Zero-current mode": 2,
+                "Constant current mode": 3,
+                "Reactive dynamic current, active zero-current mode": 4,
+                "Reactive power compensation current, active constant-current mode": 5,
+            }.get(option, 0)
+            # fmt: on
         ),
         entity_registry_enabled_default=False,
     ),
@@ -191,14 +212,35 @@ PLANT_SELECTS = [
         key="plant_hvrt_mode",
         name="[Grid Code] HVRT Mode",
         icon="mdi:cog",
-        options=["Mode 0", "Mode 2", "Mode 3", "Mode 4", "Mode 5"],
+        options=[
+            "Reactive power compensation current, active zero-current mode",
+            "Zero-current mode",
+            "Constant current mode",
+            "Reactive dynamic current, active hold mode",
+            "Reactive power compensation current, active constant-current mode",
+        ],
         entity_category=EntityCategory.CONFIG,
-        current_option_fn=lambda data, _: {0: "Mode 0", 2: "Mode 2", 3: "Mode 3", 4: "Mode 4", 5: "Mode 5"}.get(
-            data["plant"].get("plant_hvrt_mode"), "Mode 0"
+        current_option_fn=lambda data, _: {
+            0: "Reactive power compensation current, active zero-current mode",
+            2: "Zero-current mode",
+            3: "Constant current mode",
+            4: "Reactive dynamic current, active hold mode",
+            5: "Reactive power compensation current, active constant-current mode",
+        }.get(
+            data["plant"].get("plant_hvrt_mode"),
+            "Reactive power compensation current, active zero-current mode",
         ),
         select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            # fmt: off
             "plant", None, "plant_hvrt_mode",
-            {"Mode 0": 0, "Mode 2": 2, "Mode 3": 3, "Mode 4": 4, "Mode 5": 5}.get(option, 0)
+            {
+                "Reactive power compensation current, active zero-current mode": 0,
+                "Zero-current mode": 2,
+                "Constant current mode": 3,
+                "Reactive dynamic current, active hold mode": 4,
+                "Reactive power compensation current, active constant-current mode": 5,
+            }.get(option, 0)
+            # fmt: on
         ),
         entity_registry_enabled_default=False,
     ),
