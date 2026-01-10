@@ -305,7 +305,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             "inverter_running_state": {s.value: s.name.replace("_", " ").title() for s in RunningState},
             "ac_charger_system_state": {0: "Initializing", 1: "Not Connected", 2: "Reserving", 3: "Preparing", 4: "EV Ready", 5: "Charging", 6: "Fault", 7: "Error"},
             "dc_charger_running_state": {s.value: s.name.replace("_", " ").title() for s in DCChargerRunningState},
-            "inverter_output_type": {0: "Three Phase", 1: "Single Phase"},
+            "inverter_output_type":  {0: "L/N", 1: "L1/L2/L3", 2: "L1/L2/L3/N", 3: "L1/L2/N"},
             "plant_grid_sensor_status": {0: "Offline", 1: "Online"},
         }
         if self.entity_description.key in enum_maps:
