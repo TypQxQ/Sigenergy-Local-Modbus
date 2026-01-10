@@ -255,7 +255,10 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     return round(Decimal(transformed), self._round_digits)
                 return transformed
             except Exception as ex:
-                _LOGGER.error("Error in value_fn for %s: %s", self.entity_id, ex, exc_info=True)
+                if raw_value is None:
+                    _LOGGER.debug("Value function failed for %s because data is missing: %s", self.entity_id, ex)
+                else:
+                    _LOGGER.error("Error in value_fn for %s: %s", self.entity_id, ex, exc_info=True)
                 return None if self.entity_description.state_class else STATE_UNKNOWN
 
         # No transformation function, handle raw_value
