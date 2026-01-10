@@ -178,6 +178,61 @@ class StaticSensors:
             icon="mdi:alert",
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
+        # Modbus v2.8 additions
+        SigenergySensorEntityDescription(
+            key="plant_general_alarm6",
+            name="General Alarm 6",
+            icon="mdi:alert",
+            entity_category=EntityCategory.DIAGNOSTIC,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_general_alarm7",
+            name="General Alarm 7",
+            icon="mdi:alert",
+            entity_category=EntityCategory.DIAGNOSTIC,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_grid_code_rated_frequency",
+            name="Grid Code Rated Frequency",
+            device_class=SensorDeviceClass.FREQUENCY,
+            native_unit_of_measurement=UnitOfFrequency.HERTZ,
+            state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_grid_code_rated_voltage",
+            name="Grid Code Rated Voltage",
+            device_class=SensorDeviceClass.VOLTAGE,
+            native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+            state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_current_control_command_value",
+            name="Current Control Command Value",
+            native_unit_of_measurement=PERCENTAGE,
+            state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_general_load_power",
+            name="General Load Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:home-lightning-bolt",
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_total_load_power",
+            name="Total Load Power",
+            device_class=SensorDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:home-lightning-bolt-outline",
+        ),
         SigenergySensorEntityDescription(
             key="plant_active_power",
             name="Plant Active Power",
@@ -1707,6 +1762,13 @@ class StaticSensors:
             name="Current Charging Duration (Single Time)",
             icon="mdi:timer",
             state_class=SensorStateClass.MEASUREMENT,
+        ),
+        # Modbus v2.8 addition
+        SigenergySensorEntityDescription(
+            key="dc_charger_running_state",
+            name="Running State",
+            icon="mdi:ev-station",
+            entity_category=EntityCategory.DIAGNOSTIC,
         ),
     ]
 

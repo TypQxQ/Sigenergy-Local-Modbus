@@ -84,17 +84,7 @@ INVERTER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_start_stop", 0),
         entity_registry_enabled_default=False,
     ),
-    SigenergySwitchEntityDescription(
-        key="inverter_remote_ems_dispatch_enable",
-        name="Remote EMS Dispatch",
-        icon="mdi:remote",
-        entity_category=EntityCategory.CONFIG,
-        # Use device_name (inverter_name) instead of device_id (now passed as the second arg 'identifier')
-        is_on_fn=lambda data, identifier: data.get("inverters", {}).get(identifier, {}).get("inverter_remote_ems_dispatch_enable") == 1,
-        turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 1),
-        turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 0),
-        entity_registry_enabled_default=False,
-    ),
+    # Register 41500 (inverter_remote_ems_dispatch_enable) removed in Modbus v2.8
 ]
 AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
     SigenergySwitchEntityDescription(

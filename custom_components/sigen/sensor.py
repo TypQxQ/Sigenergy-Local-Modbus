@@ -23,6 +23,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .modbusregisterdefinitions import (
     RunningState,
+    DCChargerRunningState,
     ALARM_CODES,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
@@ -281,6 +282,11 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             # Handle DC Charger alarms
             elif self.entity_description.key in ["plant_general_alarm5", "inverter_alarm5", "inverter_dc_charger_alarm"]:
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["DC_CHARGER_ALARM_CODES"])
+            # Modbus v2.8 - Handle new plant alarms
+            elif self.entity_description.key == "plant_general_alarm6":
+                return self._decode_alarm_bits(raw_value, ALARM_CODES["PLANT_ALARM_CODES6"])
+            elif self.entity_description.key == "plant_general_alarm7":
+                return self._decode_alarm_bits(raw_value, ALARM_CODES["PLANT_ALARM_CODES7"])
             # Handle AC Charger alarms
             elif self.entity_description.key == "ac_charger_alarm1":
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["AC_CHARGER_ALARM_CODES1"])
@@ -295,6 +301,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             "plant_running_state": {s.value: s.name.replace("_", " ").title() for s in RunningState},
             "inverter_running_state": {s.value: s.name.replace("_", " ").title() for s in RunningState},
             "ac_charger_system_state": {0: "Initializing", 1: "Not Connected", 2: "Reserving", 3: "Preparing", 4: "EV Ready", 5: "Charging", 6: "Fault", 7: "Error"},
+            "dc_charger_running_state": {s.value: s.name.replace("_", " ").title() for s in DCChargerRunningState},
             "inverter_output_type": {0: "Three Phase", 1: "Single Phase"},
             "plant_grid_sensor_status": {0: "Offline", 1: "Online"},
         }

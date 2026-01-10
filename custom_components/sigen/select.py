@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, Optional, Coroutine
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
-from homeassistant.const import CONF_NAME#, EntityCategory
+from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -133,6 +133,109 @@ PLANT_SELECTS = [
             }.get(option, RemoteEMSControlMode.PCS_REMOTE_CONTROL),
         ),
         available_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
+        entity_registry_enabled_default=False,
+    ),
+    # Modbus v2.8 additions - Grid code parameters
+    SigenergySelectEntityDescription(
+        key="plant_lvrt_enable",
+        name="[Grid Code] LVRT Enable",
+        icon="mdi:shield-check",
+        options=["Disabled", "Enabled"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Enabled" if data["plant"].get("plant_lvrt_enable") == 1 else "Disabled",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_lvrt_enable", 1 if option == "Enabled" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_lvrt_mode",
+        name="[Grid Code] LVRT Mode",
+        icon="mdi:cog",
+        options=["Mode 0", "Mode 2", "Mode 3", "Mode 4", "Mode 5"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: {0: "Mode 0", 2: "Mode 2", 3: "Mode 3", 4: "Mode 4", 5: "Mode 5"}.get(
+            data["plant"].get("plant_lvrt_mode"), "Mode 0"
+        ),
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_lvrt_mode",
+            {"Mode 0": 0, "Mode 2": 2, "Mode 3": 3, "Mode 4": 4, "Mode 5": 5}.get(option, 0)
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_lvrt_grid_voltage_protection_blocking",
+        name="[Grid Code] LVRT Grid Voltage Protection Blocking",
+        icon="mdi:shield-off",
+        options=["Not Block", "Block"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Block" if data["plant"].get("plant_lvrt_grid_voltage_protection_blocking") == 1 else "Not Block",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_lvrt_grid_voltage_protection_blocking", 1 if option == "Block" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_hvrt_enable",
+        name="[Grid Code] HVRT Enable",
+        icon="mdi:shield-check",
+        options=["Disabled", "Enabled"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Enabled" if data["plant"].get("plant_hvrt_enable") == 1 else "Disabled",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_hvrt_enable", 1 if option == "Enabled" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_hvrt_mode",
+        name="[Grid Code] HVRT Mode",
+        icon="mdi:cog",
+        options=["Mode 0", "Mode 2", "Mode 3", "Mode 4", "Mode 5"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: {0: "Mode 0", 2: "Mode 2", 3: "Mode 3", 4: "Mode 4", 5: "Mode 5"}.get(
+            data["plant"].get("plant_hvrt_mode"), "Mode 0"
+        ),
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_hvrt_mode",
+            {"Mode 0": 0, "Mode 2": 2, "Mode 3": 3, "Mode 4": 4, "Mode 5": 5}.get(option, 0)
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_hvrt_grid_voltage_protection_blocking",
+        name="[Grid Code] HVRT Grid Voltage Protection Blocking",
+        icon="mdi:shield-off",
+        options=["Not Block", "Block"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Block" if data["plant"].get("plant_hvrt_grid_voltage_protection_blocking") == 1 else "Not Block",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_hvrt_grid_voltage_protection_blocking", 1 if option == "Block" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_over_freq_derating_enable",
+        name="[Grid Code] Over-Frequency Derating Enable",
+        icon="mdi:sine-wave",
+        options=["Disabled", "Enabled"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Enabled" if data["plant"].get("plant_over_freq_derating_enable") == 1 else "Disabled",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_over_freq_derating_enable", 1 if option == "Enabled" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_under_freq_power_boost_enable",
+        name="[Grid Code] Under-Frequency Power Boost Enable",
+        icon="mdi:sine-wave",
+        options=["Disabled", "Enabled"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Enabled" if data["plant"].get("plant_under_freq_power_boost_enable") == 1 else "Disabled",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_under_freq_power_boost_enable", 1 if option == "Enabled" else 0
+        ),
         entity_registry_enabled_default=False,
     ),
 ]
