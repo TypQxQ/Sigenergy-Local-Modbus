@@ -19,6 +19,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
@@ -714,10 +715,10 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
         # No number-specific init needed for now
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         """Return the value of the number."""
         if self.coordinator.data is None:
-            return 0.0 # Return float default
+            return None
             
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
@@ -732,15 +733,24 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
                 identifier,
                 e,
             )
-            return 0.0
+            return None
 
 
-    # The 'available' property is now inherited from SigenergyEntity
-    # We might need to override it here if the available_fn logic needs specific handling
-    # for number entities, but for now, let's rely on the base implementation.
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not super().available:
+            return False
+            
+        # Use device_name as the primary identifier passed to the lambda/function
+        identifier = self._device_name
+        return self.entity_description.available_fn(self.coordinator.data, identifier)
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the value of the number."""
+        if self.coordinator.data is None:
+            raise HomeAssistantError(f"Cannot set value for {self.entity_id}: Coordinator data is unavailable")
+
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
         # Exceptions are handled and logged in coordinator.async_write_parameter

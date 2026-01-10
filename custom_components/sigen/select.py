@@ -12,6 +12,7 @@ from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
@@ -374,23 +375,36 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
         self._attr_options = description.options if description.options is not None else []
 
     @property
-    def current_option(self) -> str:
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not super().available:
+            return False
+
+        # Use device_name as the primary identifier passed to the lambda/function
+        identifier = self._device_name
+        return self.entity_description.available_fn(self.coordinator.data, identifier)
+
+    @property
+    def current_option(self) -> str | None:
         """Return the selected entity option."""
         if self.coordinator.data is None:
-            return self.options[0] if self.options else ""
+            return None
 
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
         try:
             option = self.entity_description.current_option_fn(self.coordinator.data, identifier)
-            return option if option is not None else ""
+            return option if option is not None else None
         except Exception as e:
             _LOGGER.error("Error getting current_option for %s (identifier: %s): %s",
                           self.entity_id, identifier, e)
-            return ""
+            return None
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
+        if self.coordinator.data is None:
+            raise HomeAssistantError(f"Cannot select option for {self.entity_id}: Coordinator data is unavailable")
+
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
         # Exceptions are handled and logged in coordinator.async_write_parameter

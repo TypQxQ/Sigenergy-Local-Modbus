@@ -11,6 +11,7 @@ from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 
 from .common import generate_sigen_entity, generate_device_id
 from .const import (
@@ -200,21 +201,35 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
         )
 
     @property
-    def is_on(self) -> bool:
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not super().available:
+            return False
+
+        # Use device_name as the primary identifier passed to the lambda/function
+        identifier = self._device_name
+        return self.entity_description.available_fn(self.coordinator.data, identifier)
+
+    @property
+    def is_on(self) -> bool | None:
         """Return true if the switch is on."""
         if self.coordinator.data is None:
-            return False
+            return None
         identifier = self._device_name
         return self.entity_description.is_on_fn(self.coordinator.data, identifier)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
+        if self.coordinator.data is None:
+            raise HomeAssistantError(f"Cannot turn on {self.entity_id}: Coordinator data is unavailable")
         identifier = self._device_name
         await self.entity_description.turn_on_fn(self.coordinator, identifier)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
+        if self.coordinator.data is None:
+            raise HomeAssistantError(f"Cannot turn off {self.entity_id}: Coordinator data is unavailable")
         identifier = self._device_name
         await self.entity_description.turn_off_fn(self.coordinator, identifier)
         await self.coordinator.async_request_refresh()
