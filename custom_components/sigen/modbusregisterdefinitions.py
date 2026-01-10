@@ -297,7 +297,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.U32,
         gain=1000,
-        unit="kvar",
+        unit="kVA",
         description="Max apparent power",
     ),
     "plant_ess_soc": ModbusRegisterDefinition(

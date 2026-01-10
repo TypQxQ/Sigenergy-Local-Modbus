@@ -6,7 +6,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Coroutine
 
-from homeassistant.components.number import NumberEntity, NumberEntityDescription
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription
+# from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import (
     CONF_NAME,
@@ -15,6 +16,7 @@ from homeassistant.const import (
     UnitOfElectricCurrent,
     UnitOfFrequency,
     UnitOfPower,
+    UnitOfReactivePower,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -54,6 +56,7 @@ PLANT_NUMBERS = [
         key="plant_active_power_fixed_target",
         name="Active Power Fixed Adjustment",
         icon="mdi:flash",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=-100,
         native_max_value=100,
@@ -67,7 +70,8 @@ PLANT_NUMBERS = [
         key="plant_reactive_power_fixed_target",
         name="Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
@@ -118,6 +122,7 @@ PLANT_NUMBERS = [
         key="plant_ess_max_charging_limit",
         name="ESS Max Charging Limit",
         icon="mdi:battery-charging",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -131,6 +136,7 @@ PLANT_NUMBERS = [
         key="plant_ess_max_discharging_limit",
         name="ESS Max Discharging Limit",
         icon="mdi:battery-charging-outline",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -144,6 +150,7 @@ PLANT_NUMBERS = [
         key="plant_pv_max_power_limit",
         name="PV Max Power Limit",
         icon="mdi:solar-power",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -158,6 +165,7 @@ PLANT_NUMBERS = [
         name="Grid Export Limitation",
         # 'tower-import' icon means 'energy to grid'
         icon="mdi:transmission-tower-import",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -172,6 +180,7 @@ PLANT_NUMBERS = [
         name="Grid Import Limitation",
         # 'tower-export' icon means 'energy from grid'
         icon="mdi:transmission-tower-export",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -185,6 +194,7 @@ PLANT_NUMBERS = [
         key="plant_pcs_maximum_export_limitation",
         name="PCS Export Limitation",
         icon="mdi:transmission-tower-import",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -198,6 +208,7 @@ PLANT_NUMBERS = [
         key="plant_pcs_maximum_import_limitation",
         name="PCS Import Limitation",
         icon="mdi:transmission-tower-export",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -253,7 +264,8 @@ PLANT_NUMBERS = [
         key="plant_phase_a_reactive_power_fixed_target",
         name="Phase A Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
@@ -267,7 +279,8 @@ PLANT_NUMBERS = [
         key="plant_phase_b_reactive_power_fixed_target",
         name="Phase B Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
@@ -281,7 +294,8 @@ PLANT_NUMBERS = [
         key="plant_phase_c_reactive_power_fixed_target",
         name="Phase C Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
@@ -563,6 +577,7 @@ INVERTER_NUMBERS = [
         key="inverter_active_power_fixed_adjustment",
         name="Active Power Fixed Adjustment",
         icon="mdi:flash",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=-100,
         native_max_value=100,
@@ -577,7 +592,8 @@ INVERTER_NUMBERS = [
         key="inverter_reactive_power_fixed_adjustment",
         name="Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
