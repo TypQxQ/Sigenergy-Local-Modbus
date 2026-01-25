@@ -254,6 +254,15 @@ class SigenergyModbusHub:
             async with self._locks[key]:
                 if key not in self._clients or not self._connected.get(key, False):
                     host, port = key
+
+                    # Ensure previous client is closed before creating a new one
+                    if key in self._clients:
+                        _LOGGER.debug("Closing existing Modbus client for %s:%s before recreation", host, port)
+                        try:
+                            self._clients[key].close()
+                        except Exception as ex:
+                            _LOGGER.warning("Error closing previous client for %s:%s: %s", host, port, ex)
+
                     _LOGGER.debug("Attempting to create new Modbus client for %s:%s", host, port)
                     self._clients[key] = AsyncModbusTcpClient(
                         host=host,
@@ -267,6 +276,11 @@ class SigenergyModbusHub:
                     if not connected:
                         _LOGGER.debug("Connection attempt result for %s:%s: %s", host, port, connected)
                         _LOGGER.error("Failed to connect to %s:%s after connection attempt.", host, port)
+                        # Ensure we close the client if connection failed
+                        try:
+                            self._clients[key].close()
+                        except Exception as ex:
+                            _LOGGER.warning("Error closing failed client for %s:%s: %s", host, port, ex)
                         raise SigenergyModbusError(f"Failed to connect to {host}:{port}")
 
                     self._connected[key] = True
@@ -286,14 +300,26 @@ class SigenergyModbusHub:
     async def async_close(self) -> None:
         """Close all Modbus connections."""
         for key, client in self._clients.items():
-            if client and self._connected.get(key, False):
+            if client:
                 host, port = key
-                async with self._locks[key]:
-                    _LOGGER.debug("Attempting to close connection to %s:%s", host, port)
-                    client.close()
-                    self._connected[key] = False
-                    _LOGGER.debug("Connection closed for %s:%s", host, port)
-                    _LOGGER.info("Disconnected from Sigenergy system at %s:%s", host, port)
+                try:
+                    # Try to acquire lock, but don't block indefinitely on unload
+                    lock = self._locks.get(key)
+                    if lock:
+                         # Use a timeout or simple check? 
+                         # Since we are unloading, we might not want to wait too long.
+                         # But let's stick to standard locking to avoid race conditions with ongoing reads.
+                         async with lock:
+                            _LOGGER.debug("Attempting to close connection to %s:%s", host, port)
+                            client.close()
+                    else:
+                        _LOGGER.debug("Closing connection to %s:%s (no lock found)", host, port)
+                        client.close()
+                except Exception as ex:
+                    _LOGGER.warning("Error closing connection for %s:%s: %s", host, port, ex)
+                
+                self._connected[key] = False
+                _LOGGER.info("Disconnected from Sigenergy system at %s:%s", host, port)
 
     def _validate_register_response(self, result: Any,
                                     register_def: ModbusRegisterDefinition) -> bool:
