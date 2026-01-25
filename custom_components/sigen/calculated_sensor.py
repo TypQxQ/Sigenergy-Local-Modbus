@@ -329,6 +329,19 @@ class SigenergyCalculations:
         # Get the required values from coordinator data
         plant_data = coordinator_data["plant"]
 
+        # Try to use the direct register value first (available in newer firmware)
+        # plant_general_load_power (30282)
+        plant_general_load_power = plant_data.get("plant_general_load_power")
+        if plant_general_load_power is not None:
+            try:
+                return float(plant_general_load_power)
+            except (ValueError, TypeError):
+                # If conversion fails, fallback to calculated method
+                _LOGGER.warning(
+                    "[CS][Plant Consumed] Direct register value 'plant_general_load_power' is invalid: %s. Probably due to old firmware. Falling back to calculation.",
+                    plant_general_load_power
+                )
+
         total_ac_charger_power = 0.0
         ac_chargers: dict[str, Any] = coordinator_data.get("ac_chargers", {})
         for _, ac_charger_data in ac_chargers.items():

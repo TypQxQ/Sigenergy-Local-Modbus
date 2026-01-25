@@ -224,14 +224,14 @@ class StaticSensors:
             entity_category=EntityCategory.DIAGNOSTIC,
             entity_registry_enabled_default=False,
         ),
-        SigenergySensorEntityDescription(
-            key="plant_general_load_power",
-            name="General Load Power",
-            device_class=SensorDeviceClass.POWER,
-            native_unit_of_measurement=UnitOfPower.KILO_WATT,
-            state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:home-lightning-bolt",
-        ),
+        # SigenergySensorEntityDescription(
+        #     key="plant_general_load_power",
+        #     name="General Load Power",
+        #     device_class=SensorDeviceClass.POWER,
+        #     native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        #     state_class=SensorStateClass.MEASUREMENT,
+        #     icon="mdi:home-lightning-bolt",
+        # ),
         SigenergySensorEntityDescription(
             key="plant_total_load_power",
             name="Total Load Power",
