@@ -1,0 +1,298 @@
+# Home Assistant Power Flow Gauges for Sigenergy Inverter
+# https://github.com/TypQxQ/Sigenergy-Inverter-Modbus-Home-Assistant
+# by Andrei Ignat (TypQxQ)
+# last update: 2026-01-31
+#
+
+# This are Home Assistant entities used by the power flow gauges card.
+# It is done in HA instead of the card itself with config-template-card to avoid flickering.
+
+# To change the sensors to your own sensors, change the sensor names starting with "sensor.sigen_".
+# To change duration of the statistics, change the "hours: 24" to the desired duration.
+
+# The package uses the statistics integration to calculate the max and mean values for the power flow gauges.
+# All power flow calculations are now done with template sensors only.
+
+################################################
+# Sensors to calculate the power flow for the ESS.
+################################################
+
+template:
+  - sensor:
+      ################################################
+      # Sensors to remap to your own sensors if not using the Sigen sensors.
+      # These sensors will be initialized with 0 if the sensor is unavailable.
+      ################################################
+      - name: Power Flow Gauge - Total Consumption
+        unique_id: power_flow_gauge_total_consumption
+        state: >-
+          {{ states('sensor.sigen_plant_consumed_power') | float(0) }}
+
+      - name: Power Flow Gauge - Total Solar
+        unique_id: power_flow_gauge_total_solar
+        state: >-
+          {{ states('sensor.sigen_plant_pv_power')}}
+
+      - name: Power Flow Gauge - Total Grid Import
+        unique_id: power_flow_gauge_total_grid_import
+        state: >-
+          {{ states('sensor.sigen_plant_grid_import_power') | float(0) }}
+
+      - name: Power Flow Gauge - Total Grid Export
+        unique_id: power_flow_gauge_total_grid_export
+        state: >-
+          {{ states('sensor.sigen_plant_grid_export_power') | float(0) }}
+
+      - name: Power Flow Gauge - Total Battery Discharging
+        unique_id: power_flow_gauge_total_battery_discharging
+        state: >-
+          {{ states('sensor.sigen_battery_discharging_power') | float(0) }}
+
+      - name: Power Flow Gauge - Total Battery Charging
+        unique_id: power_flow_gauge_total_battery_charging
+        state: >-
+          {{ states('sensor.sigen_battery_charging_power') | float(0) }}
+
+      ################################################
+      # Power flow gauge calculations
+      ################################################
+      - name: Power Flow Gauge - Solar to House
+        unique_id: power_flow_gauge_solar_to_house
+        state: >-
+          {{ [states('sensor.power_flow_gauge_total_solar') | float(0), states('sensor.power_flow_gauge_total_consumption') | float(0)] | min }}
+
+      - name: Power Flow Gauge - Solar to Battery
+        unique_id: power_flow_gauge_solar_to_battery
+        state: >-
+          {% set solar = states('sensor.power_flow_gauge_total_solar') | float(0) %}
+          {% set solar_to_house = states('sensor.power_flow_gauge_solar_to_house') | float(0) %}
+          {% set battery_charging = states('sensor.power_flow_gauge_total_battery_charging') | float(0) %}
+          {{ [0, [battery_charging, [0, solar - solar_to_house] | max] | min] | max }}
+
+      - name: Power Flow Gauge - Solar to Grid
+        unique_id: power_flow_gauge_solar_to_grid
+        state: >-
+          {% set solar = states('sensor.power_flow_gauge_total_solar') | float(0) %}
+          {% set solar_to_battery = states('sensor.power_flow_gauge_solar_to_battery') | float(0) %}
+          {% set solar_to_house = states('sensor.power_flow_gauge_solar_to_house') | float(0) %}
+          {% set grid_export = states('sensor.power_flow_gauge_total_grid_export') | float(0) %}
+          {{ [grid_export, [0, solar - solar_to_battery - solar_to_house] | max] | min }}
+
+      - name: Power Flow Gauge - Battery to House
+        unique_id: power_flow_gauge_battery_to_house
+        state: >-
+          {% set battery_discharging = states('sensor.power_flow_gauge_total_battery_discharging') | float(0) %}
+          {% set consumption = states('sensor.power_flow_gauge_total_consumption') | float(0) %}
+          {% set consumption_from_solar = states('sensor.power_flow_gauge_solar_to_house') | float(0) %}
+          {{ [battery_discharging, [0, consumption - consumption_from_solar] | max] | min }}
+
+      - name: Power Flow Gauge - Battery to Grid
+        unique_id: power_flow_gauge_battery_to_grid
+        state: >-
+          {% set grid_export = states('sensor.power_flow_gauge_total_grid_export') | float(0) %}
+          {% set battery_discharging = states('sensor.power_flow_gauge_total_battery_discharging') | float(0) %}
+          {% set battery_to_house = states('sensor.power_flow_gauge_battery_to_house') | float(0) %}
+          {{ [grid_export, [0, battery_discharging - battery_to_house] | max] | min }}
+
+      - name: Power Flow Gauge - Grid to House
+        unique_id: power_flow_gauge_grid_to_house
+        state: >-
+          {% set consumption = states('sensor.power_flow_gauge_total_consumption') | float(0) %}
+          {% set solar_to_house = states('sensor.power_flow_gauge_solar_to_house') | float(0) %}
+          {% set battery_to_house = states('sensor.power_flow_gauge_battery_to_house') | float(0) %}
+          {{ [0, consumption - solar_to_house - battery_to_house] | max }}
+
+      - name: Power Flow Gauge - Grid to Battery
+        unique_id: power_flow_gauge_grid_to_battery
+        state: >-
+          {% set battery_charging = states('sensor.power_flow_gauge_total_battery_charging') | float(0) %}
+          {% set grid_import = states('sensor.power_flow_gauge_total_grid_import') | float(0) %}
+          {% set grid_to_house = states('sensor.power_flow_gauge_grid_to_house') | float(0) %}
+          {{ [battery_charging, [0, grid_import - grid_to_house] | max] | min }}
+
+      - name: Power Flow Gauge - Consumption from Solar
+        unique_id: power_flow_gauge_consumption_from_solar
+        state: >-
+          {{ states('sensor.power_flow_gauge_solar_to_house') | float(0) }}
+
+      - name: Power Flow Gauge - Consumption from Battery
+        unique_id: power_flow_gauge_consumption_from_battery
+        state: >-
+          {{ states('sensor.power_flow_gauge_battery_to_house') | float(0) }}
+
+      - name: Power Flow Gauge - Consumption from Grid
+        unique_id: power_flow_gauge_consumption_from_grid
+        state: >-
+          {{ states('sensor.power_flow_gauge_grid_to_house') | float(0) }}
+
+      ################################################
+      # Sensors to calculate difference between current value and max.
+      ################################################
+      - name: "Power Flow Gauge Consumption Until Max"
+        unit_of_measurement: "kW"
+        state: >
+          {{ states('sensor.power_flow_gauge_max_consumption')|float
+            - max(
+                states('sensor.power_flow_gauge_mean_consumption')|float,
+                states('sensor.power_flow_gauge_consumption_from_solar')|float
+                + states('sensor.power_flow_gauge_consumption_from_battery')|float
+                + states('sensor.power_flow_gauge_consumption_from_grid')|float
+              )
+          }}
+
+      - name: "Power Flow Gauge Grid Import Until Mean"
+        unit_of_measurement: "kW"
+        state: >
+          {% set mean = states('sensor.power_flow_gauge_mean_grid_import')|float %}
+          {% set to_house = states('sensor.power_flow_gauge_grid_to_house')|float %}
+          {% set to_battery = states('sensor.power_flow_gauge_grid_to_battery')|float %}
+          {{ [0, mean - to_house - to_battery] | max }}
+
+      - name: "Power Flow Gauge Grid Import Until Max"
+        unit_of_measurement: "kW"
+        state: >
+          {% set max_import = states('sensor.power_flow_gauge_max_grid_import')|float %}
+          {% set mean_import = states('sensor.power_flow_gauge_mean_grid_import')|float %}
+          {% set to_house = states('sensor.power_flow_gauge_grid_to_house')|float %}
+          {% set to_battery = states('sensor.power_flow_gauge_grid_to_battery')|float %}
+          {% set used_now = to_house + to_battery %}
+          {% set baseline = [mean_import, used_now] | max %}
+          {{ max_import - baseline }}
+
+      - name: "Power Flow Gauge Grid Export Until Max"
+        unit_of_measurement: "kW"
+        state: >
+          {% set max_export = states('sensor.power_flow_gauge_max_grid_export')|float %}
+          {% set mean_export = states('sensor.power_flow_gauge_mean_grid_export')|float %}
+          {% set solar_to_grid = states('sensor.power_flow_gauge_solar_to_grid')|float %}
+          {% set battery_to_grid = states('sensor.power_flow_gauge_battery_to_grid')|float %}
+          {% set exported_now = solar_to_grid + battery_to_grid %}
+          {% set baseline = [mean_export, exported_now] | max %}
+          {{ max_export - baseline }}
+
+      - name: "Power Flow Gauge Max Solar Remaining"
+        unit_of_measurement: "kW"
+        state: >
+          {% set max_solar = states('sensor.power_flow_gauge_max_solar')|float %}
+          {% set mean_solar = states('sensor.power_flow_gauge_mean_solar')|float %}
+          {% set to_house = states('sensor.power_flow_gauge_solar_to_house')|float %}
+          {% set to_battery = states('sensor.power_flow_gauge_solar_to_battery')|float %}
+          {% set to_grid = states('sensor.power_flow_gauge_solar_to_grid')|float %}
+          {% set used_now = to_house + to_battery + to_grid %}
+          {% set baseline = [mean_solar, used_now] | max %}
+          {{ max_solar - baseline }}
+
+      ################################################
+      # Template to to show remaining time on battery.
+      ################################################
+      - name: "Available Battery Minutes"
+        unit_of_measurement: "min"
+        state: >
+          {% if states('sensor.sigen_plant_battery_state_of_charge') == states('number.sigen_plant_ess_backup_state_of_charge') %}
+            0
+          {% else %}
+            {% set available_soc = states('sensor.sigen_plant_battery_state_of_charge')|float(0) - states('number.sigen_plant_ess_backup_state_of_charge')|float(0) %}
+            {% set available_kwh = available_soc / 100 * states('sensor.sigen_plant_rated_energy_capacity')|float(0) %}
+            {% set minutes_remaining = available_kwh / states('sensor.sigen_plant_battery_power')|float(0)|abs %}
+            {{ (minutes_remaining * 60) | int }}
+          {% endif %}
+
+################################################
+# Sensors to calculate statistics.
+################################################
+sensor:
+  - platform: statistics
+    name: Power Flow Gauge - Max Consumption
+    unique_id: power_flow_gauge_max_consumption
+    entity_id: sensor.power_flow_gauge_total_consumption
+    state_characteristic: value_max
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Mean Consumption
+    unique_id: power_flow_gauge_mean_consumption
+    entity_id: sensor.power_flow_gauge_total_consumption
+    state_characteristic: mean
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Max Solar
+    unique_id: power_flow_gauge_max_solar
+    entity_id: sensor.power_flow_gauge_total_solar
+    state_characteristic: value_max
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Mean Solar
+    unique_id: power_flow_gauge_mean_solar
+    entity_id: sensor.power_flow_gauge_total_solar
+    state_characteristic: mean
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Max Grid Import
+    unique_id: power_flow_gauge_max_grid_import
+    entity_id: sensor.power_flow_gauge_total_grid_import
+    state_characteristic: value_max
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Mean Grid Import
+    unique_id: power_flow_gauge_mean_grid_import
+    entity_id: sensor.power_flow_gauge_total_grid_import
+    state_characteristic: mean
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Max Grid Export
+    unique_id: power_flow_gauge_max_grid_export
+    entity_id: sensor.power_flow_gauge_total_grid_export
+    state_characteristic: value_max
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Mean Grid Export
+    unique_id: power_flow_gauge_mean_grid_export
+    entity_id: sensor.power_flow_gauge_total_grid_export
+    state_characteristic: mean
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Max Battery Discharging
+    unique_id: power_flow_gauge_max_battery_discharging
+    entity_id: sensor.power_flow_gauge_total_battery_discharging
+    state_characteristic: value_max
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Mean Battery Discharging
+    unique_id: power_flow_gauge_mean_battery_discharging
+    entity_id: sensor.power_flow_gauge_total_battery_discharging
+    state_characteristic: mean
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Max Battery Charging
+    unique_id: power_flow_gauge_max_battery_charging
+    entity_id: sensor.power_flow_gauge_total_battery_charging
+    state_characteristic: value_max
+    max_age:
+      hours: 24
+
+  - platform: statistics
+    name: Power Flow Gauge - Mean Battery Charging
+    unique_id: power_flow_gauge_mean_battery_charging
+    entity_id: sensor.power_flow_gauge_total_battery_charging
+    state_characteristic: mean
+    max_age:
+      hours: 24
