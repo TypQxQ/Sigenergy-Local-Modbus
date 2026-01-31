@@ -11,6 +11,7 @@ from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 
 from .common import generate_sigen_entity, generate_device_id
 from .const import (
@@ -84,17 +85,7 @@ INVERTER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_start_stop", 0),
         entity_registry_enabled_default=False,
     ),
-    SigenergySwitchEntityDescription(
-        key="inverter_remote_ems_dispatch_enable",
-        name="Remote EMS Dispatch",
-        icon="mdi:remote",
-        entity_category=EntityCategory.CONFIG,
-        # Use device_name (inverter_name) instead of device_id (now passed as the second arg 'identifier')
-        is_on_fn=lambda data, identifier: data.get("inverters", {}).get(identifier, {}).get("inverter_remote_ems_dispatch_enable") == 1,
-        turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 1),
-        turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("inverter", identifier, "inverter_remote_ems_dispatch_enable", 0),
-        entity_registry_enabled_default=False,
-    ),
+    # Register 41500 (inverter_remote_ems_dispatch_enable) removed in Modbus v2.8
 ]
 AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
     SigenergySwitchEntityDescription(
@@ -102,7 +93,9 @@ AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         name="AC Charger Power",
         icon="mdi:ev-station",
         # identifier here will be ac_charger_name
-        is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") not in ("Initializing", "Fault", "Error", "Not Connected"),
+        is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") in (3,4,5),
+        # Check if EV is connected (State != 0 (Init) and != 1 (A1_A2))
+        available_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") not in (0, 1),
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
     ),
@@ -114,7 +107,7 @@ DC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         name="DC Charging",
         icon="mdi:ev-station",
         # CHANGED: is_on_fn now checks != 0 to reflect both charging (positive) and discharging (negative) states
-        is_on_fn=lambda data, identifier: data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_output_power", 0) != 0,
+        is_on_fn=lambda data, identifier: (data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_output_power", 0) or 0) != 0,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
     ),
@@ -210,21 +203,35 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
         )
 
     @property
-    def is_on(self) -> bool:
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not super().available:
+            return False
+
+        # Use device_name as the primary identifier passed to the lambda/function
+        identifier = self._device_name
+        return self.entity_description.available_fn(self.coordinator.data, identifier)
+
+    @property
+    def is_on(self) -> bool | None:
         """Return true if the switch is on."""
         if self.coordinator.data is None:
-            return False
+            return None
         identifier = self._device_name
         return self.entity_description.is_on_fn(self.coordinator.data, identifier)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
+        if self.coordinator.data is None:
+            raise HomeAssistantError(f"Cannot turn on {self.entity_id}: Coordinator data is unavailable")
         identifier = self._device_name
         await self.entity_description.turn_on_fn(self.coordinator, identifier)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
+        if self.coordinator.data is None:
+            raise HomeAssistantError(f"Cannot turn off {self.entity_id}: Coordinator data is unavailable")
         identifier = self._device_name
         await self.entity_description.turn_off_fn(self.coordinator, identifier)
         await self.coordinator.async_request_refresh()

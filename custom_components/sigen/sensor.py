@@ -23,6 +23,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .modbusregisterdefinitions import (
     RunningState,
+    DCChargerRunningState,
     ALARM_CODES,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
@@ -254,7 +255,10 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     return round(Decimal(transformed), self._round_digits)
                 return transformed
             except Exception as ex:
-                _LOGGER.error("Error in value_fn for %s: %s", self.entity_id, ex, exc_info=True)
+                if raw_value is None:
+                    _LOGGER.debug("Value function failed for %s because data is missing: %s", self.entity_id, ex)
+                else:
+                    _LOGGER.error("Error in value_fn for %s: %s", self.entity_id, ex, exc_info=True)
                 return None if self.entity_description.state_class else STATE_UNKNOWN
 
         # No transformation function, handle raw_value
@@ -281,6 +285,11 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             # Handle DC Charger alarms
             elif self.entity_description.key in ["plant_general_alarm5", "inverter_alarm5", "inverter_dc_charger_alarm"]:
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["DC_CHARGER_ALARM_CODES"])
+            # Modbus v2.8 - Handle new plant alarms
+            elif self.entity_description.key == "plant_general_alarm6":
+                return self._decode_alarm_bits(raw_value, ALARM_CODES["PLANT_ALARM_CODES6"])
+            elif self.entity_description.key == "plant_general_alarm7":
+                return self._decode_alarm_bits(raw_value, ALARM_CODES["PLANT_ALARM_CODES7"])
             # Handle AC Charger alarms
             elif self.entity_description.key == "ac_charger_alarm1":
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["AC_CHARGER_ALARM_CODES1"])
@@ -295,7 +304,8 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             "plant_running_state": {s.value: s.name.replace("_", " ").title() for s in RunningState},
             "inverter_running_state": {s.value: s.name.replace("_", " ").title() for s in RunningState},
             "ac_charger_system_state": {0: "Initializing", 1: "Not Connected", 2: "Reserving", 3: "Preparing", 4: "EV Ready", 5: "Charging", 6: "Fault", 7: "Error"},
-            "inverter_output_type": {0: "Three Phase", 1: "Single Phase"},
+            "dc_charger_running_state": {s.value: s.name.replace("_", " ").title() for s in DCChargerRunningState},
+            "inverter_output_type":  {0: "L/N", 1: "L1/L2/L3", 2: "L1/L2/L3/N", 3: "L1/L2/N"},
             "plant_grid_sensor_status": {0: "Offline", 1: "Online"},
         }
         if self.entity_description.key in enum_maps:

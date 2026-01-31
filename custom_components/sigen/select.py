@@ -8,10 +8,11 @@ from typing import Any, Callable, Dict, Optional, Coroutine
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
-from homeassistant.const import CONF_NAME#, EntityCategory
+from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
@@ -135,6 +136,151 @@ PLANT_SELECTS = [
         available_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
         entity_registry_enabled_default=False,
     ),
+    # Modbus v2.8 additions - Grid code parameters
+    SigenergySelectEntityDescription(
+        key="plant_lvrt_enable",
+        name="[Grid Code] LVRT Enable",
+        icon="mdi:shield-check",
+        options=["Disabled", "Enabled"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Enabled" if data["plant"].get("plant_lvrt_enable") == 1 else "Disabled",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_lvrt_enable", 1 if option == "Enabled" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_lvrt_mode",
+        name="[Grid Code] LVRT Mode",
+        icon="mdi:cog",
+        options=[
+            "Reactive power compensation current, active zero-current mode",
+            "Zero-current mode",
+            "Constant current mode",
+            "Reactive dynamic current, active zero-current mode",
+            "Reactive power compensation current, active constant-current mode",
+        ],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: {
+            0: "Reactive power compensation current, active zero-current mode",
+            2: "Zero-current mode",
+            3: "Constant current mode",
+            4: "Reactive dynamic current, active zero-current mode",
+            5: "Reactive power compensation current, active constant-current mode",
+        }.get(
+            data["plant"].get("plant_lvrt_mode"),
+            "Reactive power compensation current, active zero-current mode",
+        ),
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            # fmt: off
+            "plant", None, "plant_lvrt_mode",
+            {
+                "Reactive power compensation current, active zero-current mode": 0,
+                "Zero-current mode": 2,
+                "Constant current mode": 3,
+                "Reactive dynamic current, active zero-current mode": 4,
+                "Reactive power compensation current, active constant-current mode": 5,
+            }.get(option, 0)
+            # fmt: on
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_lvrt_grid_voltage_protection_blocking",
+        name="[Grid Code] LVRT Grid Voltage Protection Blocking",
+        icon="mdi:shield-off",
+        options=["Not Block", "Block"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Block" if data["plant"].get("plant_lvrt_grid_voltage_protection_blocking") == 1 else "Not Block",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_lvrt_grid_voltage_protection_blocking", 1 if option == "Block" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_hvrt_enable",
+        name="[Grid Code] HVRT Enable",
+        icon="mdi:shield-check",
+        options=["Disabled", "Enabled"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Enabled" if data["plant"].get("plant_hvrt_enable") == 1 else "Disabled",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_hvrt_enable", 1 if option == "Enabled" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_hvrt_mode",
+        name="[Grid Code] HVRT Mode",
+        icon="mdi:cog",
+        options=[
+            "Reactive power compensation current, active zero-current mode",
+            "Zero-current mode",
+            "Constant current mode",
+            "Reactive dynamic current, active hold mode",
+            "Reactive power compensation current, active constant-current mode",
+        ],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: {
+            0: "Reactive power compensation current, active zero-current mode",
+            2: "Zero-current mode",
+            3: "Constant current mode",
+            4: "Reactive dynamic current, active hold mode",
+            5: "Reactive power compensation current, active constant-current mode",
+        }.get(
+            data["plant"].get("plant_hvrt_mode"),
+            "Reactive power compensation current, active zero-current mode",
+        ),
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            # fmt: off
+            "plant", None, "plant_hvrt_mode",
+            {
+                "Reactive power compensation current, active zero-current mode": 0,
+                "Zero-current mode": 2,
+                "Constant current mode": 3,
+                "Reactive dynamic current, active hold mode": 4,
+                "Reactive power compensation current, active constant-current mode": 5,
+            }.get(option, 0)
+            # fmt: on
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_hvrt_grid_voltage_protection_blocking",
+        name="[Grid Code] HVRT Grid Voltage Protection Blocking",
+        icon="mdi:shield-off",
+        options=["Not Block", "Block"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Block" if data["plant"].get("plant_hvrt_grid_voltage_protection_blocking") == 1 else "Not Block",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_hvrt_grid_voltage_protection_blocking", 1 if option == "Block" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_over_freq_derating_enable",
+        name="[Grid Code] Over-Frequency Derating Enable",
+        icon="mdi:sine-wave",
+        options=["Disabled", "Enabled"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Enabled" if data["plant"].get("plant_over_freq_derating_enable") == 1 else "Disabled",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_over_freq_derating_enable", 1 if option == "Enabled" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_under_freq_power_boost_enable",
+        name="[Grid Code] Under-Frequency Power Boost Enable",
+        icon="mdi:sine-wave",
+        options=["Disabled", "Enabled"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Enabled" if data["plant"].get("plant_under_freq_power_boost_enable") == 1 else "Disabled",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_under_freq_power_boost_enable", 1 if option == "Enabled" else 0
+        ),
+        entity_registry_enabled_default=False,
+    ),
 ]
 
 INVERTER_SELECTS = [
@@ -229,23 +375,36 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
         self._attr_options = description.options if description.options is not None else []
 
     @property
-    def current_option(self) -> str:
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not super().available:
+            return False
+
+        # Use device_name as the primary identifier passed to the lambda/function
+        identifier = self._device_name
+        return self.entity_description.available_fn(self.coordinator.data, identifier)
+
+    @property
+    def current_option(self) -> str | None:
         """Return the selected entity option."""
         if self.coordinator.data is None:
-            return self.options[0] if self.options else ""
+            return None
 
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
         try:
             option = self.entity_description.current_option_fn(self.coordinator.data, identifier)
-            return option if option is not None else ""
+            return option if option is not None else None
         except Exception as e:
             _LOGGER.error("Error getting current_option for %s (identifier: %s): %s",
                           self.entity_id, identifier, e)
-            return ""
+            return None
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
+        if self.coordinator.data is None:
+            raise HomeAssistantError(f"Cannot select option for {self.entity_id}: Coordinator data is unavailable")
+
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
         # Exceptions are handled and logged in coordinator.async_write_parameter

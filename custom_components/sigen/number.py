@@ -6,18 +6,22 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Coroutine
 
-from homeassistant.components.number import NumberEntity, NumberEntityDescription
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription
+# from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import (
     CONF_NAME,
     EntityCategory,
     PERCENTAGE,
     UnitOfElectricCurrent,
+    UnitOfFrequency,
     UnitOfPower,
+    UnitOfReactivePower,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
@@ -52,6 +56,7 @@ PLANT_NUMBERS = [
         key="plant_active_power_fixed_target",
         name="Active Power Fixed Adjustment",
         icon="mdi:flash",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=-100,
         native_max_value=100,
@@ -65,7 +70,8 @@ PLANT_NUMBERS = [
         key="plant_reactive_power_fixed_target",
         name="Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
@@ -116,6 +122,7 @@ PLANT_NUMBERS = [
         key="plant_ess_max_charging_limit",
         name="ESS Max Charging Limit",
         icon="mdi:battery-charging",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -129,6 +136,7 @@ PLANT_NUMBERS = [
         key="plant_ess_max_discharging_limit",
         name="ESS Max Discharging Limit",
         icon="mdi:battery-charging-outline",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -142,6 +150,7 @@ PLANT_NUMBERS = [
         key="plant_pv_max_power_limit",
         name="PV Max Power Limit",
         icon="mdi:solar-power",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -156,6 +165,7 @@ PLANT_NUMBERS = [
         name="Grid Export Limitation",
         # 'tower-import' icon means 'energy to grid'
         icon="mdi:transmission-tower-import",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -170,6 +180,7 @@ PLANT_NUMBERS = [
         name="Grid Import Limitation",
         # 'tower-export' icon means 'energy from grid'
         icon="mdi:transmission-tower-export",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -183,6 +194,7 @@ PLANT_NUMBERS = [
         key="plant_pcs_maximum_export_limitation",
         name="PCS Export Limitation",
         icon="mdi:transmission-tower-import",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -196,6 +208,7 @@ PLANT_NUMBERS = [
         key="plant_pcs_maximum_import_limitation",
         name="PCS Import Limitation",
         icon="mdi:transmission-tower-export",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0,
         native_max_value=100,
@@ -251,7 +264,8 @@ PLANT_NUMBERS = [
         key="plant_phase_a_reactive_power_fixed_target",
         name="Phase A Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
@@ -265,7 +279,8 @@ PLANT_NUMBERS = [
         key="plant_phase_b_reactive_power_fixed_target",
         name="Phase B Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
@@ -279,7 +294,8 @@ PLANT_NUMBERS = [
         key="plant_phase_c_reactive_power_fixed_target",
         name="Phase C Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
@@ -413,6 +429,146 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_discharge_cut_off_soc", value),
         entity_registry_enabled_default=False,
     ),
+    # Modbus v2.8 additions - Grid code parameters
+    SigenergyNumberEntityDescription(
+        key="plant_active_power_regulation_gradient",
+        name="[Grid Code] Active Power Regulation Gradient",
+        icon="mdi:slope-uphill",
+        native_unit_of_measurement="%/s",
+        native_min_value=0,
+        native_max_value=5,
+        native_step=0.001,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_active_power_regulation_gradient", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_active_power_regulation_gradient", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_lvrt_reactive_power_comp_factor",
+        name="[Grid Code] LVRT Reactive Power Compensation Factor",
+        icon="mdi:chart-line",
+        native_min_value=0,
+        native_max_value=10,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_lvrt_reactive_power_comp_factor", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_lvrt_reactive_power_comp_factor", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_lvrt_neg_seq_reactive_power_comp_factor",
+        name="[Grid Code] LVRT Negative-Sequence Reactive Power Compensation Factor",
+        icon="mdi:chart-line",
+        native_min_value=0,
+        native_max_value=10,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_lvrt_neg_seq_reactive_power_comp_factor", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_lvrt_neg_seq_reactive_power_comp_factor", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_hvrt_reactive_power_comp_factor",
+        name="[Grid Code] HVRT Reactive Power Compensation Factor",
+        icon="mdi:chart-line",
+        native_min_value=0,
+        native_max_value=10,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_hvrt_reactive_power_comp_factor", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_hvrt_reactive_power_comp_factor", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_hvrt_neg_seq_reactive_power_comp_factor",
+        name="[Grid Code] HVRT Negative-Sequence Reactive Power Compensation Factor",
+        icon="mdi:chart-line",
+        native_min_value=0,
+        native_max_value=10,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_hvrt_neg_seq_reactive_power_comp_factor", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_hvrt_neg_seq_reactive_power_comp_factor", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_over_freq_derating_power_ramp_rate",
+        name="[Grid Code] Over-Frequency Derating Power Ramp Rate",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_over_freq_derating_power_ramp_rate", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_over_freq_derating_power_ramp_rate", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_over_freq_derating_trigger_freq",
+        name="[Grid Code] Over-Frequency Derating Trigger Frequency",
+        icon="mdi:sine-wave",
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        native_min_value=40,
+        native_max_value=72,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_over_freq_derating_trigger_freq", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_over_freq_derating_trigger_freq", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_over_freq_derating_cutoff_freq",
+        name="[Grid Code] Over-Frequency Derating Cut-Off Frequency",
+        icon="mdi:sine-wave",
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        native_min_value=40,
+        native_max_value=72,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_over_freq_derating_cutoff_freq", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_over_freq_derating_cutoff_freq", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_under_freq_power_boost_power_ramp_rate",
+        name="[Grid Code] Under-Frequency Power Boost Power Ramp Rate",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_under_freq_power_boost_power_ramp_rate", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_under_freq_power_boost_power_ramp_rate", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_under_freq_power_boost_trigger_freq",
+        name="[Grid Code] Under-Frequency Power Boost Trigger Frequency",
+        icon="mdi:sine-wave",
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        native_min_value=40,
+        native_max_value=72,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_under_freq_power_boost_trigger_freq", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_under_freq_power_boost_trigger_freq", value),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_under_freq_power_boost_cutoff_freq",
+        name="[Grid Code] Under-Frequency Power Boost Cut-Off Frequency",
+        icon="mdi:sine-wave",
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        native_min_value=40,
+        native_max_value=72,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_under_freq_power_boost_cutoff_freq", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_under_freq_power_boost_cutoff_freq", value),
+        entity_registry_enabled_default=False,
+    ),
 
 ]
 
@@ -421,6 +577,7 @@ INVERTER_NUMBERS = [
         key="inverter_active_power_fixed_adjustment",
         name="Active Power Fixed Adjustment",
         icon="mdi:flash",
+        device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=-100,
         native_max_value=100,
@@ -435,7 +592,8 @@ INVERTER_NUMBERS = [
         key="inverter_reactive_power_fixed_adjustment",
         name="Reactive Power Fixed Adjustment",
         icon="mdi:flash",
-        native_unit_of_measurement="kvar",
+        device_class=NumberDeviceClass.REACTIVE_POWER,
+        native_unit_of_measurement=UnitOfReactivePower.KILO_VOLT_AMPERE_REACTIVE,
         native_min_value=-100,
         native_max_value=100,
         native_step=0.001,
@@ -573,10 +731,10 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
         # No number-specific init needed for now
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         """Return the value of the number."""
         if self.coordinator.data is None:
-            return 0.0 # Return float default
+            return None
             
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
@@ -591,15 +749,24 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
                 identifier,
                 e,
             )
-            return 0.0
+            return None
 
 
-    # The 'available' property is now inherited from SigenergyEntity
-    # We might need to override it here if the available_fn logic needs specific handling
-    # for number entities, but for now, let's rely on the base implementation.
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not super().available:
+            return False
+            
+        # Use device_name as the primary identifier passed to the lambda/function
+        identifier = self._device_name
+        return self.entity_description.available_fn(self.coordinator.data, identifier)
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the value of the number."""
+        if self.coordinator.data is None:
+            raise HomeAssistantError(f"Cannot set value for {self.entity_id}: Coordinator data is unavailable")
+
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
         # Exceptions are handled and logged in coordinator.async_write_parameter
