@@ -97,7 +97,8 @@ class StaticSensors:
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:battery",
+            # Intentionally no hardcoded icon: allow Home Assistant to use
+            # the default dynamic battery icon based on SOC.
         ),
         SigenergySensorEntityDescription(
             key="plant_phase_a_active_power",
@@ -1299,7 +1300,8 @@ class StaticSensors:
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:battery",
+            # Intentionally no hardcoded icon: allow Home Assistant to use
+            # the default dynamic battery icon based on SOC.
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_battery_soh",
@@ -1769,7 +1771,8 @@ class StaticSensors:
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:battery",
+            # Intentionally no hardcoded icon: allow Home Assistant to use
+            # the default dynamic battery icon based on SOC.
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_current_charging_capacity",
