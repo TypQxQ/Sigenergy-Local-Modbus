@@ -1069,19 +1069,7 @@ class StaticSensors:
             icon="mdi:ev-station",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
             entity_registry_enabled_default=False,
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_total_charged_energy_of_the_evac",
-            name="Total Charged Energy of the EVAC",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            round_digits=6,
-            icon="mdi:ev-station",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
-            entity_registry_enabled_default=False,
-        ),
+        )
     ]
 
     INVERTER_SENSORS = [
