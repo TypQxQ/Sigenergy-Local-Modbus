@@ -97,7 +97,8 @@ class StaticSensors:
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:battery",
+            # Intentionally no hardcoded icon: allow Home Assistant to use
+            # the default dynamic battery icon based on SOC.
         ),
         SigenergySensorEntityDescription(
             key="plant_phase_a_active_power",
@@ -1068,19 +1069,7 @@ class StaticSensors:
             icon="mdi:ev-station",
             suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
             entity_registry_enabled_default=False,
-        ),
-        SigenergySensorEntityDescription(
-            key="plant_total_charged_energy_of_the_evac",
-            name="Total Charged Energy of the EVAC",
-            device_class=SensorDeviceClass.ENERGY,
-            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            suggested_display_precision=2,
-            state_class=SensorStateClass.TOTAL,
-            round_digits=6,
-            icon="mdi:ev-station",
-            suggested_unit_of_measurement=UnitOfEnergy.MEGA_WATT_HOUR,
-            entity_registry_enabled_default=False,
-        ),
+        )
     ]
 
     INVERTER_SENSORS = [
@@ -1299,7 +1288,8 @@ class StaticSensors:
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:battery",
+            # Intentionally no hardcoded icon: allow Home Assistant to use
+            # the default dynamic battery icon based on SOC.
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_battery_soh",
@@ -1769,7 +1759,8 @@ class StaticSensors:
             device_class=SensorDeviceClass.BATTERY,
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
-            icon="mdi:battery",
+            # Intentionally no hardcoded icon: allow Home Assistant to use
+            # the default dynamic battery icon based on SOC.
         ),
         SigenergySensorEntityDescription(
             key="dc_charger_current_charging_capacity",
