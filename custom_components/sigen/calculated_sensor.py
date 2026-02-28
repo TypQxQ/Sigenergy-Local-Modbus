@@ -404,6 +404,7 @@ class SigenergyCalculations:
             return None
 
         total_energy = Decimal("0.0")
+        valid_sample_count = 0
         inverters_data = coordinator_data.get("inverters", {})
 
         if not inverters_data:
@@ -415,6 +416,7 @@ class SigenergyCalculations:
             if energy_value is not None:
                 try:
                     total_energy += energy_value
+                    valid_sample_count += 1
                 except (ValueError, TypeError, InvalidOperation) as e:
                     _LOGGER.warning(
                         "[%s] Invalid energy value '%s' for key '%s' in inverter %s: %s",
@@ -431,6 +433,12 @@ class SigenergyCalculations:
                     energy_key,
                     inverter_name
                  )
+
+        # If every inverter value was missing/invalid, publish unavailable instead of 0
+        # to avoid zero-bounce spikes in Energy Dashboard after reconnection events.
+        if valid_sample_count == 0:
+            _LOGGER.debug("[%s] No valid '%s' samples in this poll", log_prefix, energy_key)
+            return None
 
         # Return as Decimal, matching other calculated sensors
         return safe_decimal(total_energy)

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional, cast
 from decimal import Decimal, InvalidOperation
+from datetime import timedelta
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -20,6 +21,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .modbusregisterdefinitions import (
     RunningState,
@@ -35,7 +37,7 @@ from .calculated_sensor import (
 )
 from .static_sensor import StaticSensors as SS
 from .static_sensor import COORDINATOR_DIAGNOSTIC_SENSORS # Import the new descriptions
-from .common import generate_sigen_entity, generate_device_id, SigenergySensorEntityDescription, SensorEntityDescription
+from .common import generate_sigen_entity, generate_device_id, SigenergySensorEntityDescription, SensorEntityDescription, safe_decimal
 from .const import (
     DOMAIN,
     DEVICE_TYPE_PLANT,
@@ -48,6 +50,18 @@ from .const import (
 from .sigen_entity import SigenergyEntity
 
 _LOGGER = logging.getLogger(__name__)
+
+
+PROTECTED_DAILY_ENERGY_KEYS = {
+    "plant_daily_pv_energy",
+    "plant_daily_battery_charge_energy",
+    "plant_daily_battery_discharge_energy",
+    "inverter_daily_pv_energy",
+    "inverter_ess_daily_charge_energy",
+    "inverter_ess_daily_discharge_energy",
+}
+
+DAILY_RESET_GUARD_WINDOW = timedelta(minutes=20)
 
 
 async def async_setup_entry(
@@ -201,6 +215,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             if isinstance(description, SigenergySensorEntityDescription)
             else None
         )
+        self._last_valid_daily_energy_value: Decimal | None = None
 
     def _decode_alarm_bits(self, value: int, alarm_mapping: dict) -> str:
         """Decode alarm bits into human-readable text."""
@@ -229,6 +244,38 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             return data.get("dc_chargers", {}).get(self._device_name, {}).get(self.entity_description.key)
         return None
 
+    def _is_near_daily_reset(self) -> bool:
+        """Return True around midnight to allow legitimate daily counter resets."""
+        now = dt_util.now()
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return abs(now - midnight) <= DAILY_RESET_GUARD_WINDOW
+
+    def _apply_daily_energy_zero_guard(self, value: Any) -> Any:
+        """Prevent transient zero-bounce for daily total_increasing energy sensors."""
+        key = getattr(self.entity_description, "key", None)
+        if key not in PROTECTED_DAILY_ENERGY_KEYS:
+            return value
+
+        value_dec = safe_decimal(value)
+        if value_dec is None:
+            return value
+
+        if (
+            value_dec == 0
+            and self._last_valid_daily_energy_value is not None
+            and self._last_valid_daily_energy_value > 0
+            and not self._is_near_daily_reset()
+        ):
+            _LOGGER.warning(
+                "[%s] Ignoring transient daily energy drop to 0 outside reset window (last=%s)",
+                self.entity_id,
+                self._last_valid_daily_energy_value,
+            )
+            return None
+
+        self._last_valid_daily_energy_value = value_dec
+        return value
+
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
@@ -252,8 +299,8 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
 
                 # Round if needed
                 if transformed is not None and self._round_digits is not None:
-                    return round(Decimal(transformed), self._round_digits)
-                return transformed
+                    transformed = round(Decimal(transformed), self._round_digits)
+                return self._apply_daily_energy_zero_guard(transformed)
             except Exception as ex:
                 if raw_value is None:
                     _LOGGER.debug("Value function failed for %s because data is missing: %s", self.entity_id, ex)
@@ -309,15 +356,15 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             "plant_grid_sensor_status": {0: "Offline", 1: "Online"},
         }
         if self.entity_description.key in enum_maps:
-            return enum_maps[self.entity_description.key].get(raw_value, f"Unknown: {raw_value}")
+            return self._apply_daily_energy_zero_guard(enum_maps[self.entity_description.key].get(raw_value, f"Unknown: {raw_value}"))
 
         if self._round_digits is not None:
             try:
-                return round(Decimal(raw_value), self._round_digits)
+                return self._apply_daily_energy_zero_guard(round(Decimal(raw_value), self._round_digits))
             except (TypeError, ValueError, InvalidOperation):
                 _LOGGER.warning("Could not round direct value for %s: %s", self.entity_id, raw_value)
 
-        return raw_value
+        return self._apply_daily_energy_zero_guard(raw_value)
 
 
 class PVStringSensor(SigenergySensor):
