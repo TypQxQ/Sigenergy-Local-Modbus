@@ -412,7 +412,17 @@ class SigenergyCalculations:
             return None # No inverters found
 
         for inverter_name, inverter_data in inverters_data.items():
-            energy_value = safe_decimal(inverter_data.get(energy_key))
+            raw_value = inverter_data.get(energy_key)
+            if raw_value is None:
+                _LOGGER.debug(
+                    "[%s] Missing '%s' for inverter %s",
+                    log_prefix,
+                    energy_key,
+                    inverter_name,
+                )
+                continue
+
+            energy_value = safe_decimal(raw_value)
             if energy_value is not None:
                 try:
                     total_energy += energy_value
@@ -428,10 +438,11 @@ class SigenergyCalculations:
                     )
             else:
                 _LOGGER.debug(
-                    "[%s] Missing '%s' for inverter %s",
+                    "[%s] Invalid '%s' value '%s' for inverter %s",
                     log_prefix,
                     energy_key,
-                    inverter_name
+                    raw_value,
+                    inverter_name,
                  )
 
         # If every inverter value was missing/invalid, publish unavailable instead of 0

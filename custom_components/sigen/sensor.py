@@ -245,16 +245,22 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
         return None
 
     def _is_near_daily_reset(self) -> bool:
-        """Return True around midnight to allow legitimate daily counter resets."""
+        """Return True in a symmetric window around midnight."""
         now = dt_util.now()
-        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        return abs(now - midnight) <= DAILY_RESET_GUARD_WINDOW
+        seconds_since_midnight = (
+            now.hour * 3600 + now.minute * 60 + now.second + now.microsecond / 1_000_000
+        )
+        distance_to_midnight = min(seconds_since_midnight, 86400 - seconds_since_midnight)
+        return distance_to_midnight <= DAILY_RESET_GUARD_WINDOW.total_seconds()
 
     def _apply_daily_energy_zero_guard(self, value: Any) -> Any:
         """Prevent transient zero-bounce for daily total_increasing energy sensors."""
         key = getattr(self.entity_description, "key", None)
         if key not in PROTECTED_DAILY_ENERGY_KEYS:
             return value
+
+        if value is None:
+            return None
 
         value_dec = safe_decimal(value)
         if value_dec is None:
