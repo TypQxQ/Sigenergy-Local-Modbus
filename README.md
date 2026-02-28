@@ -35,7 +35,7 @@ More add-ons and enhancements are coming; stay tuned!
 
 ## Requirements
 - Sigenergy ESS firmware `SPC109` or newer is required starting with version `v1.1.0` of the integration. If your device runs older firmware and does not auto-update, upgrade the firmware or use a previous integration release until you have updated the firmware.
-- [Home Assistant](https://www.home-assistant.io/) at least version `2025.2`.
+- [Home Assistant](https://www.home-assistant.io/) at least version `2026.1`.
 - [Sigenergy ESS](https://www.sigenergy.com/) with Modbus‑TCP enabled by your installer. And preferably confirmed with a screenshot of your `DeviceID`. If using an AC Charger, that will have the id `1` and the inverter has to be set to a higher ID, for example `2`.
 - Preferably assign a **static IP** to your Sigenergy device in your router to ensure it always receives the same IP address.
 

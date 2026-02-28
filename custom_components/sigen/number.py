@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Coroutine
 
-from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription, NumberMode
 # from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import (
@@ -65,6 +65,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_active_power_fixed_target", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_active_power_fixed_target", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_reactive_power_fixed_target",
@@ -79,6 +80,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_reactive_power_fixed_target", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_reactive_power_fixed_target", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_active_power_percentage_target",
@@ -92,6 +94,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_active_power_percentage_target", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_active_power_percentage_target", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_qs_ratio_target",
@@ -105,6 +108,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_qs_ratio_target", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_qs_ratio_target", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_power_factor_target",
@@ -117,6 +121,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_power_factor_target", 0) / 1000,
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_power_factor_target", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_ess_max_charging_limit",
@@ -131,6 +136,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_ess_max_charging_limit", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_ess_max_charging_limit", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_ess_max_discharging_limit",
@@ -145,6 +151,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_ess_max_discharging_limit", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_ess_max_discharging_limit", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_pv_max_power_limit",
@@ -159,6 +166,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_pv_max_power_limit", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pv_max_power_limit", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_grid_point_maximum_export_limitation",
@@ -174,6 +182,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_grid_point_maximum_export_limitation", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_grid_point_maximum_export_limitation", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_grid_maximum_import_limitation",
@@ -189,6 +198,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_grid_maximum_import_limitation", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_grid_maximum_import_limitation", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_pcs_maximum_export_limitation",
@@ -203,6 +213,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_export_limitation", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcs_maximum_export_limitation", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_pcs_maximum_import_limitation",
@@ -217,6 +228,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_import_limitation", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcs_maximum_import_limitation", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_active_power_fixed_target",
@@ -231,6 +243,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_a_active_power_fixed_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_active_power_fixed_target",
@@ -245,6 +258,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_b_active_power_fixed_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_active_power_fixed_target",
@@ -259,6 +273,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_c_active_power_fixed_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_reactive_power_fixed_target",
@@ -274,6 +289,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_a_reactive_power_fixed_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_reactive_power_fixed_target",
@@ -289,6 +305,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_b_reactive_power_fixed_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_reactive_power_fixed_target",
@@ -304,6 +321,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_c_reactive_power_fixed_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_active_power_percentage_target",
@@ -318,6 +336,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_a_active_power_percentage_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_active_power_percentage_target",
@@ -332,6 +351,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_b_active_power_percentage_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_active_power_percentage_target",
@@ -346,6 +366,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_c_active_power_percentage_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_a_qs_ratio_target",
@@ -360,6 +381,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_a_qs_ratio_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_b_qs_ratio_target",
@@ -374,6 +396,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_b_qs_ratio_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_phase_c_qs_ratio_target",
@@ -388,6 +411,7 @@ PLANT_NUMBERS = [
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_phase_c_qs_ratio_target", value),
         available_fn=lambda data, _: data["plant"].get("plant_independent_phase_power_control_enable") == 1,
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     # Additions for Modbus specification v2.7
         SigenergyNumberEntityDescription(
@@ -402,6 +426,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_backup_soc", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_backup_soc", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
         SigenergyNumberEntityDescription(
         key="plant_charge_cut_off_soc",
@@ -415,6 +440,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_charge_cut_off_soc", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_charge_cut_off_soc", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
         SigenergyNumberEntityDescription(
         key="plant_discharge_cut_off_soc",
@@ -428,6 +454,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_discharge_cut_off_soc", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_discharge_cut_off_soc", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     # Modbus v2.8 additions - Grid code parameters
     SigenergyNumberEntityDescription(
@@ -442,6 +469,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_active_power_regulation_gradient", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_active_power_regulation_gradient", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_lvrt_reactive_power_comp_factor",
@@ -454,6 +482,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_lvrt_reactive_power_comp_factor", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_lvrt_reactive_power_comp_factor", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_lvrt_neg_seq_reactive_power_comp_factor",
@@ -466,6 +495,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_lvrt_neg_seq_reactive_power_comp_factor", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_lvrt_neg_seq_reactive_power_comp_factor", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_hvrt_reactive_power_comp_factor",
@@ -478,6 +508,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_hvrt_reactive_power_comp_factor", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_hvrt_reactive_power_comp_factor", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_hvrt_neg_seq_reactive_power_comp_factor",
@@ -490,6 +521,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_hvrt_neg_seq_reactive_power_comp_factor", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_hvrt_neg_seq_reactive_power_comp_factor", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_over_freq_derating_power_ramp_rate",
@@ -503,6 +535,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_over_freq_derating_power_ramp_rate", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_over_freq_derating_power_ramp_rate", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_over_freq_derating_trigger_freq",
@@ -516,6 +549,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_over_freq_derating_trigger_freq", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_over_freq_derating_trigger_freq", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_over_freq_derating_cutoff_freq",
@@ -529,6 +563,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_over_freq_derating_cutoff_freq", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_over_freq_derating_cutoff_freq", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_under_freq_power_boost_power_ramp_rate",
@@ -542,6 +577,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_under_freq_power_boost_power_ramp_rate", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_under_freq_power_boost_power_ramp_rate", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_under_freq_power_boost_trigger_freq",
@@ -555,6 +591,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_under_freq_power_boost_trigger_freq", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_under_freq_power_boost_trigger_freq", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="plant_under_freq_power_boost_cutoff_freq",
@@ -568,6 +605,7 @@ PLANT_NUMBERS = [
         value_fn=lambda data, _: data["plant"].get("plant_under_freq_power_boost_cutoff_freq", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_under_freq_power_boost_cutoff_freq", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
 
 ]
@@ -587,6 +625,7 @@ INVERTER_NUMBERS = [
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_active_power_fixed_adjustment", 0),
         set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("inverter", identifier, "inverter_active_power_fixed_adjustment", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_reactive_power_fixed_adjustment",
@@ -602,6 +641,7 @@ INVERTER_NUMBERS = [
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_reactive_power_fixed_adjustment", 0),
         set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("inverter", identifier, "inverter_reactive_power_fixed_adjustment", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_active_power_percentage_adjustment",
@@ -616,6 +656,7 @@ INVERTER_NUMBERS = [
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_active_power_percentage_adjustment", 0),
         set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("inverter", identifier, "inverter_active_power_percentage_adjustment", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_reactive_power_qs_adjustment",
@@ -630,6 +671,7 @@ INVERTER_NUMBERS = [
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_reactive_power_qs_adjustment", 0),
         set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("inverter", identifier, "inverter_reactive_power_qs_adjustment", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
     SigenergyNumberEntityDescription(
         key="inverter_power_factor_adjustment",
@@ -643,6 +685,7 @@ INVERTER_NUMBERS = [
         value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_power_factor_adjustment", 0) / 1000,
         set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("inverter", identifier, "inverter_power_factor_adjustment", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
 ]
 AC_CHARGER_NUMBERS = [
@@ -659,6 +702,7 @@ AC_CHARGER_NUMBERS = [
         value_fn=lambda data, identifier: data["ac_chargers"].get(identifier, {}).get("ac_charger_output_current", 0),
         set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_output_current", value),
         entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
     ),
 ]
 
