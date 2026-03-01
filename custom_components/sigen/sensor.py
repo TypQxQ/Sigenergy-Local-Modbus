@@ -215,6 +215,8 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             if isinstance(description, SigenergySensorEntityDescription)
             else None
         )
+        # In-memory only: this resets on HA restart, so the first post-restart poll
+        # has no historical reference and is intentionally passed through.
         self._last_valid_daily_energy_value: Decimal | None = None
 
     def _decode_alarm_bits(self, value: int, alarm_mapping: dict) -> str:
