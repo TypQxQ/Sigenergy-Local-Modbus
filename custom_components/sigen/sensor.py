@@ -274,7 +274,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             and self._last_valid_daily_energy_value > 0
             and not self._is_near_daily_reset()
         ):
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "[%s] Ignoring transient daily energy drop to 0 outside reset window (last=%s)",
                 self.entity_id,
                 self._last_valid_daily_energy_value,
