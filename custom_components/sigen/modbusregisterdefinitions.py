@@ -1337,7 +1337,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=100,
-        unit="V",
+        unit=UnitOfElectricPotential.VOLT,
         description="Grid sensor Phase A Voltage",
     ),
     "plant_grid_sensor_phase_b_voltage": ModbusRegisterDefinition(
@@ -1346,7 +1346,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=100,
-        unit="V",
+        unit=UnitOfElectricPotential.VOLT,
         description="Grid sensor Phase B Voltage",
     ),
     "plant_grid_sensor_phase_c_voltage": ModbusRegisterDefinition(
@@ -1355,7 +1355,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=100,
-        unit="V",
+        unit=UnitOfElectricPotential.VOLT,
         description="Grid sensor Phase C Voltage",
     ),
     "plant_grid_sensor_phase_a_current": ModbusRegisterDefinition(
@@ -1364,7 +1364,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=100,
-        unit="A",
+        unit=UnitOfElectricCurrent.AMPERE,
         description="Grid sensor Phase A Current",
     ),
     "plant_grid_sensor_phase_b_current": ModbusRegisterDefinition(
@@ -1373,7 +1373,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=100,
-        unit="A",
+        unit=UnitOfElectricCurrent.AMPERE,
         description="Grid sensor Phase B Current",
     ),
     "plant_grid_sensor_phase_c_current": ModbusRegisterDefinition(
@@ -1382,7 +1382,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
         gain=100,
-        unit="A",
+        unit=UnitOfElectricCurrent.AMPERE,
         description="Grid sensor Phase C Current",
     ),
 }
