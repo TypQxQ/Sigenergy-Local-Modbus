@@ -1377,7 +1377,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         description="Grid sensor Phase B Current",
     ),
     "plant_grid_sensor_phase_c_current": ModbusRegisterDefinition(
-        address=30294,
+        address=30296,
         count=2,
         register_type=RegisterType.READ_ONLY,
         data_type=DataType.S32,
