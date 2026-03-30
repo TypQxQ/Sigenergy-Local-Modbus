@@ -18,6 +18,7 @@ from homeassistant.const import (
     UnitOfEnergy,
     EntityCategory,
     UnitOfPower,
+    UnitOfElectricCurrent,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
@@ -491,6 +492,117 @@ class SigenergyCalculations:
             "CS][Daily Batt Discharge"
         )
 
+@staticmethod
+    def _identify_battery_series_cells(
+        pack_count: int,
+        rated_capacity_kwh: float,
+        tolerance: float = 0.02,
+    ) -> Optional[int]:
+        """Determine total cells in series across the battery stack.
+
+        Finds the combination of Sigenergy module types that matches the
+        given pack count and rated capacity, then returns the total number
+        of series-connected cells across all packs.
+
+        Module types (cells_in_series x cell_Ah):
+            5kWh  = 5.38kWh, 6 cells in series
+            6kWh  = 6.02kWh, 6 cells in series
+            8kWh  = 8.06kWh, 9 cells in series
+            10kWh = 9.04kWh, 9 cells in series
+
+        Args:
+            pack_count:         Number of battery packs (register 31024)
+            rated_capacity_kwh: Total rated battery capacity in kWh (register 30548)
+            tolerance:          Fractional tolerance for capacity matching (default 2%)
+
+        Returns:
+            Total cells in series, or None if no valid combination found.
+        """
+        # (capacity_kwh, cells_in_series)
+        MODULE_TYPES = [
+            (5.38, 6),   # 5kWh module
+            (6.02, 6),   # 6kWh module
+            (8.06, 9),   # 8kWh module
+            (9.04, 9),   # 10kWh module
+        ]
+        tolerance_kwh = rated_capacity_kwh * tolerance
+
+        for a in range(pack_count + 1):
+            for b in range(pack_count + 1 - a):
+                for c in range(pack_count + 1 - a - b):
+                    d = pack_count - a - b - c
+                    calc_capacity = (
+                        a * MODULE_TYPES[0][0]
+                        + b * MODULE_TYPES[1][0]
+                        + c * MODULE_TYPES[2][0]
+                        + d * MODULE_TYPES[3][0]
+                    )
+                    if abs(calc_capacity - rated_capacity_kwh) <= tolerance_kwh:
+                        return (
+                            a * MODULE_TYPES[0][1]
+                            + b * MODULE_TYPES[1][1]
+                            + c * MODULE_TYPES[2][1]
+                            + d * MODULE_TYPES[3][1]
+                        )
+        return None
+
+    @staticmethod
+    def calculate_ess_current(
+        _,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[float]:
+        """Calculate ESS current (A) from power, pack configuration and live
+        average cell voltage.
+
+        Uses pack count and rated capacity to identify the battery module
+        combination, determines total series cells, then divides power by
+        the live system voltage (series_cells × avg_cell_voltage).
+
+        Positive = charging, negative = discharging.
+        Returns None if data is unavailable or module type cannot be identified.
+        """
+        if not coordinator_data or not extra_params:
+            return None
+
+        device_name = extra_params.get("device_name")
+        inverter_data = coordinator_data.get("inverters", {}).get(device_name, {})
+
+        ess_power_kw       = safe_float(inverter_data.get("inverter_ess_charge_discharge_power"))
+        avg_cell_voltage   = safe_float(inverter_data.get("inverter_ess_average_cell_voltage"))
+        pack_count         = inverter_data.get("inverter_pack_count")
+        rated_capacity_kwh = safe_float(inverter_data.get("inverter_rated_battery_capacity"))
+
+        if any(v is None for v in [ess_power_kw, avg_cell_voltage,
+                                    pack_count, rated_capacity_kwh]):
+            _LOGGER.debug(
+                "[CS][ESS Current] Missing data for %s: power=%s, cell_v=%s, packs=%s, capacity=%s",
+                device_name, ess_power_kw, avg_cell_voltage, pack_count, rated_capacity_kwh,
+            )
+            return None
+
+        pack_count_int = int(pack_count)
+        if pack_count_int == 0 or avg_cell_voltage == 0:
+            return None
+
+        total_series_cells = SigenergyCalculations._identify_battery_series_cells(
+            pack_count_int, float(rated_capacity_kwh)
+        )
+
+        if total_series_cells is None:
+            _LOGGER.warning(
+                "[CS][ESS Current] Could not identify module type for %s: "
+                "%d packs, %.2f kWh rated capacity",
+                device_name, pack_count_int, rated_capacity_kwh,
+            )
+            return None
+
+        system_voltage = total_series_cells * avg_cell_voltage
+        if system_voltage == 0:
+            return None
+
+        return round((ess_power_kw * 1000) / system_voltage, 2)
+    
     @staticmethod
     def calculate_plant_daily_pv_energy(
         value,
@@ -1775,6 +1887,17 @@ class SigenergyCalculatedSensors:
             ),
             extra_fn_data=True,  # Indicates that this sensor needs coordinator data
             entity_registry_enabled_default=False,
+        ),
+        SigenergySensorEntityDescription(
+            key="inverter_ess_current",
+            name="Battery Current",
+            device_class=SensorDeviceClass.CURRENT,
+            native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+            state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=2,
+            icon="mdi:current-dc",
+            value_fn=SigenergyCalculations.calculate_ess_current,
+            extra_fn_data=True,
         ),
     ]
 
