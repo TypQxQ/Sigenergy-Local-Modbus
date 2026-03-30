@@ -493,6 +493,19 @@ class SigenergyCalculations:
         )
 
     @staticmethod
+    def calculate_daily_battery_discharge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Calculate the total daily battery discharge energy across all inverters."""
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_daily_discharge_energy",
+            "CS][Daily Batt Discharge"
+        )
+
+    @staticmethod
     def _identify_battery_series_cells(
         pack_count: int,
         rated_capacity_kwh: float,
@@ -518,7 +531,6 @@ class SigenergyCalculations:
         Returns:
             Total cells in series, or None if no valid combination found.
         """
-        # (capacity_kwh, cells_in_series)
         MODULE_TYPES = [
             (5.38, 6),   # 5kWh module
             (6.02, 6),   # 6kWh module
@@ -602,7 +614,7 @@ class SigenergyCalculations:
             return None
 
         return round((ess_power_kw * 1000) / system_voltage, 2)
-    
+
     @staticmethod
     def calculate_plant_daily_pv_energy(
         value,
@@ -610,7 +622,6 @@ class SigenergyCalculations:
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[Decimal]:
         """Calculate the total daily PV energy across all inverters."""
-        # _LOGGER.debug("[CS][Daily PV] Calculating daily PV energy")
         return SigenergyCalculations._calculate_total_inverter_energy(
             coordinator_data,
             "inverter_daily_pv_energy",
