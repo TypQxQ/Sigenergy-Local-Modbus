@@ -492,7 +492,7 @@ class SigenergyCalculations:
             "CS][Daily Batt Discharge"
         )
 
-@staticmethod
+    @staticmethod
     def _identify_battery_series_cells(
         pack_count: int,
         rated_capacity_kwh: float,
