@@ -1014,7 +1014,7 @@ PLANT_RUNNING_INFO_REGISTERS = {
         data_type=DataType.S32,
         gain=1000,
         unit=UnitOfPower.KILO_WATT,
-        description="[Smart load 15] Power",
+        description="[Smart load 16] Power",
     ),
     "plant_smart_load_17_power": ModbusRegisterDefinition(
         address=30178,
