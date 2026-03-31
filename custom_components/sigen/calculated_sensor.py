@@ -574,46 +574,60 @@ class SigenergyCalculations:
         Positive = charging, negative = discharging.
         Returns None if data is unavailable or module type cannot be identified.
         """
-        if not coordinator_data or not extra_params:
+        if not coordinator_data:
             return None
 
-        device_name = extra_params.get("device_name")
-        inverter_data = coordinator_data.get("inverters", {}).get(device_name, {})
+        # Try extra_params device_name first, then fall back to iterating inverters.
+        # extra_params["device_name"] may not be populated for inverter-level
+        # calculated sensors, so we iterate and return the first valid result.
+        inverters_data = coordinator_data.get("inverters", {})
+        if not inverters_data:
+            _LOGGER.debug("[CS][ESS Current] No inverter data in coordinator")
+            return None
 
-        ess_power_kw       = safe_float(inverter_data.get("inverter_ess_charge_discharge_power"))
-        avg_cell_voltage   = safe_float(inverter_data.get("inverter_ess_average_cell_voltage"))
-        pack_count         = inverter_data.get("inverter_pack_count")
-        rated_capacity_kwh = safe_float(inverter_data.get("inverter_rated_battery_capacity"))
+        device_name = (extra_params or {}).get("device_name")
+        if device_name and device_name in inverters_data:
+            candidates = {device_name: inverters_data[device_name]}
+        else:
+            candidates = inverters_data
 
-        if any(v is None for v in [ess_power_kw, avg_cell_voltage,
-                                    pack_count, rated_capacity_kwh]):
-            _LOGGER.debug(
-                "[CS][ESS Current] Missing data for %s: power=%s, cell_v=%s, packs=%s, capacity=%s",
-                device_name, ess_power_kw, avg_cell_voltage, pack_count, rated_capacity_kwh,
+        for inv_name, inverter_data in candidates.items():
+            ess_power_kw       = safe_float(inverter_data.get("inverter_ess_charge_discharge_power"))
+            avg_cell_voltage   = safe_float(inverter_data.get("inverter_ess_average_cell_voltage"))
+            pack_count         = inverter_data.get("inverter_pack_count")
+            rated_capacity_kwh = safe_float(inverter_data.get("inverter_rated_battery_capacity"))
+
+            if any(v is None for v in [ess_power_kw, avg_cell_voltage,
+                                        pack_count, rated_capacity_kwh]):
+                _LOGGER.debug(
+                    "[CS][ESS Current] Missing data for %s: power=%s, cell_v=%s, packs=%s, capacity=%s",
+                    inv_name, ess_power_kw, avg_cell_voltage, pack_count, rated_capacity_kwh,
+                )
+                continue
+
+            pack_count_int = int(pack_count)
+            if pack_count_int == 0 or avg_cell_voltage == 0:
+                continue
+
+            total_series_cells = SigenergyCalculations._identify_battery_series_cells(
+                pack_count_int, float(rated_capacity_kwh)
             )
-            return None
 
-        pack_count_int = int(pack_count)
-        if pack_count_int == 0 or avg_cell_voltage == 0:
-            return None
+            if total_series_cells is None:
+                _LOGGER.warning(
+                    "[CS][ESS Current] Could not identify module type for %s: "
+                    "%d packs, %.2f kWh rated capacity",
+                    inv_name, pack_count_int, rated_capacity_kwh,
+                )
+                continue
 
-        total_series_cells = SigenergyCalculations._identify_battery_series_cells(
-            pack_count_int, float(rated_capacity_kwh)
-        )
+            system_voltage = total_series_cells * avg_cell_voltage
+            if system_voltage == 0:
+                continue
 
-        if total_series_cells is None:
-            _LOGGER.warning(
-                "[CS][ESS Current] Could not identify module type for %s: "
-                "%d packs, %.2f kWh rated capacity",
-                device_name, pack_count_int, rated_capacity_kwh,
-            )
-            return None
+            return round((ess_power_kw * 1000) / system_voltage, 2)
 
-        system_voltage = total_series_cells * avg_cell_voltage
-        if system_voltage == 0:
-            return None
-
-        return round((ess_power_kw * 1000) / system_voltage, 2)
+        return None
 
     @staticmethod
     def calculate_plant_daily_pv_energy(
