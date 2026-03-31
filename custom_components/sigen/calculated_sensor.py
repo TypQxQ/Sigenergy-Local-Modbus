@@ -486,31 +486,66 @@ class SigenergyCalculations:
     ) -> Optional[int]:
         """Determine total cells in series across the battery stack.
 
-        Finds the combination of Sigenergy module types that matches the
-        given pack count and rated capacity, then returns the total number
-        of series-connected cells across all packs.
+        Finds the combination of Sigenergy module types that best matches
+        the given pack count and rated capacity, then returns the total
+        number of series-connected cells across all packs.
 
-        Module types (cells_in_series x cell_Ah):
-            5kWh  = 5.38kWh, 6 cells in series
-            6kWh  = 6.02kWh, 6 cells in series
-            8kWh  = 8.06kWh, 9 cells in series
-            10kWh = 9.04kWh, 9 cells in series
+        The search is exhaustive over all valid combinations of module types
+        that sum to pack_count, and returns the combination whose total
+        capacity is closest to rated_capacity_kwh (within tolerance).
+
+        Module types:
+            5kWh  = 5.38 kWh, 6 cells in series
+            6kWh  = 6.02 kWh, 6 cells in series
+            8kWh  = 8.06 kWh, 9 cells in series
+            10kWh = 9.04 kWh, 9 cells in series
+
+        pack_count is taken directly from register 31024
+        (inverter_pack_count) and reflects the actual number of modules
+        installed in the battery stack on that inverter. The sanity cap
+        exists only to guard against corrupt register values — it is set
+        well above any currently documented Sigenergy hardware limit.
 
         Args:
-            pack_count:         Number of battery packs (register 31024)
-            rated_capacity_kwh: Total rated battery capacity in kWh (register 30548)
-            tolerance:          Fractional tolerance for capacity matching (default 2%)
+            pack_count:         Number of battery packs from register 31024.
+            rated_capacity_kwh: Total rated battery capacity in kWh from
+                                register 30548.
+            tolerance:          Fractional tolerance for capacity matching
+                                (default 2 %).
 
         Returns:
-            Total cells in series, or None if no valid combination found.
+            Total cells in series for the best-matching combination, or
+            None if no combination falls within the tolerance window.
         """
+        # Sanity cap: guards against corrupt register values only.
+        # The real constraint is the value of inverter_pack_count itself.
+        # Set to 20 to accommodate any future Sigenergy hardware expansion
+        # well beyond the current documented maximum of 6 per stack.
+        SANITY_CAP = 20
+
+        # (capacity_kwh, cells_in_series)
         MODULE_TYPES = [
-            (5.38, 6),   # 5kWh module
-            (6.02, 6),   # 6kWh module
-            (8.06, 9),   # 8kWh module
-            (9.04, 9),   # 10kWh module
+            (5.38, 6),   # 5 kWh module
+            (6.02, 6),   # 6 kWh module
+            (8.06, 9),   # 8 kWh module
+            (9.04, 9),   # 10 kWh module
         ]
+
+        # Apply sanity cap — log a warning if it triggers so corrupt
+        # register values are visible rather than causing silent errors.
+        if pack_count > SANITY_CAP:
+            _LOGGER.warning(
+                "[CS][ESS Current] pack_count=%d exceeds sanity cap of %d. "
+                "This likely indicates a corrupt register value. "
+                "Capping at %d for safety.",
+                pack_count, SANITY_CAP, SANITY_CAP,
+            )
+            pack_count = SANITY_CAP
+
         tolerance_kwh = rated_capacity_kwh * tolerance
+
+        best_cells: Optional[int] = None
+        best_delta: float = float("inf")
 
         for a in range(pack_count + 1):
             for b in range(pack_count + 1 - a):
@@ -522,14 +557,17 @@ class SigenergyCalculations:
                         + c * MODULE_TYPES[2][0]
                         + d * MODULE_TYPES[3][0]
                     )
-                    if abs(calc_capacity - rated_capacity_kwh) <= tolerance_kwh:
-                        return (
+                    delta = abs(calc_capacity - rated_capacity_kwh)
+                    if delta <= tolerance_kwh and delta < best_delta:
+                        best_delta = delta
+                        best_cells = (
                             a * MODULE_TYPES[0][1]
                             + b * MODULE_TYPES[1][1]
                             + c * MODULE_TYPES[2][1]
                             + d * MODULE_TYPES[3][1]
                         )
-        return None
+
+        return best_cells
 
     @staticmethod
     def calculate_ess_current(
