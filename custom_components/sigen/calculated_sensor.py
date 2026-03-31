@@ -492,18 +492,6 @@ class SigenergyCalculations:
             "CS][Daily Batt Discharge"
         )
 
-    @staticmethod
-    def calculate_daily_battery_discharge_energy(
-        value,
-        coordinator_data: Optional[Dict[str, Any]] = None,
-        extra_params: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Decimal]:
-        """Calculate the total daily battery discharge energy across all inverters."""
-        return SigenergyCalculations._calculate_total_inverter_energy(
-            coordinator_data,
-            "inverter_ess_daily_discharge_energy",
-            "CS][Daily Batt Discharge"
-        )
 
     @staticmethod
     def _identify_battery_series_cells(
