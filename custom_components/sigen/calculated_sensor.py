@@ -585,6 +585,13 @@ class SigenergyCalculations:
                             + d * MODULE_TYPES[3][1]
                         )
 
+        # Divide by pack_count to get cells per module, not total cells.
+        # SigenStor modules connect in parallel — each has a built-in DC-DC
+        # optimiser so parallel stacking adds capacity while keeping voltage
+        # constant. system_voltage = cells_per_module × avg_cell_voltage
+        # regardless of how many modules are installed.
+        # Source: https://www.sigenergy.com/en/products/sigenstor
+        #         https://www.sigenergy.com/uploads/en_download/1693548782125366.pdf
         return best_cells // pack_count if best_cells is not None else None
 
     @staticmethod
