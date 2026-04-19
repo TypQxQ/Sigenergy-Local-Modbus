@@ -404,6 +404,7 @@ class SigenergyCalculations:
             return None
 
         total_energy = Decimal("0.0")
+        valid_sample_count = 0
         inverters_data = coordinator_data.get("inverters", {})
 
         if not inverters_data:
@@ -411,10 +412,20 @@ class SigenergyCalculations:
             return None # No inverters found
 
         for inverter_name, inverter_data in inverters_data.items():
-            energy_value = safe_decimal(inverter_data.get(energy_key))
+            raw = inverter_data.get(energy_key)
+            if raw is None:
+                _LOGGER.debug(
+                    "[%s] Missing '%s' for inverter %s",
+                    log_prefix,
+                    energy_key,
+                    inverter_name,
+                )
+                continue
+            energy_value = safe_decimal(raw)
             if energy_value is not None:
                 try:
                     total_energy += energy_value
+                    valid_sample_count += 1
                 except (ValueError, TypeError, InvalidOperation) as e:
                     _LOGGER.warning(
                         "[%s] Invalid energy value '%s' for key '%s' in inverter %s: %s",
@@ -426,11 +437,16 @@ class SigenergyCalculations:
                     )
             else:
                 _LOGGER.debug(
-                    "[%s] Missing '%s' for inverter %s",
+                    "[%s] Could not convert '%s' for inverter %s",
                     log_prefix,
-                    energy_key,
-                    inverter_name
-                 )
+                    raw,
+                    inverter_name,
+                )
+
+        # All inverters offline/missing → report unavailable, not 0
+        if valid_sample_count == 0:
+            _LOGGER.debug("[%s] No valid samples for '%s', returning None", log_prefix, energy_key)
+            return None
 
         # Return as Decimal, matching other calculated sensors
         return safe_decimal(total_energy)
