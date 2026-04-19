@@ -1926,7 +1926,7 @@ class SigenergyCalculatedSensors:
         ),
         SigenergySensorEntityDescription(
             key="inverter_ess_current",
-            name="Battery Current",
+            name="Battery Current (Calculated)",
             device_class=SensorDeviceClass.CURRENT,
             native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
             state_class=SensorStateClass.MEASUREMENT,
