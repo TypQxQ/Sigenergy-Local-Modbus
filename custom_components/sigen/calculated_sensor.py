@@ -479,6 +479,19 @@ class SigenergyCalculations:
         )
 
     @staticmethod
+    def calculate_daily_battery_discharge_energy(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Calculate the total daily battery discharge energy across all inverters."""
+        return SigenergyCalculations._calculate_total_inverter_energy(
+            coordinator_data,
+            "inverter_ess_daily_discharge_energy",
+            "CS][Daily Batt Discharge"
+        )
+
+    @staticmethod
     def _identify_battery_series_cells(
         pack_count: int,
         rated_capacity_kwh: float,
@@ -588,9 +601,6 @@ class SigenergyCalculations:
         if not coordinator_data:
             return None
 
-        # Try extra_params device_name first, then fall back to iterating inverters.
-        # extra_params["device_name"] may not be populated for inverter-level
-        # calculated sensors, so we iterate and return the first valid result.
         inverters_data = coordinator_data.get("inverters", {})
         if not inverters_data:
             _LOGGER.debug("[CS][ESS Current] No inverter data in coordinator")
