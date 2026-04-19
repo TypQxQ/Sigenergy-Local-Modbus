@@ -497,11 +497,16 @@ class SigenergyCalculations:
         rated_capacity_kwh: float,
         tolerance: float = 0.02,
     ) -> Optional[int]:
-        """Determine total cells in series across the battery stack.
+        """Determine cells in series for a single battery module.
 
         Finds the combination of Sigenergy module types that best matches
-        the given pack count and rated capacity, then returns the total
-        number of series-connected cells across all packs.
+        the given pack count and rated capacity, then returns the series
+        cell count of one module.
+
+        Modules are connected in parallel (each has a built-in DC-DC
+        optimiser). Parallel connection adds capacity while keeping voltage
+        constant, so system_voltage = cells_per_module × avg_cell_voltage
+        regardless of pack_count.
 
         The search is exhaustive over all valid combinations of module types
         that sum to pack_count, and returns the combination whose total
@@ -527,7 +532,7 @@ class SigenergyCalculations:
                                 (default 2 %).
 
         Returns:
-            Total cells in series for the best-matching combination, or
+            Cells in series per module for the best-matching combination, or
             None if no combination falls within the tolerance window.
         """
         # Sanity cap: guards against corrupt register values only.
@@ -580,7 +585,7 @@ class SigenergyCalculations:
                             + d * MODULE_TYPES[3][1]
                         )
 
-        return best_cells
+        return best_cells // pack_count if best_cells is not None else None
 
     @staticmethod
     def calculate_ess_current(
@@ -630,11 +635,11 @@ class SigenergyCalculations:
             if pack_count_int == 0 or avg_cell_voltage == 0 or not rated_capacity_kwh:
                 continue
 
-            total_series_cells = SigenergyCalculations._identify_battery_series_cells(
+            cells_per_module = SigenergyCalculations._identify_battery_series_cells(
                 pack_count_int, float(rated_capacity_kwh)
             )
 
-            if total_series_cells is None:
+            if cells_per_module is None:
                 _LOGGER.warning(
                     "[CS][ESS Current] Could not identify module type for %s: "
                     "%d packs, %.2f kWh rated capacity",
@@ -642,7 +647,7 @@ class SigenergyCalculations:
                 )
                 continue
 
-            system_voltage = total_series_cells * avg_cell_voltage
+            system_voltage = cells_per_module * avg_cell_voltage
             if system_voltage == 0:
                 continue
 
