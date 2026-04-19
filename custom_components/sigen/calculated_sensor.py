@@ -627,7 +627,7 @@ class SigenergyCalculations:
                 continue
 
             pack_count_int = int(pack_count)
-            if pack_count_int == 0 or avg_cell_voltage == 0:
+            if pack_count_int == 0 or avg_cell_voltage == 0 or not rated_capacity_kwh:
                 continue
 
             total_series_cells = SigenergyCalculations._identify_battery_series_cells(
