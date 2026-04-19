@@ -1944,6 +1944,7 @@ class SigenergyCalculatedSensors:
             icon="mdi:current-dc",
             value_fn=SigenergyCalculations.calculate_ess_current,
             extra_fn_data=True,
+            entity_registry_enabled_default=False,
         ),
     ]
 
