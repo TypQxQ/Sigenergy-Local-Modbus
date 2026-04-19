@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Optional, cast
 from decimal import Decimal, InvalidOperation
 
@@ -19,6 +19,7 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -220,9 +221,13 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
         self._last_valid_daily_energy_value: Decimal | None = None
 
     def _is_near_daily_reset(self) -> bool:
-        """Return True if within ±20 minutes of midnight (legitimate daily reset window)."""
-        now = datetime.now()
-        seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
+        """Return True if within ±20 minutes of midnight (legitimate daily reset window).
+
+        Uses dt_util.now() so the check respects HA's configured timezone, not the OS clock.
+        """
+        now = dt_util.now()
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        seconds_since_midnight = (now - midnight).total_seconds()
         window = _DAILY_RESET_WINDOW.total_seconds()
         return seconds_since_midnight <= window or seconds_since_midnight >= 86400 - window
 
