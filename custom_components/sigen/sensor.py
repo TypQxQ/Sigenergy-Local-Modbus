@@ -219,6 +219,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             else None
         )
         self._last_valid_daily_energy_value: Decimal | None = None
+        self._last_valid_daily_energy_date = None
 
     def _is_near_daily_reset(self) -> bool:
         """Return True if within ±20 minutes of midnight (legitimate daily reset window).
@@ -247,9 +248,12 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
         except (ValueError, TypeError, InvalidOperation):
             return value
         last = self._last_valid_daily_energy_value
+        today = dt_util.now().date()
+        last_date = self._last_valid_daily_energy_date
         if decimal_value == 0:
-            if self._is_near_daily_reset():
+            if self._is_near_daily_reset() or (last_date is not None and last_date < today):
                 self._last_valid_daily_energy_value = decimal_value
+                self._last_valid_daily_energy_date = today
                 return value
             if last is not None and last > 0:
                 _LOGGER.debug(
@@ -260,6 +264,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 return None
         if decimal_value > 0:
             self._last_valid_daily_energy_value = decimal_value
+            self._last_valid_daily_energy_date = today
         return value
 
     def _decode_alarm_bits(self, value: int, alarm_mapping: dict) -> str:
