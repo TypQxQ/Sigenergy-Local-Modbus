@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any, Optional, cast
 from decimal import Decimal, InvalidOperation
 
@@ -219,7 +219,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             else None
         )
         self._last_valid_daily_energy_value: Decimal | None = None
-        self._last_valid_daily_energy_date = None
+        self._last_valid_daily_energy_date: date | None = None
 
     def _is_near_daily_reset(self) -> bool:
         """Return True if within ±20 minutes of midnight (legitimate daily reset window).
