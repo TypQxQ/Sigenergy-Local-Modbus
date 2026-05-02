@@ -112,6 +112,14 @@ Plant (IP:Port)
 > [!NOTE]
 > Controls are **read-only by default** unless  explicitly enabled in the integration configuration.
 
+## Known Limitations & Important Notes
+
+- **Sigenergy "Grid side info" is not fully available over local Modbus.** The grid-side details shown in the Sigen app are not currently exposed through a stable Modbus register set. Some diagnostic grid phase voltage/current sensors added in `v1.2.2` can remain unavailable if the device rejects those registers. This has been reported on single-phase firmware `V100R001C22SPC113`; see [discussion #295](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/295#discussioncomment-16776425).
+- **Grid phase voltage/current support depends on Sigenergy firmware and Modbus documentation.** The gateway/grid phase registers were included in at least one `V2.8` Modbus protocol document and were discussed in [discussion #192](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/192), but not all `V2.8` documents match. In the local `Modbus_Protocol_EN_2.8-SIGEN.pdf` copy used by this project, `V2.8` is dated `2025-11-28` and the plant running info table lists new registers up to `30284` (`General load power` and `Total load power`). It does not list the grid phase voltage/current registers currently mapped at `30286`, `30288`, `30290`, `30292`, `30294`, and `30296`, so these sensors may not work even on newer firmware.
+- **`Register validation failed ... exception_code=2` usually means an unsupported register.** If you see this in debug logs for addresses such as `30286`, `30288`, `30290`, `30292`, `30294`, or `30296`, the integration is likely skipping grid-side registers your device does not expose, not failing the whole integration. Address `30281` is `Merged Alarm7` in the `2025-11-28` V2.8 document and may also be unsupported if your firmware does not expose the newer V2.8 plant registers.
+- **Controls and diagnostic entities are conservative by default.** Write controls and many diagnostic sensors are disabled by default. To use controls, disable read-only mode in the integration options and enable the specific entity in Home Assistant only if you understand the setting.
+- **Device IDs and topology matter.** AC chargers are normally device ID `1`; inverters must use another ID. DC charger data is read via the inverter, and all devices in a plant should normally use the same host and port.
+
 ## Quickstart Automation Example
 ```yaml
 alias: "Notify on Low Battery"

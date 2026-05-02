@@ -646,8 +646,12 @@ class SigenergyCalculations:
             pack_count         = inverter_data.get("inverter_pack_count")
             rated_capacity_kwh = safe_float(inverter_data.get("inverter_rated_battery_capacity"))
 
-            if any(v is None for v in [ess_power_kw, avg_cell_voltage,
-                                        pack_count, rated_capacity_kwh]):
+            if (
+                ess_power_kw is None
+                or avg_cell_voltage is None
+                or pack_count is None
+                or rated_capacity_kwh is None
+            ):
                 _LOGGER.debug(
                     "[CS][ESS Current] Missing data for %s: power=%s, cell_v=%s, packs=%s, capacity=%s",
                     inv_name, ess_power_kw, avg_cell_voltage, pack_count, rated_capacity_kwh,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any, Optional, cast
 from decimal import Decimal, InvalidOperation
 
@@ -37,7 +37,7 @@ from .calculated_sensor import (
 )
 from .static_sensor import StaticSensors as SS
 from .static_sensor import COORDINATOR_DIAGNOSTIC_SENSORS # Import the new descriptions
-from .common import generate_sigen_entity, generate_device_id, SigenergySensorEntityDescription, SensorEntityDescription
+from .common import generate_sigen_entity, generate_device_id, SigenergySensorEntityDescription
 from .const import (
     DOMAIN,
     DEVICE_TYPE_PLANT,
@@ -219,6 +219,7 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             else None
         )
         self._last_valid_daily_energy_value: Decimal | None = None
+        self._last_valid_daily_energy_date: date | None = None
 
     def _is_near_daily_reset(self) -> bool:
         """Return True if within ±20 minutes of midnight (legitimate daily reset window).
@@ -247,15 +248,23 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
         except (ValueError, TypeError, InvalidOperation):
             return value
         last = self._last_valid_daily_energy_value
-        if decimal_value == 0 and last is not None and last > 0 and not self._is_near_daily_reset():
-            _LOGGER.debug(
-                "[%s] Suppressing transient zero (last valid: %s) outside midnight window",
-                self.entity_id,
-                last,
-            )
-            return None
+        today = dt_util.now().date()
+        last_date = self._last_valid_daily_energy_date
+        if decimal_value == 0:
+            if self._is_near_daily_reset() or (last_date is not None and last_date < today):
+                self._last_valid_daily_energy_value = decimal_value
+                self._last_valid_daily_energy_date = today
+                return value
+            if last is not None and last > 0:
+                _LOGGER.debug(
+                    "[%s] Suppressing transient zero (last valid: %s) outside midnight window",
+                    self.entity_id,
+                    last,
+                )
+                return None
         if decimal_value > 0:
             self._last_valid_daily_energy_value = decimal_value
+            self._last_valid_daily_energy_date = today
         return value
 
     def _decode_alarm_bits(self, value: int, alarm_mapping: dict) -> str:
