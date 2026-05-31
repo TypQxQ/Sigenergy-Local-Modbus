@@ -1,5 +1,6 @@
 """Button platform for Sigenergy ESS integration."""
 from __future__ import annotations
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any, Coroutine, Callable, Dict, Optional
@@ -25,7 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 class SigenergyButtonEntityDescription(ButtonEntityDescription):
     """Class describing Sigenergy button entities."""
 
-    press_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any]], Coroutine[Any, Any, None]] = lambda coordinator, identifier: None
+    press_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any]], Coroutine[Any, Any, None]] = lambda coordinator, identifier: asyncio.sleep(0)
     available_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, _: True
 
 PLANT_BUTTONS: list[SigenergyButtonEntityDescription] = [
