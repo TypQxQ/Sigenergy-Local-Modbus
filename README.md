@@ -7,7 +7,7 @@
 [commits-shield]: https://img.shields.io/github/commit-activity/y/TypQxQ/Sigenergy-Local-Modbus.svg
 [commits]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/commits/main
 [license-shield]: https://img.shields.io/github/license/TypQxQ/Sigenergy-Local-Modbus.svg
-[maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [releases-shield]: https://img.shields.io/github/release/TypQxQ/Sigenergy-Local-Modbus.svg
 [releases]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases/latest
 [hacs-badge]: https://img.shields.io/badge/HACS-Default-41BDF5.svg
@@ -37,6 +37,7 @@ More add-ons and enhancements are coming; stay tuned!
 - Sigenergy ESS firmware `SPC109` or newer is required starting with version `v1.1.0` of the integration. If your device runs older firmware and does not auto-update, upgrade the firmware or use a previous integration release until you have updated the firmware.
 - [Home Assistant](https://www.home-assistant.io/) at least version `2026.1`.
 - [Sigenergy ESS](https://www.sigenergy.com/) with Modbus‑TCP enabled by your installer. And preferably confirmed with a screenshot of your `DeviceID`. If using an AC Charger, that will have the id `1` and the inverter has to be set to a higher ID, for example `2`.
+- **Modbus TCP Server enabled in the Sigenergy app.** Since the firmware update in May 2026, Modbus TCP must also be enabled by the end user in the app. Go to **Sigenergy App → Settings → System Settings → Modbus TCP Server Settings** and ensure the server is enabled.
 - Preferably assign a **static IP** to your Sigenergy device in your router to ensure it always receives the same IP address.
 
 ## Installation
@@ -137,6 +138,7 @@ action:
 
 ## Troubleshooting
 - Ensure your installer tapped **SAVE** after enabling Modbus‑TCP on your device.
+- **Ensure Modbus TCP Server is enabled in the Sigenergy app** (Settings → System Settings → Modbus TCP Server Settings). This is required since the May 2026 firmware update. If the connection is not working, try disabling and then re-enabling the Modbus TCP Server in the app.
 - Verify IP and firewall settings.
 - Ensure again Modbus‑TCP is enabled on your ESS.
 - Check Home Assistant logs for `sigen` errors.
