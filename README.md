@@ -7,7 +7,7 @@
 [commits-shield]: https://img.shields.io/github/commit-activity/y/TypQxQ/Sigenergy-Local-Modbus.svg
 [commits]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/commits/main
 [license-shield]: https://img.shields.io/github/license/TypQxQ/Sigenergy-Local-Modbus.svg
-[maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [releases-shield]: https://img.shields.io/github/release/TypQxQ/Sigenergy-Local-Modbus.svg
 [releases]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases/latest
 [hacs-badge]: https://img.shields.io/badge/HACS-Default-41BDF5.svg
