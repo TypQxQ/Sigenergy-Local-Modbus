@@ -34,6 +34,7 @@ from .modbusregisterdefinitions import (
     ModbusRegisterDefinition,
     PLANT_RUNNING_INFO_REGISTERS,
     PLANT_PARAMETER_REGISTERS,
+    PLANT_ESS_PREHEATING_REGISTERS,
     INVERTER_RUNNING_INFO_REGISTERS,
     INVERTER_PARAMETER_REGISTERS,
     AC_CHARGER_RUNNING_INFO_REGISTERS,
@@ -1002,10 +1003,11 @@ class SigenergyModbusHub:
             if self._should_retry_probe("plant"):
                 try:
                     plant_info = self.config_entry.data.get(CONF_PLANT_CONNECTION, {})
-                    # Combine all readable registers for one probe call
                     all_plant_registers = {
                         **PLANT_RUNNING_INFO_REGISTERS,
                         **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+                           if reg.register_type != RegisterType.WRITE_ONLY},
+                        **{name: reg for name, reg in PLANT_ESS_PREHEATING_REGISTERS.items()
                            if reg.register_type != RegisterType.WRITE_ONLY}
                     }
                     _LOGGER.debug("Attempting to probe plant registers on %s...", plant_info)
@@ -1027,6 +1029,8 @@ class SigenergyModbusHub:
         registers_to_read = {
             **PLANT_RUNNING_INFO_REGISTERS,
             **{name: reg for name, reg in PLANT_PARAMETER_REGISTERS.items()
+               if reg.register_type != RegisterType.WRITE_ONLY},
+            **{name: reg for name, reg in PLANT_ESS_PREHEATING_REGISTERS.items()
                if reg.register_type != RegisterType.WRITE_ONLY}
         }
         # _LOGGER.debug("Reading %s Plant registers.", len(registers_to_read))
@@ -1218,7 +1222,7 @@ class SigenergyModbusHub:
         if device_type == "plant":
             connection_dict = self.plant_connection
             # Ensure plant_connection is treated as a dict for type checking
-            parameter_registers = PLANT_PARAMETER_REGISTERS
+            parameter_registers = {**PLANT_PARAMETER_REGISTERS, **PLANT_ESS_PREHEATING_REGISTERS}
         elif device_type == "inverter":
             if not device_identifier:
                 raise ValueError("device_identifier is required for device_type 'inverter'")

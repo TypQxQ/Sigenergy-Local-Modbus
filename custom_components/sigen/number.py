@@ -27,7 +27,9 @@ from .const import (
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
+    DEVICE_TYPE_DC_CHARGER,
     DOMAIN,
+    CONF_INVERTER_HAS_DCCHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator # Import coordinator
 # from .modbus import SigenergyModbusError
@@ -118,7 +120,7 @@ PLANT_NUMBERS = [
         native_max_value=1,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_power_factor_target", 0) / 1000,
+        value_fn=lambda data, _: data["plant"].get("plant_power_factor_target", 0),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_power_factor_target", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -607,8 +609,97 @@ PLANT_NUMBERS = [
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
     ),
-
+    SigenergyNumberEntityDescription(
+        key="plant_pcc_power_factor_grid_import",
+        name="Grid Import Power Factor Adjustment",
+        icon="mdi:sine-wave",
+        native_min_value=-1,
+        native_max_value=1,
+        native_step=0.001,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_pcc_power_factor_grid_import", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcc_power_factor_grid_import", value),
+        entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_pcc_power_factor_grid_export",
+        name="Grid Export Power Factor Adjustment",
+        icon="mdi:sine-wave",
+        native_min_value=-1,
+        native_max_value=1,
+        native_step=0.001,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_pcc_power_factor_grid_export", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcc_power_factor_grid_export", value),
+        entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
+    ),
+    SigenergyNumberEntityDescription(
+        key="plant_ess_preheating_reserved_soc",
+        name="ESS Preheating Reserved SOC",
+        icon="mdi:percent",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.01,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, _: data["plant"].get("plant_ess_preheating_reserved_soc", 0),
+        set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_ess_preheating_reserved_soc", value),
+        entity_registry_enabled_default=False,
+        mode=NumberMode.BOX,
+    ),
 ]
+
+# Add the 30 TOU slot numbers dynamically (start_time, end_time, target_power)
+for i in range(1, 31):
+    PLANT_NUMBERS.append(
+        SigenergyNumberEntityDescription(
+            key=f"plant_ess_preheating_tou_{i}_start_time",
+            name=f"ESS Preheating TOU Slot {i} Start Time",
+            icon="mdi:clock-start",
+            native_min_value=0,
+            native_max_value=2147483647,
+            native_step=1,
+            entity_category=EntityCategory.CONFIG,
+            value_fn=lambda data, _, slot=i: data["plant"].get(f"plant_ess_preheating_tou_{slot}_start_time", 0),
+            set_value_fn=lambda coordinator, _, value, slot=i: coordinator.async_write_parameter("plant", None, f"plant_ess_preheating_tou_{slot}_start_time", int(value)),
+            entity_registry_enabled_default=False,
+            mode=NumberMode.BOX,
+        )
+    )
+    PLANT_NUMBERS.append(
+        SigenergyNumberEntityDescription(
+            key=f"plant_ess_preheating_tou_{i}_end_time",
+            name=f"ESS Preheating TOU Slot {i} End Time",
+            icon="mdi:clock-end",
+            native_min_value=0,
+            native_max_value=2147483647,
+            native_step=1,
+            entity_category=EntityCategory.CONFIG,
+            value_fn=lambda data, _, slot=i: data["plant"].get(f"plant_ess_preheating_tou_{slot}_end_time", 0),
+            set_value_fn=lambda coordinator, _, value, slot=i: coordinator.async_write_parameter("plant", None, f"plant_ess_preheating_tou_{slot}_end_time", int(value)),
+            entity_registry_enabled_default=False,
+            mode=NumberMode.BOX,
+        )
+    )
+    PLANT_NUMBERS.append(
+        SigenergyNumberEntityDescription(
+            key=f"plant_ess_preheating_tou_{i}_target_power",
+            name=f"ESS Preheating TOU Slot {i} Target Power",
+            icon="mdi:radiator",
+            device_class=NumberDeviceClass.POWER,
+            native_unit_of_measurement=UnitOfPower.KILO_WATT,
+            native_min_value=-100,
+            native_max_value=100,
+            native_step=0.001,
+            entity_category=EntityCategory.CONFIG,
+            value_fn=lambda data, _, slot=i: data["plant"].get(f"plant_ess_preheating_tou_{slot}_target_power", 0),
+            set_value_fn=lambda coordinator, _, value, slot=i: coordinator.async_write_parameter("plant", None, f"plant_ess_preheating_tou_{slot}_target_power", value),
+            entity_registry_enabled_default=False,
+            mode=NumberMode.BOX,
+        )
+    )
 
 INVERTER_NUMBERS = [
     SigenergyNumberEntityDescription(
@@ -706,7 +797,36 @@ AC_CHARGER_NUMBERS = [
     ),
 ]
 
-DC_CHARGER_NUMBERS = []
+DC_CHARGER_NUMBERS = [
+    SigenergyNumberEntityDescription(
+        key="dc_charger_max_charging_power_limit",
+        name="Max Charging Power Limit",
+        icon="mdi:flash",
+        device_class=NumberDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.001,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, identifier: data["dc_chargers"].get(identifier, {}).get("dc_charger_max_charging_power_limit", 0),
+        set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_max_charging_power_limit", value),
+        mode=NumberMode.BOX,
+    ),
+    SigenergyNumberEntityDescription(
+        key="dc_charger_max_discharging_power_limit",
+        name="Max Discharging Power Limit",
+        icon="mdi:flash-outline",
+        device_class=NumberDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.001,
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda data, identifier: data["dc_chargers"].get(identifier, {}).get("dc_charger_max_discharging_power_limit", 0),
+        set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_max_discharging_power_limit", value),
+        mode=NumberMode.BOX,
+    ),
+]
 
 
 async def async_setup_entry(
@@ -738,6 +858,31 @@ async def async_setup_entry(
                                            SigenergyNumber,
                                            AC_CHARGER_NUMBERS,
                                            DEVICE_TYPE_AC_CHARGER)
+
+    # Add DC Charger numbers
+    for device_name, device_conn in coordinator.hub.inverter_connections.items():
+        if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
+            from .common import generate_device_id
+            dc_name = f"{device_name} DC Charger"
+            parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
+            dc_id = f"{parent_inverter_id}_dc_charger"
+            dc_device_info = DeviceInfo(
+                identifiers={(DOMAIN, dc_id)},
+                name=dc_name,
+                manufacturer="Sigenergy",
+                model="DC Charger",
+                via_device=(DOMAIN, parent_inverter_id),
+            )
+            entities += generate_sigen_entity(
+                plant_name,
+                device_name,
+                device_conn,
+                coordinator,
+                SigenergyNumber,
+                DC_CHARGER_NUMBERS,
+                DEVICE_TYPE_DC_CHARGER,
+                device_info=dc_device_info,
+            )
 
     async_add_entities(entities)
 

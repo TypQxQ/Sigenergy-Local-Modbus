@@ -72,6 +72,24 @@ PLANT_SWITCHES: list[SigenergySwitchEntityDescription] = [
         turn_off_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_independent_phase_power_control_enable", 0),
         entity_registry_enabled_default=False,
     ),
+    SigenergySwitchEntityDescription(
+        key="plant_ess_preheating_enable",
+        name="ESS Preheating Enable",
+        icon="mdi:radiator",
+        is_on_fn=lambda data, _: data.get("plant", {}).get("plant_ess_preheating_enable") == 1,
+        turn_on_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_ess_preheating_enable", 1),
+        turn_off_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_ess_preheating_enable", 0),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySwitchEntityDescription(
+        key="plant_ess_preheating_advance_enable",
+        name="ESS Preheating Advance Enable",
+        icon="mdi:clock-fast",
+        is_on_fn=lambda data, _: data.get("plant", {}).get("plant_ess_preheating_advance_enable") == 1,
+        turn_on_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_ess_preheating_advance_enable", 1),
+        turn_off_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_ess_preheating_advance_enable", 0),
+        entity_registry_enabled_default=False,
+    ),
 ]
 
 INVERTER_SWITCHES: list[SigenergySwitchEntityDescription] = [
@@ -93,7 +111,7 @@ AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         name="AC Charger Power",
         icon="mdi:ev-station",
         # identifier here will be ac_charger_name
-        is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") in (3,4,5),
+        is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") in (2,3,4,5),
         # Check if EV is connected (State != 0 (Init) and != 1 (A1_A2))
         available_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") not in (0, 1),
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
