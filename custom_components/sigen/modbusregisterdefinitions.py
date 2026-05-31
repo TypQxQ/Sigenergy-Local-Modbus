@@ -166,6 +166,8 @@ class RemoteEMSControlMode(IntEnum):
     COMMAND_CHARGING_PV_FIRST = 4
     COMMAND_DISCHARGING_PV_FIRST = 5
     COMMAND_DISCHARGING_ESS_FIRST = 6
+    RESERVED = 7
+    V2G = 8
 
 # Output types
 class OutputType(IntEnum):
@@ -1331,59 +1333,32 @@ PLANT_RUNNING_INFO_REGISTERS = {
         unit=UnitOfPower.KILO_WATT,
         description="Total load power",
     ),
-    "plant_grid_sensor_phase_a_voltage": ModbusRegisterDefinition(
+    "plant_pv_total_daily_generation": ModbusRegisterDefinition(
+        address=30272,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="PV total daily generation",
+    ),
+    "plant_pv_generation_previous_day": ModbusRegisterDefinition(
+        address=30274,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="PV total generation of previous day",
+    ),
+    "plant_ess_average_cell_temperature": ModbusRegisterDefinition(
         address=30286,
-        count=2,
+        count=1,
         register_type=RegisterType.READ_ONLY,
-        data_type=DataType.S32,
-        gain=100,
-        unit=UnitOfElectricPotential.VOLT,
-        description="Grid sensor Phase A Voltage",
-    ),
-    "plant_grid_sensor_phase_b_voltage": ModbusRegisterDefinition(
-        address=30288,
-        count=2,
-        register_type=RegisterType.READ_ONLY,
-        data_type=DataType.S32,
-        gain=100,
-        unit=UnitOfElectricPotential.VOLT,
-        description="Grid sensor Phase B Voltage",
-    ),
-    "plant_grid_sensor_phase_c_voltage": ModbusRegisterDefinition(
-        address=30290,
-        count=2,
-        register_type=RegisterType.READ_ONLY,
-        data_type=DataType.S32,
-        gain=100,
-        unit=UnitOfElectricPotential.VOLT,
-        description="Grid sensor Phase C Voltage",
-    ),
-    "plant_grid_sensor_phase_a_current": ModbusRegisterDefinition(
-        address=30292,
-        count=2,
-        register_type=RegisterType.READ_ONLY,
-        data_type=DataType.S32,
-        gain=100,
-        unit=UnitOfElectricCurrent.AMPERE,
-        description="Grid sensor Phase A Current",
-    ),
-    "plant_grid_sensor_phase_b_current": ModbusRegisterDefinition(
-        address=30294,
-        count=2,
-        register_type=RegisterType.READ_ONLY,
-        data_type=DataType.S32,
-        gain=100,
-        unit=UnitOfElectricCurrent.AMPERE,
-        description="Grid sensor Phase B Current",
-    ),
-    "plant_grid_sensor_phase_c_current": ModbusRegisterDefinition(
-        address=30296,
-        count=2,
-        register_type=RegisterType.READ_ONLY,
-        data_type=DataType.S32,
-        gain=100,
-        unit=UnitOfElectricCurrent.AMPERE,
-        description="Grid sensor Phase C Current",
+        data_type=DataType.S16,
+        gain=10,
+        unit=UnitOfTemperature.CELSIUS,
+        description="ESS Average cell temperature",
     ),
 }
 
@@ -1843,7 +1818,99 @@ PLANT_PARAMETER_REGISTERS = {
         unit=UnitOfFrequency.HERTZ,
         description="[Grid code] Under-frequency power boost cut-off frequency. Range: [0.8*Fn, 1.0*Fn]",
     ),
+    "plant_pcc_power_factor_grid_import": ModbusRegisterDefinition(
+        address=40157,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.S16,
+        gain=1000,
+        description="PCC Power factor adjustment (Grid import). Range: (-1, -0.8] ∪ [0.8, 1]",
+    ),
+    "plant_pcc_power_factor_grid_export": ModbusRegisterDefinition(
+        address=40158,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.S16,
+        gain=1000,
+        description="PCC Power factor adjustment (Grid export). Range: (-1, -0.8] ∪ [0.8, 1]",
+    ),
+    "plant_grid_power_loss_lockout_alarm_clear": ModbusRegisterDefinition(
+        address=40159,
+        count=1,
+        register_type=RegisterType.WRITE_ONLY,
+        data_type=DataType.U16,
+        gain=1,
+        description="Grid Power Loss Lockout Alarm Clear (1 = clear)",
+    ),
 }
+
+# ESS Preheating TOU registers
+PLANT_ESS_PREHEATING_REGISTERS = {
+    "plant_ess_preheating_enable": ModbusRegisterDefinition(
+        address=50000,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=1,
+        description="ESS preheating enable (0: disable, 1: enable)",
+    ),
+    "plant_ess_preheating_mode": ModbusRegisterDefinition(
+        address=50001,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=1,
+        description="ESS preheating mode (0: automatic, 1: manual)",
+    ),
+    "plant_ess_preheating_advance_enable": ModbusRegisterDefinition(
+        address=50002,
+        count=1,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U16,
+        gain=1,
+        description="ESS preheating advance enable (0: disable, 1: enable)",
+    ),
+}
+
+# Add the 30 TOU slots
+for i in range(1, 31):
+    PLANT_ESS_PREHEATING_REGISTERS[f"plant_ess_preheating_tou_{i}_start_time"] = ModbusRegisterDefinition(
+        address=50003 + (i - 1) * 6,
+        count=2,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U32,
+        gain=1,
+        unit="s",
+        description=f"ESS preheating TOU slot {i} start time (Epoch seconds)",
+    )
+    PLANT_ESS_PREHEATING_REGISTERS[f"plant_ess_preheating_tou_{i}_end_time"] = ModbusRegisterDefinition(
+        address=50005 + (i - 1) * 6,
+        count=2,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U32,
+        gain=1,
+        unit="s",
+        description=f"ESS preheating TOU slot {i} end time (Epoch seconds)",
+    )
+    PLANT_ESS_PREHEATING_REGISTERS[f"plant_ess_preheating_tou_{i}_target_power"] = ModbusRegisterDefinition(
+        address=50007 + (i - 1) * 6,
+        count=2,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.S32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description=f"ESS preheating TOU slot {i} target power",
+    )
+
+PLANT_ESS_PREHEATING_REGISTERS["plant_ess_preheating_reserved_soc"] = ModbusRegisterDefinition(
+    address=50183,
+    count=1,
+    register_type=RegisterType.HOLDING,
+    data_type=DataType.U16,
+    gain=100,
+    unit=PERCENTAGE,
+    description="ESS preheating reserved SOC [0, 100.0]",
+)
 
 INVERTER_RUNNING_INFO_REGISTERS = {
     "inverter_model_type": ModbusRegisterDefinition(
@@ -3383,6 +3450,76 @@ DC_CHARGER_RUNNING_INFO_REGISTERS = {
         description="[DC Charger] Running state (Refer to Appendix 14)",
         applicable_to=["hybrid_inverter"],
     ),
+    "dc_charger_discharging_current": ModbusRegisterDefinition(
+        address=31514,
+        count=1,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U16,
+        gain=10,
+        unit=UnitOfElectricCurrent.AMPERE,
+        description="Discharging current",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "dc_charger_current_discharging_capacity": ModbusRegisterDefinition(
+        address=31515,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Current discharging capacity (single time)",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "dc_charger_current_discharging_duration": ModbusRegisterDefinition(
+        address=31517,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=1,
+        unit="s",
+        description="Current discharging duration (single time)",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "dc_charger_total_charging_capacity": ModbusRegisterDefinition(
+        address=31519,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total charging capacity",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "dc_charger_total_discharging_capacity": ModbusRegisterDefinition(
+        address=31521,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=100,
+        unit=UnitOfEnergy.KILO_WATT_HOUR,
+        description="Total discharging capacity",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "dc_charger_rated_charging_power": ModbusRegisterDefinition(
+        address=31523,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Rated charging power",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "dc_charger_rated_discharging_power": ModbusRegisterDefinition(
+        address=31525,
+        count=2,
+        register_type=RegisterType.READ_ONLY,
+        data_type=DataType.U32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Rated discharging power",
+        applicable_to=["hybrid_inverter"],
+    ),
 }
 
 DC_CHARGER_PARAMETER_REGISTERS = {
@@ -3393,6 +3530,26 @@ DC_CHARGER_PARAMETER_REGISTERS = {
         data_type=DataType.U16,
         gain=1,
         description="DC Charger Start/Stop (0: Start 1: Stop)",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "dc_charger_max_charging_power_limit": ModbusRegisterDefinition(
+        address=41002,
+        count=2,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Max charging power limit [0, rated]",
+        applicable_to=["hybrid_inverter"],
+    ),
+    "dc_charger_max_discharging_power_limit": ModbusRegisterDefinition(
+        address=41004,
+        count=2,
+        register_type=RegisterType.HOLDING,
+        data_type=DataType.U32,
+        gain=1000,
+        unit=UnitOfPower.KILO_WATT,
+        description="Max discharging power limit [0, rated]",
         applicable_to=["hybrid_inverter"],
     ),
 }

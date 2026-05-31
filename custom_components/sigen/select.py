@@ -110,6 +110,7 @@ PLANT_SELECTS = [
             "Command Charging (PV First)",
             "Command Discharging (PV First)",
             "Command Discharging (ESS First)",
+            "V2G",
             "Unknown",
         ],
         current_option_fn=lambda data, _: {
@@ -120,6 +121,7 @@ PLANT_SELECTS = [
             RemoteEMSControlMode.COMMAND_CHARGING_PV_FIRST: "Command Charging (PV First)",
             RemoteEMSControlMode.COMMAND_DISCHARGING_PV_FIRST: "Command Discharging (PV First)",
             RemoteEMSControlMode.COMMAND_DISCHARGING_ESS_FIRST: "Command Discharging (ESS First)",
+            RemoteEMSControlMode.V2G: "V2G",
         }.get(data["plant"].get("plant_remote_ems_control_mode"), "Unknown"),
         select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
             "plant", None, "plant_remote_ems_control_mode",
@@ -131,9 +133,22 @@ PLANT_SELECTS = [
                 "Command Charging (PV First)": RemoteEMSControlMode.COMMAND_CHARGING_PV_FIRST,
                 "Command Discharging (PV First)": RemoteEMSControlMode.COMMAND_DISCHARGING_PV_FIRST,
                 "Command Discharging (ESS First)": RemoteEMSControlMode.COMMAND_DISCHARGING_ESS_FIRST,
+                "V2G": RemoteEMSControlMode.V2G,
             }.get(option, RemoteEMSControlMode.PCS_REMOTE_CONTROL),
         ),
         available_fn=lambda data, _: data["plant"].get("plant_remote_ems_enable") == 1,
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySelectEntityDescription(
+        key="plant_ess_preheating_mode",
+        name="ESS Preheating Mode",
+        icon="mdi:radiator",
+        options=["Automatic", "Manual"],
+        entity_category=EntityCategory.CONFIG,
+        current_option_fn=lambda data, _: "Manual" if data["plant"].get("plant_ess_preheating_mode") == 1 else "Automatic",
+        select_option_fn=lambda coordinator, _, option: coordinator.async_write_parameter(
+            "plant", None, "plant_ess_preheating_mode", 1 if option == "Manual" else 0
+        ),
         entity_registry_enabled_default=False,
     ),
     # Modbus v2.8 additions - Grid code parameters

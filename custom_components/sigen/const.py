@@ -65,7 +65,7 @@ DEFAULT_READ_ONLY = True  # Default to read-only mode
 DEFAULT_MIN_INTEGRATION_TIME = 1  # Minimum integration time in seconds
 
 # Platforms
-PLATFORMS = ["sensor", "switch", "select", "number", "binary_sensor"]
+PLATFORMS = ["sensor", "switch", "select", "number", "binary_sensor", "button"]
 
 # Device types
 DEVICE_TYPE_NEW_PLANT = "new_plant"

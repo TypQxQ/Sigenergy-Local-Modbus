@@ -72,6 +72,24 @@ PLANT_SWITCHES: list[SigenergySwitchEntityDescription] = [
         turn_off_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_independent_phase_power_control_enable", 0),
         entity_registry_enabled_default=False,
     ),
+    SigenergySwitchEntityDescription(
+        key="plant_ess_preheating_enable",
+        name="ESS Preheating Enable",
+        icon="mdi:radiator",
+        is_on_fn=lambda data, _: data.get("plant", {}).get("plant_ess_preheating_enable") == 1,
+        turn_on_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_ess_preheating_enable", 1),
+        turn_off_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_ess_preheating_enable", 0),
+        entity_registry_enabled_default=False,
+    ),
+    SigenergySwitchEntityDescription(
+        key="plant_ess_preheating_advance_enable",
+        name="ESS Preheating Advance Enable",
+        icon="mdi:clock-fast",
+        is_on_fn=lambda data, _: data.get("plant", {}).get("plant_ess_preheating_advance_enable") == 1,
+        turn_on_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_ess_preheating_advance_enable", 1),
+        turn_off_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_ess_preheating_advance_enable", 0),
+        entity_registry_enabled_default=False,
+    ),
 ]
 
 INVERTER_SWITCHES: list[SigenergySwitchEntityDescription] = [
