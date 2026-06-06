@@ -2,6 +2,7 @@
 from __future__ import annotations
 import logging
 import asyncio
+import time
 from dataclasses import dataclass
 from typing import Any, Coroutine, Callable, Dict, Optional
 
@@ -26,6 +27,10 @@ from .coordinator import SigenergyDataUpdateCoordinator # Import coordinator
 from .sigen_entity import SigenergyEntity # Import the new base class
 
 _LOGGER = logging.getLogger(__name__)
+
+# Grace window for active states (3/4/5) to allow hardware to transition
+# after a write, before reverting to reporting the real hardware state.
+_AC_CHARGER_FORCE_OFF_ACTIVE_GRACE = 120
 
 
 @dataclass(frozen=True)
@@ -113,7 +118,7 @@ AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         # identifier here will be ac_charger_name
         is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") in (2,3,4,5),
         # Check if EV is connected (State != 0 (Init) and != 1 (A1_A2))
-        available_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") not in (0, 1),
+        available_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") not in (None, 0, 1),
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
     ),
@@ -219,6 +224,19 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
             device_info=device_info,
             pv_string_idx=pv_string_idx,
         )
+        # Optimistic state tracking for AC charger (#349 / #365)
+        self._ac_charger_force_off: bool = False
+        self._ac_charger_force_off_at: float = 0.0  # time.monotonic() timestamp
+
+    def _clear_ac_charger_force_off(self) -> None:
+        """Clear the optimistic force-off flag if set."""
+        if self._ac_charger_force_off:
+            _LOGGER.debug(
+                "Clearing AC charger force-off flag for %s",
+                self.entity_id,
+            )
+            self._ac_charger_force_off = False
+            self._ac_charger_force_off_at = 0.0
 
     @property
     def available(self) -> bool:
@@ -228,7 +246,20 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
 
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
-        return self.entity_description.available_fn(self.coordinator.data, identifier)
+        result = self.entity_description.available_fn(self.coordinator.data, identifier)
+        if not result and self.entity_description.key == "ac_charger_start_stop":
+            # Check why it's unavailable.
+            # If it's a true terminal disconnection (state 0 or 1), clear the flag.
+            # If it's None (read failure), do NOT clear the flag.
+            if self.coordinator.data is not None:
+                state = (
+                    self.coordinator.data.get("ac_chargers", {})
+                    .get(identifier, {})
+                    .get("ac_charger_system_state")
+                )
+                if state in (0, 1):
+                    self._clear_ac_charger_force_off()
+        return result
 
     @property
     def is_on(self) -> bool | None:
@@ -236,14 +267,74 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
         if self.coordinator.data is None:
             return None
         identifier = self._device_name
-        return self.entity_description.is_on_fn(self.coordinator.data, identifier)
+        result = self.entity_description.is_on_fn(self.coordinator.data, identifier)
+
+        if self.entity_description.key == "ac_charger_start_stop" and self._ac_charger_force_off:
+            state = (
+                self.coordinator.data.get("ac_chargers", {})
+                .get(identifier, {})
+                .get("ac_charger_system_state")
+            )
+            elapsed = time.monotonic() - self._ac_charger_force_off_at
+
+            if state in (6, 7):
+                # Definitive non-ON state — the charger faulted or errored.
+                # Clear the flag and report the real state.
+                self._clear_ac_charger_force_off()
+            elif state is None:
+                # Read failure / missing data — keep flag, return False (entity will show as unavailable via available_fn)
+                return False
+            elif state in (3, 4, 5):
+                # Active states (Preparing, EV Ready, Charging)
+                if elapsed > _AC_CHARGER_FORCE_OFF_ACTIVE_GRACE:
+                    # Beyond the transition window, this is a real active state.
+                    # Clear override and show actual state.
+                    _LOGGER.debug(
+                        "AC charger in active state %s after grace window (%.1fs) for %s, "
+                        "clearing force-off",
+                        state,
+                        elapsed,
+                        self.entity_id,
+                    )
+                    self._clear_ac_charger_force_off()
+                else:
+                    # Within the transition window, override to OFF to cover stale reads
+                    return False
+            elif state == 2:
+                # State is 2 (Reserving) — override to OFF.
+                # Do NOT clear the flag due to TTL while state is 2.
+                return False
+            else:
+                # State is 0 or 1 (Initializing, Not Connected).
+                # Clear the flag and report the real state.
+                self._clear_ac_charger_force_off()
+
+        return result
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
         if self.coordinator.data is None:
             raise HomeAssistantError(f"Cannot turn on {self.entity_id}: Coordinator data is unavailable")
         identifier = self._device_name
-        await self.entity_description.turn_on_fn(self.coordinator, identifier)
+
+        # Snapshot the flag so we can restore on failure
+        is_ac_charger = self.entity_description.key == "ac_charger_start_stop"
+        prev_force_off = self._ac_charger_force_off
+        prev_force_off_at = self._ac_charger_force_off_at
+
+        # Tentatively clear — user wants the charger on
+        if is_ac_charger:
+            self._clear_ac_charger_force_off()
+
+        try:
+            await self.entity_description.turn_on_fn(self.coordinator, identifier)
+        except Exception:
+            # Write failed — restore the previous flag
+            if is_ac_charger:
+                self._ac_charger_force_off = prev_force_off
+                self._ac_charger_force_off_at = prev_force_off_at
+            raise
+
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -251,5 +342,20 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
         if self.coordinator.data is None:
             raise HomeAssistantError(f"Cannot turn off {self.entity_id}: Coordinator data is unavailable")
         identifier = self._device_name
-        await self.entity_description.turn_off_fn(self.coordinator, identifier)
+
+        # Set optimistic flag BEFORE write — the write triggers an internal
+        # refresh that may publish state 2 as ON before we return.
+        is_ac_charger = self.entity_description.key == "ac_charger_start_stop"
+        if is_ac_charger:
+            self._ac_charger_force_off = True
+            self._ac_charger_force_off_at = time.monotonic()
+
+        try:
+            await self.entity_description.turn_off_fn(self.coordinator, identifier)
+        except Exception:
+            # Write failed — roll back the flag
+            if is_ac_charger:
+                self._clear_ac_charger_force_off()
+            raise
+
         await self.coordinator.async_request_refresh()

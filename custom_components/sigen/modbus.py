@@ -1211,8 +1211,7 @@ class SigenergyModbusHub:
             ValueError: If device_type is invalid or device_identifier is missing when required.
         """
         if self.read_only:
-            _LOGGER.error("Cannot write parameter while in read-only mode")
-            return
+            raise SigenergyModbusError("Cannot write parameter while in read-only mode")
 
         slave_id: Optional[int] = None
         parameter_registers: Dict[str, ModbusRegisterDefinition] = {}
