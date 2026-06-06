@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .common import generate_sigen_entity, generate_device_id
 from .const import (
@@ -195,7 +196,7 @@ async def async_setup_entry(
         _LOGGER.debug("No switch entities to add.")
 
 
-class SigenergySwitch(SigenergyEntity, SwitchEntity):
+class SigenergySwitch(SigenergyEntity, SwitchEntity, RestoreEntity):
     """Representation of a Sigenergy switch."""
 
     entity_description: SigenergySwitchEntityDescription
@@ -227,6 +228,52 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
         # Optimistic state tracking for AC charger (#349 / #365)
         self._ac_charger_force_off: bool = False
         self._ac_charger_force_off_at: float = 0.0  # time.monotonic() timestamp
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+
+        if self.entity_description.key == "ac_charger_start_stop":
+            state = await self.async_get_last_state()
+            if state is not None:
+                # Restore the force-off flag if it was active
+                force_off = state.attributes.get("ac_charger_force_off", False)
+                force_off_at_utc = state.attributes.get("ac_charger_force_off_at_utc")
+                if force_off and force_off_at_utc is not None:
+                    try:
+                        from datetime import datetime, timezone
+                        dt = datetime.fromisoformat(force_off_at_utc)
+                        elapsed_seconds = (datetime.now(timezone.utc) - dt).total_seconds()
+                        
+                        # Recreate the monotonic timestamp
+                        self._ac_charger_force_off = True
+                        self._ac_charger_force_off_at = time.monotonic() - elapsed_seconds
+                        _LOGGER.debug(
+                            "Restored AC charger force-off state for %s. Created %.1fs ago",
+                            self.entity_id,
+                            elapsed_seconds,
+                        )
+                    except Exception as ex:
+                        _LOGGER.warning(
+                            "Failed to restore AC charger force-off timestamp for %s: %s",
+                            self.entity_id,
+                            ex,
+                        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra state attributes."""
+        attrs = super().extra_state_attributes or {}
+        if self.entity_description.key == "ac_charger_start_stop" and self._ac_charger_force_off:
+            from datetime import datetime, timezone, timedelta
+            elapsed = time.monotonic() - self._ac_charger_force_off_at
+            utc_time = datetime.now(timezone.utc) - timedelta(seconds=elapsed)
+            return {
+                **attrs,
+                "ac_charger_force_off": True,
+                "ac_charger_force_off_at_utc": utc_time.isoformat(),
+            }
+        return attrs
 
     def _clear_ac_charger_force_off(self) -> None:
         """Clear the optimistic force-off flag if set."""
