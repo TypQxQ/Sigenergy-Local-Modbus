@@ -13,7 +13,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.exceptions import HomeAssistantError
 
-from .common import ac_charger_command_available, generate_sigen_entity, generate_device_id
+from .common import generate_sigen_entity, generate_device_id
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_DC_CHARGER,
@@ -41,6 +41,11 @@ class SigenergySwitchEntityDescription(SwitchEntityDescription):
     turn_off_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any]], Coroutine[Any, Any, None]] = lambda coordinator, identifier: asyncio.sleep(0) # Placeholder async lambda
     available_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, _: True
     entity_registry_enabled_default: bool = True
+
+
+def _deprecated_ac_charger_switch_available(data: Dict[str, Any], identifier: Optional[Any]) -> bool:
+    """Preserve legacy switch availability when charger state is missing."""
+    return data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") not in (0, 1)
 
 
 PLANT_SWITCHES: list[SigenergySwitchEntityDescription] = [
@@ -113,7 +118,7 @@ AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         # identifier here will be ac_charger_name
         is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") in (2,3,4,5),
         # Check if EV is connected (State != 0 (Init) and != 1 (A1_A2))
-        available_fn=ac_charger_command_available,
+        available_fn=_deprecated_ac_charger_switch_available,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
         entity_registry_enabled_default=False,
