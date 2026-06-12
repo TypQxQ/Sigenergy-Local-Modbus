@@ -9,11 +9,13 @@ from homeassistant.components.button import ButtonEntity, ButtonEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .common import generate_sigen_entity
+from .common import ac_charger_command_available, generate_sigen_entity
 from .const import (
+    DEVICE_TYPE_AC_CHARGER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
 )
@@ -29,6 +31,7 @@ class SigenergyButtonEntityDescription(ButtonEntityDescription):
     press_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any]], Coroutine[Any, Any, None]] = lambda coordinator, identifier: asyncio.sleep(0)
     available_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, _: True
 
+
 PLANT_BUTTONS: list[SigenergyButtonEntityDescription] = [
     SigenergyButtonEntityDescription(
         key="plant_grid_power_loss_lockout_alarm_clear",
@@ -36,6 +39,23 @@ PLANT_BUTTONS: list[SigenergyButtonEntityDescription] = [
         icon="mdi:alarm-check",
         press_fn=lambda coordinator, _: coordinator.async_write_parameter("plant", None, "plant_grid_power_loss_lockout_alarm_clear", 1),
         entity_category=EntityCategory.CONFIG,
+    ),
+]
+
+AC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
+    SigenergyButtonEntityDescription(
+        key="ac_charger_start",
+        name="Start Charging",
+        icon="mdi:ev-plug-type2",
+        press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
+        available_fn=ac_charger_command_available,
+    ),
+    SigenergyButtonEntityDescription(
+        key="ac_charger_stop",
+        name="Stop Charging",
+        icon="mdi:ev-plug-type2-off",
+        press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
+        available_fn=ac_charger_command_available,
     ),
 ]
 
@@ -57,6 +77,19 @@ async def async_setup_entry(
         PLANT_BUTTONS,
         DEVICE_TYPE_PLANT,
     )
+
+    for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
+        entities.extend(
+            generate_sigen_entity(
+                plant_name,
+                device_name,
+                device_conn,
+                coordinator,
+                SigenergyButton,
+                AC_CHARGER_BUTTONS,
+                DEVICE_TYPE_AC_CHARGER,
+            )
+        )
 
     if entities:
         async_add_entities(entities)
@@ -101,5 +134,7 @@ class SigenergyButton(SigenergyEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Press the button."""
+        if self.coordinator.data is None:
+            raise HomeAssistantError(f"Cannot press {self.entity_id}: Coordinator data is unavailable")
         identifier = self._device_name
         await self.entity_description.press_fn(self.coordinator, identifier)

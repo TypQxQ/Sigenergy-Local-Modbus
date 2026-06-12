@@ -18,6 +18,12 @@ from .const import (DOMAIN, DEVICE_TYPE_INVERTER, DEVICE_TYPE_DC_CHARGER)
 _LOGGER = logging.getLogger(__name__)
 
 
+def ac_charger_command_available(data: Dict[str, Any], identifier: Optional[Any]) -> bool:
+    """Return if AC charger start/stop commands should be exposed."""
+    state = data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state")
+    return state is not None and state not in (0, 1)
+
+
 def get_suffix_if_not_one(name: str) -> str:
     """Get the last part of the name if it is a number other than 1."""
     return name.split()[-1].strip() + " " if len(name.split()) > 1 and name.split()[-1].isdigit() and name.split()[-1] != "1" else ""
