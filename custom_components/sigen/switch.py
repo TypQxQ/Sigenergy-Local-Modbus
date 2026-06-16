@@ -24,6 +24,7 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator # Import coordinator
 from .sigen_entity import SigenergyEntity # Import the new base class
+from .modbusregisterdefinitions import DCChargerRunningState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -130,8 +131,13 @@ DC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         key="dc_charging",
         name="DC Charging",
         icon="mdi:ev-station",
-        # CHANGED: is_on_fn now checks != 0 to reflect both charging (positive) and discharging (negative) states
-        is_on_fn=lambda data, identifier: (data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_output_power", 0) or 0) != 0,
+        # is_on reflects the reported running state (CHARGING or DISCHARGING), not
+        # instantaneous output power. During a genuine session the output power
+        # momentarily reads exactly 0.0 kW at taper/handshake/cycle boundaries, which
+        # made an `output_power != 0` test flap the switch off/on every poll (and, via
+        # plug-in negotiation, a brief on/off on every connect). running_state is the
+        # stable signal and still covers both charging and discharging (like the AC charger).
+        is_on_fn=lambda data, identifier: data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_running_state") in (DCChargerRunningState.CHARGING, DCChargerRunningState.DISCHARGING),
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
     ),
