@@ -13,10 +13,17 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .common import ac_charger_command_available, generate_sigen_entity
+from .common import (
+    ac_charger_command_available,
+    dc_charger_command_available,
+    generate_device_id,
+    generate_sigen_entity,
+)
 from .const import (
     DEVICE_TYPE_AC_CHARGER,
+    DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_PLANT,
+    CONF_INVERTER_HAS_DCCHARGER,
     DOMAIN,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
@@ -59,6 +66,23 @@ AC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
     ),
 ]
 
+DC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
+    SigenergyButtonEntityDescription(
+        key="dc_charger_start",
+        name="Start Charging",
+        icon="mdi:ev-plug-ccs2",
+        press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
+        available_fn=dc_charger_command_available,
+    ),
+    SigenergyButtonEntityDescription(
+        key="dc_charger_stop",
+        name="Stop Charging",
+        icon="mdi:ev-plug-ccs2",
+        press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
+        available_fn=dc_charger_command_available,
+    ),
+]
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -77,6 +101,31 @@ async def async_setup_entry(
         PLANT_BUTTONS,
         DEVICE_TYPE_PLANT,
     )
+
+    for device_name, device_conn in coordinator.hub.inverter_connections.items():
+        if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
+            dc_name = f"{device_name} DC Charger"
+            parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
+            dc_id = f"{parent_inverter_id}_dc_charger"
+            dc_device_info = DeviceInfo(
+                identifiers={(DOMAIN, dc_id)},
+                name=dc_name,
+                manufacturer="Sigenergy",
+                model="DC Charger",
+                via_device=(DOMAIN, parent_inverter_id),
+            )
+            entities.extend(
+                generate_sigen_entity(
+                    plant_name,
+                    device_name,
+                    device_conn,
+                    coordinator,
+                    SigenergyButton,
+                    DC_CHARGER_BUTTONS,
+                    DEVICE_TYPE_DC_CHARGER,
+                    device_info=dc_device_info,
+                )
+            )
 
     for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
         entities.extend(
