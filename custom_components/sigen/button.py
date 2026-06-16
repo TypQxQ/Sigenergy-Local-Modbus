@@ -77,11 +77,12 @@ DC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
     SigenergyButtonEntityDescription(
         key="dc_charger_stop",
         name="Stop Charging",
-        icon="mdi:ev-plug-ccs2",
+        icon="mdi:ev-plug-ccs2-off",
         press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
         available_fn=dc_charger_command_available,
     ),
 ]
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
