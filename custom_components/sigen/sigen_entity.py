@@ -4,7 +4,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
+from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_registry import (
+    RegistryEntryHider,
+    async_get as async_get_entity_registry,
+)
 from homeassistant.helpers.update_coordinator import CoordinatorEntity  # pylint: disable=syntax-error
 
 from .const import (
@@ -15,7 +20,11 @@ from .const import (
     DEVICE_TYPE_DC_CHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
-from .common import generate_unique_entity_id, generate_device_id
+from .common import (
+    generate_device_id,
+    generate_unique_entity_id,
+    get_entity_register_support,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,6 +100,7 @@ class SigenergyEntity(CoordinatorEntity):
         self._device_name = device_name  # Store device name (e.g., "Inverter 1", "Plant", "AC Charger 1")
         self._pv_string_idx = pv_string_idx
         self._device_info_override = device_info
+        self._unsupported_removal_requested = False
 
         # Set unique ID
         self._attr_unique_id = generate_unique_entity_id(
@@ -104,6 +114,60 @@ class SigenergyEntity(CoordinatorEntity):
             self._attr_device_info = _generate_device_info(
                 device_type, device_name, coordinator
             )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data and remove newly confirmed unsupported entities."""
+        if self._unsupported_removal_requested:
+            return
+
+        register_support, register_support_keys = get_entity_register_support(
+            self.hub,
+            self._device_type,
+            self._device_name,
+            self.entity_description,
+            self._pv_string_idx,
+        )
+
+        registry_entry = self.registry_entry
+        if (
+            register_support is True
+            and registry_entry is not None
+            and registry_entry.hidden_by is RegistryEntryHider.INTEGRATION
+        ):
+            entity_registry = async_get_entity_registry(self.hass)
+            entity_registry.async_update_entity(
+                self.entity_id,
+                hidden_by=None,
+            )
+            _LOGGER.info(
+                "Unhid entity %s after backing register(s) '%s' were confirmed "
+                "supported",
+                self.entity_id,
+                ", ".join(register_support_keys),
+            )
+
+        if register_support is False:
+            self._unsupported_removal_requested = True
+            if registry_entry is not None:
+                if registry_entry.hidden_by is None:
+                    entity_registry = async_get_entity_registry(self.hass)
+                    entity_registry.async_update_entity(
+                        self.entity_id,
+                        hidden_by=RegistryEntryHider.INTEGRATION,
+                    )
+                self.hass.async_create_task(self.async_remove())
+            else:
+                self.hass.async_create_task(self.async_remove(force_remove=True))
+            _LOGGER.info(
+                "Unloaded unsupported entity %s while preserving its registry entry "
+                "after backing register(s) '%s' were confirmed unsupported",
+                self.entity_id,
+                ", ".join(register_support_keys),
+            )
+            return
+
+        super()._handle_coordinator_update()
 
     @property
     def available(self) -> bool:

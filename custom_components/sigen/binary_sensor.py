@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Literal, Optional
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
@@ -35,6 +35,9 @@ class SigenergyBinarySensorEntityDescription(
     value_fn: Optional[Callable[[dict[str, Any]], bool | None]] = None
     # Key of the source sensor in the coordinator data dictionary
     source_key: Optional[str] = None
+    # Modbus registers used to determine support for this derived entity
+    register_support_keys: Optional[tuple[str, ...]] = None
+    register_support_mode: Literal["all", "any"] = "all"
 
 # Define the calculated binary sensors
 PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
@@ -44,6 +47,11 @@ PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
         device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:solar-power",
         source_key=None,  # No longer a direct key, calculated from multiple values
+        register_support_keys=(
+            "plant_sigen_photovoltaic_power",
+            "plant_third_party_photovoltaic_power",
+        ),
+        register_support_mode="any",
         value_fn=lambda data: (
             (
                 power := SigenergyCalculations.calculate_total_pv_power(

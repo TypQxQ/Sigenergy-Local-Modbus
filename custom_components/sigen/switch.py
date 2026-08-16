@@ -42,6 +42,7 @@ class SigenergySwitchEntityDescription(SwitchEntityDescription):
     turn_off_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any]], Coroutine[Any, Any, None]] = lambda coordinator, identifier: asyncio.sleep(0) # Placeholder async lambda
     available_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, _: True
     entity_registry_enabled_default: bool = True
+    register_support_keys: Optional[tuple[str, ...]] = None
 
 
 def _deprecated_ac_charger_switch_available(data: Dict[str, Any], identifier: Optional[Any]) -> bool:
@@ -130,6 +131,7 @@ AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         available_fn=_deprecated_ac_charger_switch_available,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
+        register_support_keys=("ac_charger_system_state",),
         entity_registry_enabled_default=False,
     ),
 ]
@@ -149,6 +151,7 @@ DC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         available_fn=_deprecated_dc_charger_switch_available,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
+        register_support_keys=("dc_charger_running_state",),
         entity_registry_enabled_default=False,
     ),
 ]
