@@ -27,6 +27,10 @@ from .const import (
     CONF_PLANT_CONNECTION,
     DEFAULT_PLANT_SLAVE_ID,
     DEFAULT_READ_ONLY,
+    DEVICE_TYPE_PLANT,
+    DEVICE_TYPE_INVERTER,
+    DEVICE_TYPE_AC_CHARGER,
+    DEVICE_TYPE_DC_CHARGER,
 )
 from .modbusregisterdefinitions import (
     DataType,
@@ -44,6 +48,8 @@ from .modbusregisterdefinitions import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+ILLEGAL_DATA_ADDRESS = 0x02
 
 # Pymodbus version compatibility handling
 def _get_pymodbus_version_info():
@@ -203,6 +209,13 @@ class SigenergyModbusHub:
         self.inverter_register_intervals: Dict[str, Dict[RegisterType, List[Tuple[int, int]]]] = {}
         self.ac_charger_register_intervals: Dict[str, Dict[RegisterType, List[Tuple[int, int]]]] = {}
         self.dc_charger_register_intervals: Dict[str, Dict[RegisterType, List[Tuple[int, int]]]] = {}
+
+        # Register support belongs to a specific device. The register definitions
+        # are module-level objects and must not carry runtime state between hubs or
+        # devices.
+        self._register_support: Dict[
+            Tuple[str, str, int, int], Dict[str, bool]
+        ] = {}
         
         # Track last failed probe times for retry logic (1 minute retry delay)
         self.plant_last_probe_failure: Optional[float] = None
@@ -213,6 +226,61 @@ class SigenergyModbusHub:
     def _get_connection_key(self, device_info: dict) -> Tuple[str, int]:
         """Get the connection key (host, port) for a device_info dict."""
         return (device_info[CONF_HOST], device_info[CONF_PORT])
+
+    def _get_register_support_key(
+        self, device_type: str, device_info: Dict[str, Any]
+    ) -> Tuple[str, str, int, int]:
+        """Return the per-device key used for runtime register support."""
+        slave_id = device_info.get(CONF_SLAVE_ID)
+        if slave_id is None:
+            if device_type == DEVICE_TYPE_PLANT:
+                slave_id = self.plant_id
+            else:
+                raise ValueError(f"Slave ID is missing in device info: {device_info}")
+        return (
+            device_type,
+            str(device_info[CONF_HOST]),
+            int(device_info[CONF_PORT]),
+            int(slave_id),
+        )
+
+    def _get_device_info_for_register_support(
+        self, device_type: str, device_name: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve connection information for an entity's device."""
+        if device_type == DEVICE_TYPE_PLANT:
+            return {
+                **self.plant_connection,
+                CONF_SLAVE_ID: self.plant_connection.get(
+                    CONF_SLAVE_ID, self.plant_id
+                ),
+            }
+        if device_type == DEVICE_TYPE_INVERTER:
+            return self.inverter_connections.get(device_name or "")
+        if device_type == DEVICE_TYPE_AC_CHARGER:
+            return self.ac_charger_connections.get(device_name or "")
+        if device_type == DEVICE_TYPE_DC_CHARGER:
+            inverter_name = (device_name or "").replace(" DC Charger", "").strip()
+            return self.inverter_connections.get(inverter_name)
+        return None
+
+    def get_register_support(
+        self,
+        device_type: str,
+        device_name: Optional[str],
+        register_name: str,
+    ) -> Optional[bool]:
+        """Return True, False, or None for a device register's support state."""
+        device_info = self._get_device_info_for_register_support(
+            device_type, device_name
+        )
+        if device_info is None:
+            return None
+        try:
+            support_key = self._get_register_support_key(device_type, device_info)
+        except (KeyError, TypeError, ValueError):
+            return None
+        return self._register_support.get(support_key, {}).get(register_name)
     
     def _should_retry_probe(self, device_type: str, device_name: Optional[str] = None) -> bool:
         """Check if enough time has passed since last probe failure to retry."""
@@ -322,67 +390,45 @@ class SigenergyModbusHub:
                 self._connected[key] = False
                 _LOGGER.info("Disconnected from Sigenergy system at %s:%s", host, port)
 
-    def _validate_register_response(self, result: Any,
-                                    register_def: ModbusRegisterDefinition) -> bool:
-        """Validate if register response indicates support for the register."""
-        # Handle error responses silently - these indicate unsupported registers
-        if result is None or (hasattr(result, 'isError') and result.isError()):
-            _LOGGER.debug("Register validation failed for address"
-                          f" {register_def.address} with error: %s", result)
-            return False
-
-        registers = getattr(result, 'registers', [])
-        if not registers:
-            _LOGGER.debug("Register validation failed for address %s: empty response",
-                          register_def.address)
-            return False
-
-        # For string type registers, check if all values are 0 (indicating no support)
-        if register_def.data_type == DataType.STRING:
+    def _validate_register_response(
+        self, result: Any, register_def: ModbusRegisterDefinition
+    ) -> Optional[bool]:
+        """Classify a register probe as supported, unsupported, or unknown."""
+        if result is None:
             _LOGGER.debug(
-                "Register validation failed for address %s: string type "
-                "(not all string registers have to be filled)",
-                register_def.address
+                "Register probe for address %s returned no response",
+                register_def.address,
             )
-            return not all(reg == 0 for reg in registers)
+            return None
 
-        # For numeric registers, check if values are within reasonable bounds
-        try:
-            value = self._decode_value(registers, register_def.data_type, register_def.gain)
-            if isinstance(value, (int, float)):
-                # Consider register supported if value is non-zero and within reasonable bounds
-                # This helps filter out invalid/unsupported registers that might return garbage
-                max_reasonable = {
-                    "voltage": 1000,  # 1000V
-                    "current": 1000,  # 1000A
-                    "power": 1000,     # 1000kW
-                    "energy": 10000000, # 10000MWh
-                    "temperature": 200, # 200°C
-                    "percentage": 120  # 120% Some batteries can go above 100% when charging
-                }
+        if hasattr(result, "isError") and result.isError():
+            exception_code = getattr(result, "exception_code", None)
+            if exception_code == ILLEGAL_DATA_ADDRESS:
+                _LOGGER.debug(
+                    "Register address %s is unsupported (illegal data address)",
+                    register_def.address,
+                )
+                return False
+            _LOGGER.debug(
+                "Register probe for address %s was inconclusive: %s",
+                register_def.address,
+                result,
+            )
+            return None
 
-                # Determine max value based on unit if present
-                if register_def.unit:
-                    unit = register_def.unit.lower()
-                    if any(u in unit for u in ["v", "volt"]):
-                        return 0 <= abs(value) <= max_reasonable["voltage"]
-                    elif any(u in unit for u in ["a", "amp"]):
-                        return 0 <= abs(value) <= max_reasonable["current"]
-                    elif any(u in unit for u in ["wh", "kwh"]):
-                        return 0 <= abs(value) <= max_reasonable["energy"]
-                    elif any(u in unit for u in ["w", "watt"]):
-                        return 0 <= abs(value) <= max_reasonable["power"]
-                    elif any(u in unit for u in ["c", "f", "temp"]):
-                        return -50 <= value <= max_reasonable["temperature"]
-                    elif "%" in unit:
-                        return 0 <= value <= max_reasonable["percentage"]
-                # Default validation - accept any value including 0
-                return True
+        registers = getattr(result, "registers", [])
+        if len(registers) < register_def.count:
+            _LOGGER.debug(
+                "Register probe for address %s returned %d of %d registers",
+                register_def.address,
+                len(registers),
+                register_def.count,
+            )
+            return None
 
-            return True
-        except Exception as ex:
-            _LOGGER.debug("Register validation failed with exception: %s", ex)
-            return False
+        # A successful Modbus response proves that the address exists. Zero is a
+        # valid value for alarms and for empty optional string fields.
+        return True
 
     async def _probe_single_register(
         self,
@@ -391,44 +437,49 @@ class SigenergyModbusHub:
         name: str,
         register: ModbusRegisterDefinition,
         device_info_log: str # Added for logging context
-    ) -> Tuple[str, bool, Optional[Exception]]:
+    ) -> Tuple[str, Optional[bool], Optional[Exception]]:
         """Probe a single register and return its name, support status, and any exception."""
 
-        with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
-            if register.register_type == RegisterType.READ_ONLY:
-                result = await _call_modbus_method_safe(
-                    client.read_input_registers,
-                    address=register.address,
-                    count=register.count,
-                    slave=slave_id
-                )
-            elif register.register_type == RegisterType.HOLDING:
-                result = await _call_modbus_method_safe(
-                    client.read_holding_registers,
-                    address=register.address,
-                    count=register.count,
-                    slave=slave_id
-                )
-            else:
-                _LOGGER.debug(
-                    "Register %s (0x%04X) for slave %d (%s) has unsupported type: %s",
-                    name, register.address, slave_id, device_info_log, register.register_type
-                )
-                return name, False, None # Mark as unsupported, no exception
+        try:
+            with _suppress_pymodbus_logging(
+                really_suppress=not _LOGGER.isEnabledFor(logging.DEBUG)
+            ):
+                if register.register_type == RegisterType.READ_ONLY:
+                    result = await _call_modbus_method_safe(
+                        client.read_input_registers,
+                        address=register.address,
+                        count=register.count,
+                        slave=slave_id,
+                    )
+                elif register.register_type == RegisterType.HOLDING:
+                    result = await _call_modbus_method_safe(
+                        client.read_holding_registers,
+                        address=register.address,
+                        count=register.count,
+                        slave=slave_id,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Register %s (0x%04X) for slave %d (%s) has unreadable type: %s",
+                        name,
+                        register.address,
+                        slave_id,
+                        device_info_log,
+                        register.register_type,
+                    )
+                    return name, None, None
 
-            is_supported = self._validate_register_response(result, register)
-
-            # if _LOGGER.isEnabledFor(logging.DEBUG) and not is_supported:
-            #     _LOGGER.debug(
-            #         "Register %s (%s) for device %s is not supported. Result: %s, registers: %s",
-            #         name, register.address, device_info_log, str(result), str(register)
-            #     )
-            return name, is_supported, None # Return name, support status, no exception
+                return name, self._validate_register_response(result, register), None
+        except asyncio.CancelledError:
+            raise
+        except Exception as ex:
+            return name, None, ex
 
     async def async_probe_registers(
         self,
         device_info: Dict[str, str | int],
-        register_defs: Dict[str, ModbusRegisterDefinition]
+        register_defs: Dict[str, ModbusRegisterDefinition],
+        device_type: str,
     ) -> Dict[RegisterType, List[Tuple[int, int]]]:
         """
         Probe registers to determine support and create optimal read intervals.
@@ -443,6 +494,8 @@ class SigenergyModbusHub:
         slave_id = int(slave_id_value)
         client = await self._get_client(device_info)
         key = self._get_connection_key(device_info)
+        support_key = self._get_register_support_key(device_type, device_info)
+        register_support = self._register_support.setdefault(support_key, {})
         device_info_log = f"{key[0]}:{key[1]}@{slave_id}" # For logging
 
         tasks = []
@@ -451,17 +504,13 @@ class SigenergyModbusHub:
                 # Create tasks for probing each register
                 for name, register in register_defs.items():
                     # Only probe if support status is unknown (None)
-                    if register.is_supported is None:
+                    if register_support.get(name) is None:
                         tasks.append(
                             self._probe_single_register(client, slave_id, name, register, device_info_log)
                         )
         except Exception as ex:
             _LOGGER.error("Error while preparing register probing tasks for %s: %s",
                           device_info_log, ex)
-            # Mark all probed registers as potentially unsupported due to the error
-            for name, register in register_defs.items():
-                if register.is_supported is None:
-                    register.is_supported = False
             return {}
 
         if not tasks:
@@ -484,10 +533,6 @@ class SigenergyModbusHub:
             except Exception as ex:
                 _LOGGER.error("Unexpected error during concurrent register probing for %s: %s",
                               device_info_log, ex)
-                # Mark all probed registers as potentially unsupported due to the gather error
-                for name, register in register_defs.items():
-                    if register.is_supported is None: # Only update those that were being probed
-                        register.is_supported = False
                 self._connected[key] = False # Assume connection issue
                 return {} # Exit probing on major error
 
@@ -506,14 +551,15 @@ class SigenergyModbusHub:
                                            SigenergyModbusError)):
                         connection_error_occurred = True
                     # We don't know which register failed here, so we can't mark it specifically.
-                    # The registers remain is_supported=None and will be retried on read.
+                    # The register remains unknown and can be probed again later.
                     continue # Skip to next result
 
                 # Unpack successful results
                 if isinstance(result, tuple) and len(result) == 3:
                     name, is_supported, probe_exception = result
                     if name in register_defs:
-                        register_defs[name].is_supported = is_supported
+                        if is_supported is not None:
+                            register_support[name] = is_supported
                         if probe_exception:
                             # Log the specific exception caught by _probe_single_register
                             _LOGGER.debug("Probe failed for register %s on %s: %s",
@@ -530,11 +576,14 @@ class SigenergyModbusHub:
 
 
         _LOGGER.debug("Probing completed for %s. Supported registers: %s", device_info_log,
-                      {name: register.is_supported for name, register in register_defs.items() \
-                       if register.is_supported})
+                      {name: status for name, status in register_support.items() if status})
 
         # Create address intervals for optimized reading
-        supported_registers = [reg for reg in register_defs.values() if reg.is_supported]
+        supported_registers = [
+            register
+            for name, register in register_defs.items()
+            if register_support.get(name) is True
+        ]
 
         registers_by_type: Dict[RegisterType, List[ModbusRegisterDefinition]] = {}
         for reg in supported_registers:
@@ -902,6 +951,7 @@ class SigenergyModbusHub:
         self,
         device_info: Dict[str, Any],
         device_name: str,
+        device_type: str,
         device_type_log_prefix: str,
         registers_to_read: Dict[str, ModbusRegisterDefinition],
         read_intervals: Dict[RegisterType, List[Tuple[int, int]]]
@@ -938,11 +988,13 @@ class SigenergyModbusHub:
                         start_address, device_type_log_prefix, device_name, ex
                     )
 
+        support_key = self._get_register_support_key(device_type, device_info)
+        register_support = self._register_support.get(support_key, {})
         data = {}
         # 2. Decode the read data for each specific register
         for register_name, register_def in registers_to_read.items():
             # Skip unsupported or disabled registers
-            if not register_def.is_supported:
+            if register_support.get(register_name) is not True:
                 continue
 
             # Find the interval data that contains this register
@@ -1012,7 +1064,7 @@ class SigenergyModbusHub:
                     }
                     _LOGGER.debug("Attempting to probe plant registers on %s...", plant_info)
                     self.plant_register_intervals = await self.async_probe_registers(
-                        plant_info, all_plant_registers
+                        plant_info, all_plant_registers, DEVICE_TYPE_PLANT
                     )
                     _LOGGER.info("Plant register probing successful")
                 except asyncio.CancelledError:
@@ -1043,6 +1095,7 @@ class SigenergyModbusHub:
         return await self._async_read_device_data_core(
             device_info=plant_info,
             device_name=plant_name,
+            device_type=DEVICE_TYPE_PLANT,
             device_type_log_prefix="plant",
             registers_to_read=registers_to_read,
             read_intervals=self.plant_register_intervals
@@ -1068,7 +1121,7 @@ class SigenergyModbusHub:
                     }
                     _LOGGER.debug("Attempting to probe inverter '%s' registers on %s...", inverter_name, inverter_info)
                     self.inverter_register_intervals[inverter_name] = await self.async_probe_registers(
-                        inverter_info, all_inverter_registers
+                        inverter_info, all_inverter_registers, DEVICE_TYPE_INVERTER
                     )
                     _LOGGER.info("Inverter '%s' register probing successful", inverter_name)
                 except asyncio.CancelledError:
@@ -1093,6 +1146,7 @@ class SigenergyModbusHub:
         return await self._async_read_device_data_core(
             device_info=inverter_info,
             device_name=inverter_name,
+            device_type=DEVICE_TYPE_INVERTER,
             device_type_log_prefix="inverter",
             registers_to_read=registers_to_read,
             read_intervals=self.inverter_register_intervals.get(inverter_name, {})
@@ -1118,7 +1172,7 @@ class SigenergyModbusHub:
                     }
                     _LOGGER.debug("Attempting to probe DC charger '%s' registers on %s...", inverter_name, inverter_info)
                     self.dc_charger_register_intervals[inverter_name] = await self.async_probe_registers(
-                        inverter_info, all_dc_charger_registers
+                        inverter_info, all_dc_charger_registers, DEVICE_TYPE_DC_CHARGER
                     )
                     _LOGGER.info("DC charger '%s' register probing successful", inverter_name)
                 except asyncio.CancelledError:
@@ -1143,6 +1197,7 @@ class SigenergyModbusHub:
         return await self._async_read_device_data_core(
             device_info=inverter_info,
             device_name=inverter_name,
+            device_type=DEVICE_TYPE_DC_CHARGER,
             device_type_log_prefix="dc charger",
             registers_to_read=registers_to_read,
             read_intervals=self.dc_charger_register_intervals.get(inverter_name, {})
@@ -1167,7 +1222,7 @@ class SigenergyModbusHub:
                        if reg.register_type != RegisterType.WRITE_ONLY}
                 }
                 self.ac_charger_register_intervals[ac_charger_name] = await self.async_probe_registers(
-                    ac_charger_info, all_ac_charger_registers
+                    ac_charger_info, all_ac_charger_registers, DEVICE_TYPE_AC_CHARGER
                 )
             except Exception as ex:
                 _LOGGER.error("Failed to probe AC charger '%s' registers: %s", ac_charger_name, ex)
@@ -1185,6 +1240,7 @@ class SigenergyModbusHub:
         return await self._async_read_device_data_core(
             device_info=ac_charger_info,
             device_name=ac_charger_name,
+            device_type=DEVICE_TYPE_AC_CHARGER,
             device_type_log_prefix="AC charger",
             registers_to_read=registers_to_read,
             read_intervals=self.ac_charger_register_intervals.get(ac_charger_name, {})

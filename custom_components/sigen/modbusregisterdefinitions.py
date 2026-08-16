@@ -220,7 +220,6 @@ class ModbusRegisterDefinition:
     unit: Optional[str] = None
     description: Optional[str] = None
     applicable_to: Optional[list[str]] = field(default_factory=lambda: ["hybrid_inverter", "pv_inverter"])
-    is_supported: Optional[bool] = None  # Tracks whether register is supported by device
 
 # Define register definitions based on PLANT_RUNNING_INFO_REGISTERS.csv
 PLANT_RUNNING_INFO_REGISTERS = {

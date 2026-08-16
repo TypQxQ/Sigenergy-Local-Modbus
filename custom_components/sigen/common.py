@@ -6,7 +6,10 @@ from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, Callable, Dict
 from dataclasses import dataclass
-from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from homeassistant.helpers.entity_registry import (
+    async_entries_for_config_entry,
+    async_get as async_get_entity_registry,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.sensor import (
@@ -75,6 +78,37 @@ def generate_sigen_entity(
     entities = []
     for description in entity_description:
         # _LOGGER.debug("Generating entity for description: %s", description.name)
+
+        register_support = coordinator.hub.get_register_support(
+            device_type,
+            device_name,
+            description.key,
+        )
+        if register_support is False:
+            unique_id = generate_unique_entity_id(
+                device_type,
+                device_name,
+                coordinator,
+                description.key,
+                pv_string_idx,
+            )
+            entity_registry = async_get_entity_registry(coordinator.hass)
+            for registry_entry in async_entries_for_config_entry(
+                entity_registry, coordinator.hub.config_entry.entry_id
+            ):
+                if registry_entry.unique_id == unique_id:
+                    entity_registry.async_remove(registry_entry.entity_id)
+                    _LOGGER.info(
+                        "Removed unsupported entity %s from the entity registry",
+                        registry_entry.entity_id,
+                    )
+            _LOGGER.debug(
+                "Skipping entity '%s' because register '%s' is unsupported by %s",
+                description.name,
+                description.key,
+                device_name,
+            )
+            continue
 
         # Generate PV specific entity names and IDs if applicable
         if pv_string_idx is not None:
