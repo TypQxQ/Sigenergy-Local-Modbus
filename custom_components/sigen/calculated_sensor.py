@@ -15,6 +15,7 @@ from homeassistant.components.sensor import (
     RestoreSensor,
 )
 from homeassistant.const import (
+    ATTR_UNIT_OF_MEASUREMENT,
     UnitOfEnergy,
     EntityCategory,
     UnitOfPower,
@@ -54,6 +55,28 @@ DAILY_RESET_SECOND = 0
 LOG_THIS_ENTITY = [
     # "sensor.sigen_plant_daily_pv_energy",
 ]
+
+
+# Home Assistant exposes a sensor's selected display unit in the state machine.
+# Integration sensors must therefore normalize source power states before using
+# their numeric values. The native unit for SigenergyIntegrationSensor is kWh.
+_POWER_TO_KILO_WATT: dict[str, Decimal] = {
+    "mW": Decimal("0.000001"),
+    "W": Decimal("0.001"),
+    "kW": Decimal("1"),
+    "MW": Decimal("1000"),
+    "GW": Decimal("1000000"),
+    "TW": Decimal("1000000000"),
+}
+
+_ENERGY_TO_KILO_WATT_HOUR: dict[str, Decimal] = {
+    "mWh": Decimal("0.000001"),
+    "Wh": Decimal("0.001"),
+    "kWh": Decimal("1"),
+    "MWh": Decimal("1000"),
+    "GWh": Decimal("1000000"),
+    "TWh": Decimal("1000000000"),
+}
 
 
 class SigenergyCalculations:
@@ -1337,15 +1360,71 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             _LOGGER.warning("[CS][State] Failed to convert %s to Decimal: %s", state, e)
             return None
 
+    def _power_state_in_kw(self, state: State) -> Optional[Decimal]:
+        """Return a Home Assistant power state normalized to kW."""
+        if state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            return None
+
+        if (state_dec := self._decimal_state(state.state)) is None:
+            return None
+
+        source_unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+        if not isinstance(source_unit, str):
+            _LOGGER.warning(
+                "Cannot integrate %s for %s: missing power unit",
+                state.entity_id,
+                self.entity_id,
+            )
+            return None
+
+        conversion_factor = _POWER_TO_KILO_WATT.get(source_unit)
+        if conversion_factor is None:
+            _LOGGER.warning(
+                "Cannot integrate %s for %s: unsupported power unit %s",
+                state.entity_id,
+                self.entity_id,
+                source_unit,
+            )
+            return None
+
+        return state_dec * conversion_factor
+
     def _validate_states(
-        self, left: str, right: str
+        self, left: State, right: State
     ) -> Optional[tuple[Decimal, Decimal]]:
-        """Validate states and convert to Decimal."""
-        if (left_dec := self._decimal_state(left)) is None or (
-            right_dec := self._decimal_state(right)
+        """Validate power states and normalize both values to kW."""
+        if (left_dec := self._power_state_in_kw(left)) is None or (
+            right_dec := self._power_state_in_kw(right)
         ) is None:
             return None
         return (left_dec, right_dec)
+
+    def _energy_value_in_kwh(
+        self, value: Any, unit_of_measurement: Optional[str]
+    ) -> Optional[Decimal]:
+        """Convert a restored energy value to the sensor's native kWh."""
+        value_dec = safe_decimal(value)
+        if value_dec is None:
+            return None
+
+        source_unit = (
+            unit_of_measurement
+            or self.entity_description.native_unit_of_measurement
+        )
+        if not isinstance(source_unit, str):
+            _LOGGER.warning("Cannot restore %s: missing energy unit", self.entity_id)
+            return None
+
+        conversion_factor = _ENERGY_TO_KILO_WATT_HOUR.get(source_unit)
+        if conversion_factor is None:
+            _LOGGER.warning(
+                "Cannot restore %s: unsupported energy unit %s",
+                self.entity_id,
+                source_unit,
+            )
+            return None
+
+        return value_dec * conversion_factor
 
     def _calculate_trapezoidal(
         self, elapsed_time: Decimal, left: Decimal, right: Decimal
@@ -1467,26 +1546,44 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                     # Update the plant's configuration with the new data
                     self.hass.config_entries.async_update_entry(config_entry, data=new_config_data)
 
-        # Only check last_state if we haven't restored from config yet
+        # Restore the previously stored native value so a display unit override
+        # cannot rescale the integral across a restart.
+        # Preserve that native value exactly; correcting an earlier bad total is
+        # an explicit user action and must never be an automatic migration.
         if not restored_from_config:
-            # Restore previous state if available
-            last_state = await self.async_get_last_state()
-            if last_state and last_state.state not in (
-                None,
-                STATE_UNKNOWN,
-                STATE_UNAVAILABLE,
+            last_sensor_data = await self.async_get_last_sensor_data()
+            if (
+                last_sensor_data is not None
+                and last_sensor_data.native_value is not None
             ):
-                if self.unit_of_measurement == "MWh":
-                    restore_value = str(Decimal(last_state.state) * 1000)
-                else:
-                    restore_value = str(Decimal(last_state.state) * 1)
+                restore_value = self._energy_value_in_kwh(
+                    last_sensor_data.native_value,
+                    last_sensor_data.native_unit_of_measurement,
+                )
                 if self.log_this_entity:
-                    if self.unit_of_measurement == last_state.attributes["unit_of_measurement"]:
-                        _LOGGER.debug("Both are %s", self.unit_of_measurement)
-                    else:
-                        _LOGGER.debug("Self is %s and last is %s", self.unit_of_measurement, last_state.attributes["unit_of_measurement"])
+                    _LOGGER.debug(
+                        "Restoring native value for %s: %s %s",
+                        self.entity_id,
+                        last_sensor_data.native_value,
+                        last_sensor_data.native_unit_of_measurement,
+                    )
 
-            else:
+            # Compatibility fallback for states saved before native sensor data
+            # was available. Interpret the value using its stored unit, never the
+            # entity's current display unit.
+            if restore_value is None:
+                last_state = await self.async_get_last_state()
+                if last_state and last_state.state not in (
+                    None,
+                    STATE_UNKNOWN,
+                    STATE_UNAVAILABLE,
+                ):
+                    restore_value = self._energy_value_in_kwh(
+                        last_state.state,
+                        last_state.attributes.get(ATTR_UNIT_OF_MEASUREMENT),
+                    )
+
+            if restore_value is None:
                 _LOGGER.debug(
                     "No valid last state available for %s, using default value",
                     self.entity_id,
@@ -1619,7 +1716,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             return
 
         # Validate states
-        if not (states := self._validate_states(old_state.state, new_state.state)):
+        if not (states := self._validate_states(old_state, new_state)):
             return
 
         # Calculate elapsed time
@@ -1657,7 +1754,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         if (
             self._max_sub_interval is not None
             and source_state is not None
-            and (source_state_dec := self._decimal_state(source_state.state))
+            and (source_power_kw := self._power_state_in_kw(source_state))
             is not None
         ):
 
@@ -1682,7 +1779,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                     return
 
                 try:
-                    area = elapsed_seconds * source_state_dec
+                    area = elapsed_seconds * source_power_kw
                 except (ValueError, TypeError) as e:
                     _LOGGER.warning(
                         "[%s] Timer - Error calculating area: %s", self.entity_id, e
