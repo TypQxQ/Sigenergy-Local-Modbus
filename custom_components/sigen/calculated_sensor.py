@@ -1839,6 +1839,11 @@ class SigenergyCalculatedSensors:
             icon="mdi:solar-power",
             value_fn=SigenergyCalculations.calculate_total_pv_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
+            register_support_keys=(
+                "plant_sigen_photovoltaic_power",
+                "plant_third_party_photovoltaic_power",
+            ),
+            register_support_mode="any",
             suggested_display_precision=3,
             round_digits=6,
         ),

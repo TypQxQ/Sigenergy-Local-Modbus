@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any, Optional, Callable, Dict
+from typing import Any, Optional, Callable, Dict, Literal
 from dataclasses import dataclass
 from homeassistant.helpers.entity_registry import (
     RegistryEntryHider,
@@ -96,6 +96,13 @@ def get_entity_register_support(
         hub.get_register_support(device_type, device_name, register_name)
         for register_name in register_support_keys
     )
+
+    if getattr(description, "register_support_mode", "all") == "any":
+        if any(state is True for state in support_states):
+            return True, register_support_keys
+        if all(state is False for state in support_states):
+            return False, register_support_keys
+        return None, register_support_keys
 
     if any(state is False for state in support_states):
         return False, register_support_keys
@@ -348,6 +355,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
     extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
     extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
     register_support_keys: Optional[tuple[str, ...]] = None
+    register_support_mode: Literal["all", "any"] = "all"
     source_entity_id: Optional[str] = None
     source_key: Optional[str] = None  # Key of the source entity to use for integration
     max_sub_interval: Optional[timedelta] = None
@@ -373,6 +381,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 				extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
 				extra_params=extra_params or description.extra_params,
 				register_support_keys=description.register_support_keys,
+				register_support_mode=description.register_support_mode,
 				source_entity_id=description.source_entity_id,
 				source_key=description.source_key,
 				max_sub_interval=description.max_sub_interval,
@@ -391,6 +400,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
             extra_fn_data=extra_fn_data,
             extra_params=extra_params,
             register_support_keys=getattr(description, "register_support_keys", None),
+            register_support_mode=getattr(description, "register_support_mode", "all"),
         )
 
 def safe_float(value: Any, precision: int = 6) -> Optional[float]:
