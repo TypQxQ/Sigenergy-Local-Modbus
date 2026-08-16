@@ -89,9 +89,6 @@ def get_entity_register_support(
     pv_string_idx: Optional[int] = None,
 ) -> tuple[Optional[bool], tuple[str, ...]]:
     """Return aggregate support and backing register keys for an entity."""
-    register_support_keys = resolve_register_support_keys(
-        description, pv_string_idx
-    )
     if getattr(description, "register_support_scope", "entity") == "inverters":
         support_targets = tuple(
             (DEVICE_TYPE_INVERTER, inverter_name)
@@ -100,6 +97,53 @@ def get_entity_register_support(
     else:
         support_targets = ((device_type, device_name),)
 
+    register_support_alternatives = getattr(
+        description, "register_support_alternatives", None
+    )
+    if register_support_alternatives:
+        resolved_alternatives = tuple(
+            tuple(
+                resolve_register_support_key(register_name, pv_string_idx)
+                for register_name in alternative
+            )
+            for alternative in register_support_alternatives
+        )
+        register_support_keys = tuple(
+            dict.fromkeys(
+                register_name
+                for alternative in resolved_alternatives
+                for register_name in alternative
+            )
+        )
+        alternative_states = []
+        for alternative in resolved_alternatives:
+            states = tuple(
+                hub.get_register_support(
+                    support_device_type, support_device_name, register_name
+                )
+                for support_device_type, support_device_name in support_targets
+                for register_name in alternative
+            )
+            if not states:
+                alternative_states.append(None)
+            elif any(state is False for state in states):
+                alternative_states.append(False)
+            elif all(state is True for state in states):
+                alternative_states.append(True)
+            else:
+                alternative_states.append(None)
+
+        if any(state is True for state in alternative_states):
+            return True, register_support_keys
+        if alternative_states and all(
+            state is False for state in alternative_states
+        ):
+            return False, register_support_keys
+        return None, register_support_keys
+
+    register_support_keys = resolve_register_support_keys(
+        description, pv_string_idx
+    )
     support_states = tuple(
         hub.get_register_support(
             support_device_type, support_device_name, register_name
@@ -369,6 +413,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
     extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
     extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
     register_support_keys: Optional[tuple[str, ...]] = None
+    register_support_alternatives: Optional[tuple[tuple[str, ...], ...]] = None
     register_support_scope: Literal["entity", "inverters"] = "entity"
     register_support_mode: Literal["all", "any"] = "all"
     source_entity_id: Optional[str] = None
@@ -396,6 +441,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 				extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
 				extra_params=extra_params or description.extra_params,
 				register_support_keys=description.register_support_keys,
+				register_support_alternatives=description.register_support_alternatives,
 				register_support_scope=description.register_support_scope,
 				register_support_mode=description.register_support_mode,
 				source_entity_id=description.source_entity_id,
@@ -416,7 +462,12 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
             extra_fn_data=extra_fn_data,
             extra_params=extra_params,
             register_support_keys=getattr(description, "register_support_keys", None),
-            register_support_scope=getattr(description, "register_support_scope", "entity"),
+            register_support_alternatives=getattr(
+                description, "register_support_alternatives", None
+            ),
+            register_support_scope=getattr(
+                description, "register_support_scope", "entity"
+            ),
             register_support_mode=getattr(description, "register_support_mode", "all"),
         )
 

@@ -1882,6 +1882,14 @@ class SigenergyCalculatedSensors:
             icon="mdi:home-lightning-bolt",
             value_fn=SigenergyCalculations.calculate_plant_consumed_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
+            register_support_alternatives=(
+                ("plant_general_load_power",),
+                (
+                    "plant_active_power",
+                    "plant_grid_sensor_active_power",
+                    "plant_third_party_photovoltaic_power",
+                ),
+            ),
             suggested_display_precision=3,
             round_digits=6,
         ),
