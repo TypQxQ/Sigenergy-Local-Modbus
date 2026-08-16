@@ -92,10 +92,24 @@ def get_entity_register_support(
     register_support_keys = resolve_register_support_keys(
         description, pv_string_idx
     )
+    if getattr(description, "register_support_scope", "entity") == "inverters":
+        support_targets = tuple(
+            (DEVICE_TYPE_INVERTER, inverter_name)
+            for inverter_name in hub.inverter_connections
+        )
+    else:
+        support_targets = ((device_type, device_name),)
+
     support_states = tuple(
-        hub.get_register_support(device_type, device_name, register_name)
+        hub.get_register_support(
+            support_device_type, support_device_name, register_name
+        )
+        for support_device_type, support_device_name in support_targets
         for register_name in register_support_keys
     )
+
+    if not support_states:
+        return None, register_support_keys
 
     if getattr(description, "register_support_mode", "all") == "any":
         if any(state is True for state in support_states):
@@ -355,6 +369,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
     extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
     extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
     register_support_keys: Optional[tuple[str, ...]] = None
+    register_support_scope: Literal["entity", "inverters"] = "entity"
     register_support_mode: Literal["all", "any"] = "all"
     source_entity_id: Optional[str] = None
     source_key: Optional[str] = None  # Key of the source entity to use for integration
@@ -381,6 +396,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 				extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
 				extra_params=extra_params or description.extra_params,
 				register_support_keys=description.register_support_keys,
+				register_support_scope=description.register_support_scope,
 				register_support_mode=description.register_support_mode,
 				source_entity_id=description.source_entity_id,
 				source_key=description.source_key,
@@ -400,6 +416,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
             extra_fn_data=extra_fn_data,
             extra_params=extra_params,
             register_support_keys=getattr(description, "register_support_keys", None),
+            register_support_scope=getattr(description, "register_support_scope", "entity"),
             register_support_mode=getattr(description, "register_support_mode", "all"),
         )
 

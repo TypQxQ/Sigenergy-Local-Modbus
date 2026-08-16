@@ -1894,6 +1894,9 @@ class SigenergyCalculatedSensors:
             state_class=SensorStateClass.TOTAL_INCREASING,
             value_fn=SigenergyCalculations.calculate_plant_daily_pv_energy,
             extra_fn_data=True,  # Pass coordinator data to value_fn
+            register_support_keys=("inverter_daily_pv_energy",),
+            register_support_scope="inverters",
+            register_support_mode="any",
             max_sub_interval=timedelta(seconds=30),
             icon="mdi:solar-power",
         ),
@@ -1932,6 +1935,9 @@ class SigenergyCalculatedSensors:
             icon="mdi:battery-positive",
             value_fn=SigenergyCalculations.calculate_daily_battery_charge_energy,
             extra_fn_data=True, # Pass coordinator data to value_fn
+            register_support_keys=("inverter_ess_daily_charge_energy",),
+            register_support_scope="inverters",
+            register_support_mode="any",
             suggested_display_precision=2,
             round_digits=6, # Match other energy sensors
         ),
@@ -1944,6 +1950,9 @@ class SigenergyCalculatedSensors:
             icon="mdi:battery-negative",
             value_fn=SigenergyCalculations.calculate_daily_battery_discharge_energy,
             extra_fn_data=True, # Pass coordinator data to value_fn
+            register_support_keys=("inverter_ess_daily_discharge_energy",),
+            register_support_scope="inverters",
+            register_support_mode="any",
             suggested_display_precision=2,
             round_digits=6, # Match other energy sensors
         ),
