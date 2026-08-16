@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, Callable, Dict
 from dataclasses import dataclass
 from homeassistant.helpers.entity_registry import (
+    RegistryEntryHider,
     async_entries_for_config_entry,
     async_get as async_get_entity_registry,
 )
@@ -41,6 +42,16 @@ def get_suffix_if_not_one(name: str) -> str:
     """Get the last part of the name if it is a number other than 1."""
     return name.split()[-1].strip() + " " if len(name.split()) > 1 and name.split()[-1].isdigit() and name.split()[-1] != "1" else ""
 
+
+def resolve_register_support_key(
+    register_name: str, pv_string_idx: Optional[int] = None
+) -> str:
+    """Resolve an entity description key to its Modbus register name."""
+    if pv_string_idx is not None and register_name in {"voltage", "current"}:
+        return f"inverter_pv{pv_string_idx}_{register_name}"
+    return register_name
+
+
 def generate_device_name(plant_name: str, device_name: str) -> str:
     """Generate a device name based on plant name and device name."""
     device_type = " ".join(device_name.split()[:-1]) if len(device_name.split()) > 1 and device_name.split()[-1].isdigit() else device_name
@@ -74,15 +85,26 @@ def generate_sigen_entity(
         list: A list of instantiated entities for the device
     """
     device_name = device_name if device_name else plant_name
+    entity_registry = async_get_entity_registry(coordinator.hass)
+    registry_entries_by_unique_id = {}
+    for registry_entry in async_entries_for_config_entry(
+        entity_registry, coordinator.hub.config_entry.entry_id
+    ):
+        registry_entries_by_unique_id.setdefault(
+            registry_entry.unique_id, []
+        ).append(registry_entry)
 
     entities = []
     for description in entity_description:
         # _LOGGER.debug("Generating entity for description: %s", description.name)
 
+        register_support_key = resolve_register_support_key(
+            description.key, pv_string_idx
+        )
         register_support = coordinator.hub.get_register_support(
             device_type,
             device_name,
-            description.key,
+            register_support_key,
         )
         if register_support is False:
             unique_id = generate_unique_entity_id(
@@ -92,23 +114,42 @@ def generate_sigen_entity(
                 description.key,
                 pv_string_idx,
             )
-            entity_registry = async_get_entity_registry(coordinator.hass)
-            for registry_entry in async_entries_for_config_entry(
-                entity_registry, coordinator.hub.config_entry.entry_id
-            ):
-                if registry_entry.unique_id == unique_id:
-                    entity_registry.async_remove(registry_entry.entity_id)
+            for registry_entry in registry_entries_by_unique_id.get(unique_id, []):
+                if registry_entry.hidden_by is None:
+                    entity_registry.async_update_entity(
+                        registry_entry.entity_id,
+                        hidden_by=RegistryEntryHider.INTEGRATION,
+                    )
                     _LOGGER.info(
-                        "Removed unsupported entity %s from the entity registry",
+                        "Hid unsupported entity %s while preserving its registry entry",
                         registry_entry.entity_id,
                     )
             _LOGGER.debug(
                 "Skipping entity '%s' because register '%s' is unsupported by %s",
                 description.name,
-                description.key,
+                register_support_key,
                 device_name,
             )
             continue
+
+        if register_support is True:
+            unique_id = generate_unique_entity_id(
+                device_type,
+                device_name,
+                coordinator,
+                description.key,
+                pv_string_idx,
+            )
+            for registry_entry in registry_entries_by_unique_id.get(unique_id, []):
+                if registry_entry.hidden_by is RegistryEntryHider.INTEGRATION:
+                    entity_registry.async_update_entity(
+                        registry_entry.entity_id,
+                        hidden_by=None,
+                    )
+                    _LOGGER.info(
+                        "Unhid supported entity %s",
+                        registry_entry.entity_id,
+                    )
 
         # Generate PV specific entity names and IDs if applicable
         if pv_string_idx is not None:
