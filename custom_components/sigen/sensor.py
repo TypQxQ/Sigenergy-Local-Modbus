@@ -161,18 +161,13 @@ async def async_setup_entry(
         
         # Combine sensor descriptions for AC chargers
         ac_charger_sensors = SS.AC_CHARGER_SENSORS + SCS.AC_CHARGER_SENSORS
-        for description in ac_charger_sensors:
-            sensor_name = f"{ac_charger_name} {description.name}"
-            entities_to_add.append(
-                SigenergySensor(
-                    coordinator=coordinator,
-                    description=description,
-                    name=sensor_name,
-                    device_type=DEVICE_TYPE_AC_CHARGER,
-                    device_id=str(slave_id),
-                    device_name=ac_charger_name,
-                )
-            )
+        add_entities_for_device(
+            ac_charger_name,
+            ac_details,
+            ac_charger_sensors,
+            SigenergySensor,
+            DEVICE_TYPE_AC_CHARGER,
+        )
 
     if entities_to_add:
         async_add_entities(entities_to_add)
