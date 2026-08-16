@@ -37,6 +37,7 @@ class SigenergyButtonEntityDescription(ButtonEntityDescription):
 
     press_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any]], Coroutine[Any, Any, None]] = lambda coordinator, identifier: asyncio.sleep(0)
     available_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, _: True
+    register_support_keys: Optional[tuple[str, ...]] = None
 
 
 PLANT_BUTTONS: list[SigenergyButtonEntityDescription] = [
@@ -56,6 +57,7 @@ AC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
         icon="mdi:ev-plug-type2",
         press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
         available_fn=ac_charger_command_available,
+        register_support_keys=("ac_charger_system_state",),
     ),
     SigenergyButtonEntityDescription(
         key="ac_charger_stop",
@@ -63,6 +65,7 @@ AC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
         icon="mdi:ev-plug-type2-off",
         press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
         available_fn=ac_charger_command_available,
+        register_support_keys=("ac_charger_system_state",),
     ),
 ]
 
@@ -73,6 +76,7 @@ DC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
         icon="mdi:ev-plug-ccs2",
         press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
         available_fn=dc_charger_command_available,
+        register_support_keys=("dc_charger_running_state",),
     ),
     SigenergyButtonEntityDescription(
         key="dc_charger_stop",
@@ -80,6 +84,7 @@ DC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
         icon="mdi:ev-plug-ccs2-off",
         press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
         available_fn=dc_charger_command_available,
+        register_support_keys=("dc_charger_running_state",),
     ),
 ]
 
