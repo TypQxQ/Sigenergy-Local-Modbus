@@ -78,6 +78,7 @@ DEFAULT_PLANT_CONNECTION = {
                 CONF_HOST: "",
                 CONF_PORT: DEFAULT_PORT,
                 CONF_INVERTER_SLAVE_ID: DEFAULT_INVERTER_SLAVE_ID,
+                CONF_READ_ONLY: DEFAULT_READ_ONLY,
                 CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
 }
 
@@ -302,6 +303,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         new_plant_connection[CONF_SLAVE_ID] = DEFAULT_PLANT_SLAVE_ID
         new_plant_connection[CONF_INVERTER_SLAVE_ID] = \
             self._discovered_device_type[DEVICE_TYPE_INVERTER][0]
+        new_plant_connection[CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
         self._data[CONF_PLANT_CONNECTION] = new_plant_connection
         self._data[CONF_INVERTER_CONNECTIONS] = {}
         self._data[CONF_AC_CHARGER_CONNECTIONS] = {}
@@ -482,6 +484,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         new_plant_connection[CONF_HOST] = user_input[CONF_HOST]
         new_plant_connection[CONF_PORT] = user_input[CONF_PORT]
         new_plant_connection[CONF_SLAVE_ID] = DEFAULT_PLANT_SLAVE_ID
+        new_plant_connection[CONF_READ_ONLY] = user_input[CONF_READ_ONLY]
         new_plant_connection[CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
         self._data[CONF_PLANT_CONNECTION] = new_plant_connection
 
