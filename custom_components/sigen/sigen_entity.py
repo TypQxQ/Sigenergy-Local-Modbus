@@ -23,7 +23,7 @@ from .coordinator import SigenergyDataUpdateCoordinator
 from .common import (
     generate_device_id,
     generate_unique_entity_id,
-    resolve_register_support_key,
+    get_entity_register_support,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -100,9 +100,6 @@ class SigenergyEntity(CoordinatorEntity):
         self._device_name = device_name  # Store device name (e.g., "Inverter 1", "Plant", "AC Charger 1")
         self._pv_string_idx = pv_string_idx
         self._device_info_override = device_info
-        self._register_support_key = resolve_register_support_key(
-            description.key, pv_string_idx
-        )
         self._unsupported_removal_requested = False
 
         # Set unique ID
@@ -124,18 +121,37 @@ class SigenergyEntity(CoordinatorEntity):
         if self._unsupported_removal_requested:
             return
 
+        register_support, register_support_keys = get_entity_register_support(
+            self.hub,
+            self._device_type,
+            self._device_name,
+            self.entity_description,
+            self._pv_string_idx,
+        )
+
+        registry_entry = self.registry_entry
         if (
-            self.hub.get_register_support(
-                self._device_type,
-                self._device_name,
-                self._register_support_key,
-            )
-            is False
+            register_support is True
+            and registry_entry is not None
+            and registry_entry.hidden_by is RegistryEntryHider.INTEGRATION
         ):
-            self._unsupported_removal_requested = True
             entity_registry = async_get_entity_registry(self.hass)
-            if (registry_entry := entity_registry.async_get(self.entity_id)) is not None:
+            entity_registry.async_update_entity(
+                self.entity_id,
+                hidden_by=None,
+            )
+            _LOGGER.info(
+                "Unhid entity %s after backing register(s) '%s' were confirmed "
+                "supported",
+                self.entity_id,
+                ", ".join(register_support_keys),
+            )
+
+        if register_support is False:
+            self._unsupported_removal_requested = True
+            if registry_entry is not None:
                 if registry_entry.hidden_by is None:
+                    entity_registry = async_get_entity_registry(self.hass)
                     entity_registry.async_update_entity(
                         self.entity_id,
                         hidden_by=RegistryEntryHider.INTEGRATION,
@@ -145,9 +161,9 @@ class SigenergyEntity(CoordinatorEntity):
                 self.hass.async_create_task(self.async_remove(force_remove=True))
             _LOGGER.info(
                 "Unloaded unsupported entity %s while preserving its registry entry "
-                "after register '%s' was confirmed unsupported",
+                "after backing register(s) '%s' were confirmed unsupported",
                 self.entity_id,
-                self._register_support_key,
+                ", ".join(register_support_keys),
             )
             return
 

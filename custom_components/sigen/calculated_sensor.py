@@ -1783,6 +1783,7 @@ class SigenergyCalculatedSensors:
             state_class=SensorStateClass.MEASUREMENT,
             value_fn=SigenergyCalculations.calculate_pv_power,
             extra_fn_data=True,
+            register_support_keys=("voltage", "current"),
             suggested_display_precision=3,
             round_digits=6,
             icon="mdi:solar-power",
@@ -1850,6 +1851,7 @@ class SigenergyCalculatedSensors:
             icon="mdi:transmission-tower-export",
             value_fn=SigenergyCalculations.calculate_grid_import_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
+            register_support_keys=("plant_grid_sensor_active_power",),
             suggested_display_precision=3,
             round_digits=6,
         ),
@@ -1862,6 +1864,7 @@ class SigenergyCalculatedSensors:
             icon="mdi:transmission-tower-import",
             value_fn=SigenergyCalculations.calculate_grid_export_power,
             extra_fn_data=True,  # Pass coordinator data to value_fn
+            register_support_keys=("plant_grid_sensor_active_power",),
             suggested_display_precision=3,
             round_digits=6,
         ),
@@ -1976,6 +1979,12 @@ class SigenergyCalculatedSensors:
             icon="mdi:current-dc",
             value_fn=SigenergyCalculations.calculate_ess_current,
             extra_fn_data=True,
+            register_support_keys=(
+                "inverter_ess_charge_discharge_power",
+                "inverter_ess_average_cell_voltage",
+                "inverter_pack_count",
+                "inverter_rated_battery_capacity",
+            ),
             entity_registry_enabled_default=False,
         ),
     ]

@@ -52,6 +52,58 @@ def resolve_register_support_key(
     return register_name
 
 
+def resolve_register_support_keys(
+    description: Any, pv_string_idx: Optional[int] = None
+) -> tuple[str, ...]:
+    """Resolve all Modbus registers required by an entity description."""
+    explicit_keys = getattr(description, "register_support_keys", None)
+    if explicit_keys:
+        register_names = (
+            (explicit_keys,) if isinstance(explicit_keys, str) else tuple(explicit_keys)
+        )
+    else:
+        extra_params = getattr(description, "extra_params", None) or {}
+        register_name = extra_params.get("register_name")
+        source_key = getattr(description, "source_key", None)
+
+        if register_name:
+            register_names = (register_name,)
+        elif source_key == "pv_string_power" and pv_string_idx is not None:
+            register_names = ("voltage", "current")
+        elif source_key:
+            register_names = (source_key,)
+        else:
+            register_names = (description.key,)
+
+    return tuple(
+        resolve_register_support_key(register_name, pv_string_idx)
+        for register_name in register_names
+    )
+
+
+def get_entity_register_support(
+    hub,
+    device_type: str,
+    device_name: Optional[str],
+    description: Any,
+    pv_string_idx: Optional[int] = None,
+) -> tuple[Optional[bool], tuple[str, ...]]:
+    """Return aggregate support and backing register keys for an entity."""
+    register_support_keys = resolve_register_support_keys(
+        description, pv_string_idx
+    )
+    support_states = tuple(
+        hub.get_register_support(device_type, device_name, register_name)
+        for register_name in register_support_keys
+    )
+
+    if any(state is False for state in support_states):
+        return False, register_support_keys
+    if all(state is True for state in support_states):
+        return True, register_support_keys
+    return None, register_support_keys
+
+
 def generate_device_name(plant_name: str, device_name: str) -> str:
     """Generate a device name based on plant name and device name."""
     device_type = " ".join(device_name.split()[:-1]) if len(device_name.split()) > 1 and device_name.split()[-1].isdigit() else device_name
@@ -98,13 +150,12 @@ def generate_sigen_entity(
     for description in entity_description:
         # _LOGGER.debug("Generating entity for description: %s", description.name)
 
-        register_support_key = resolve_register_support_key(
-            description.key, pv_string_idx
-        )
-        register_support = coordinator.hub.get_register_support(
+        register_support, register_support_keys = get_entity_register_support(
+            coordinator.hub,
             device_type,
             device_name,
-            register_support_key,
+            description,
+            pv_string_idx,
         )
         if register_support is False:
             unique_id = generate_unique_entity_id(
@@ -125,9 +176,10 @@ def generate_sigen_entity(
                         registry_entry.entity_id,
                     )
             _LOGGER.debug(
-                "Skipping entity '%s' because register '%s' is unsupported by %s",
+                "Skipping entity '%s' because backing register(s) '%s' are "
+                "unsupported by %s",
                 description.name,
-                register_support_key,
+                ", ".join(register_support_keys),
                 device_name,
             )
             continue
@@ -295,6 +347,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
     value_fn: Optional[Callable[[Any, Optional[Dict[str, Any]], Optional[Dict[str, Any]]], Any]] = None
     extra_fn_data: Optional[bool] = False  # Flag to indicate if value_fn needs coordinator data
     extra_params: Optional[Dict[str, Any]] = None  # Additional parameters for value_fn
+    register_support_keys: Optional[tuple[str, ...]] = None
     source_entity_id: Optional[str] = None
     source_key: Optional[str] = None  # Key of the source entity to use for integration
     max_sub_interval: Optional[timedelta] = None
@@ -319,6 +372,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
 				value_fn=value_fn or description.value_fn,
 				extra_fn_data=extra_fn_data if extra_fn_data is not None else description.extra_fn_data,
 				extra_params=extra_params or description.extra_params,
+				register_support_keys=description.register_support_keys,
 				source_entity_id=description.source_entity_id,
 				source_key=description.source_key,
 				max_sub_interval=description.max_sub_interval,
@@ -336,6 +390,7 @@ class SigenergySensorEntityDescription(SensorEntityDescription):
             value_fn=value_fn,
             extra_fn_data=extra_fn_data,
             extra_params=extra_params,
+            register_support_keys=getattr(description, "register_support_keys", None),
         )
 
 def safe_float(value: Any, precision: int = 6) -> Optional[float]:

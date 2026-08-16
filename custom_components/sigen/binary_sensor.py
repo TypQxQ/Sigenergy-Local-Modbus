@@ -35,6 +35,8 @@ class SigenergyBinarySensorEntityDescription(
     value_fn: Optional[Callable[[dict[str, Any]], bool | None]] = None
     # Key of the source sensor in the coordinator data dictionary
     source_key: Optional[str] = None
+    # Modbus registers that must all be supported for this derived entity
+    register_support_keys: Optional[tuple[str, ...]] = None
 
 # Define the calculated binary sensors
 PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
