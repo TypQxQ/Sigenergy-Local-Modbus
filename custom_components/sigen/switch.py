@@ -51,11 +51,29 @@ def _deprecated_ac_charger_switch_available(data: Dict[str, Any], identifier: Op
 
 
 def _deprecated_dc_charger_switch_available(data: Dict[str, Any], identifier: Optional[Any]) -> bool:
-    """Preserve legacy switch availability when charger state is missing."""
-    return data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_running_state") not in (
-        DCChargerRunningState.IDLE,
-        DCChargerRunningState.UNAVAILABLE,
-    )
+    """Preserve the deprecated switch's off state when the charger is idle."""
+    charger_data = data.get("dc_chargers", {}).get(identifier)
+    if not isinstance(charger_data, dict):
+        return False
+
+    state = charger_data.get("dc_charger_running_state")
+    if state is None:
+        return any(value is not None for value in charger_data.values())
+    return state != DCChargerRunningState.UNAVAILABLE
+
+
+def _deprecated_dc_charger_switch_is_on(data: Dict[str, Any], identifier: Optional[Any]) -> bool:
+    """Return the DC charging state with a legacy telemetry fallback."""
+    charger_data = data.get("dc_chargers", {}).get(identifier, {})
+    state = charger_data.get("dc_charger_running_state")
+    if state is not None:
+        return state in (
+            DCChargerRunningState.CHARGING,
+            DCChargerRunningState.DISCHARGING,
+        )
+
+    output_power = charger_data.get("dc_charger_output_power")
+    return output_power is not None and output_power != 0
 
 
 PLANT_SWITCHES: list[SigenergySwitchEntityDescription] = [
@@ -147,11 +165,13 @@ DC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
         # made an `output_power != 0` test flap the switch off/on every poll (and, via
         # plug-in negotiation, a brief on/off on every connect). running_state is the
         # stable signal and still covers both charging and discharging (like the AC charger).
-        is_on_fn=lambda data, identifier: data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_running_state") in (DCChargerRunningState.CHARGING, DCChargerRunningState.DISCHARGING),
+        is_on_fn=_deprecated_dc_charger_switch_is_on,
         available_fn=_deprecated_dc_charger_switch_available,
         turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
         turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
-        register_support_keys=("dc_charger_running_state",),
+        # This legacy control can still issue its write-only command without the
+        # optional running-state register and then falls back to output power.
+        register_support_keys=(),
         entity_registry_enabled_default=False,
     ),
 ]

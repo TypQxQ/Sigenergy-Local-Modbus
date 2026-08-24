@@ -76,7 +76,9 @@ DC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
         icon="mdi:ev-plug-ccs2",
         press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
         available_fn=dc_charger_command_available,
-        register_support_keys=("dc_charger_running_state",),
+        # The command is write-only and remains usable on chargers that do not
+        # expose the optional running-state register.
+        register_support_keys=(),
     ),
     SigenergyButtonEntityDescription(
         key="dc_charger_stop",
@@ -84,7 +86,7 @@ DC_CHARGER_BUTTONS: list[SigenergyButtonEntityDescription] = [
         icon="mdi:ev-plug-ccs2-off",
         press_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
         available_fn=dc_charger_command_available,
-        register_support_keys=("dc_charger_running_state",),
+        register_support_keys=(),
     ),
 ]
 

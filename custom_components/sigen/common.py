@@ -31,7 +31,17 @@ def ac_charger_command_available(data: Dict[str, Any], identifier: Optional[Any]
 
 def dc_charger_command_available(data: Dict[str, Any], identifier: Optional[Any]) -> bool:
     """Return if DC charger start/stop commands should be exposed."""
-    state = data.get("dc_chargers", {}).get(identifier, {}).get("dc_charger_running_state")
+    charger_data = data.get("dc_chargers", {}).get(identifier)
+    if not isinstance(charger_data, dict):
+        return False
+
+    state = charger_data.get("dc_charger_running_state")
+    if state is None:
+        # The command register is write-only and some chargers do not expose the
+        # optional running-state register. Keep the commands usable when other DC
+        # charger telemetry confirms that the configured charger is responding.
+        return any(value is not None for value in charger_data.values())
+
     return state is not None and state not in (
         DCChargerRunningState.IDLE,
         DCChargerRunningState.UNAVAILABLE,
@@ -57,7 +67,9 @@ def resolve_register_support_keys(
 ) -> tuple[str, ...]:
     """Resolve all Modbus registers required by an entity description."""
     explicit_keys = getattr(description, "register_support_keys", None)
-    if explicit_keys:
+    if explicit_keys is not None:
+        # An explicit empty tuple opts a non-readable entity, such as a command
+        # backed by a write-only register, out of inferred support filtering.
         register_names = (
             (explicit_keys,) if isinstance(explicit_keys, str) else tuple(explicit_keys)
         )
