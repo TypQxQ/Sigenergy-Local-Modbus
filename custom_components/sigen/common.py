@@ -156,6 +156,12 @@ def get_entity_register_support(
     register_support_keys = resolve_register_support_keys(
         description, pv_string_idx
     )
+    if not register_support_keys:
+        # Explicitly dependency-free entities are structurally supported. This
+        # also restores registry entries hidden by an earlier dependency rule;
+        # their runtime availability is still decided by the entity itself.
+        return True, register_support_keys
+
     support_states = tuple(
         hub.get_register_support(
             support_device_type, support_device_name, register_name
