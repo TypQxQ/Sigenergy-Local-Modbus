@@ -11,4 +11,6 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
         - uses: "actions/checkout@v4"
+        - name: Run regression tests
+          run: python -m unittest discover -s tests -v
         - uses: "home-assistant/actions/hassfest@master"

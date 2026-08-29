@@ -1300,7 +1300,6 @@ class SigenergyLifetimeDailySensor(SigenergyEntity, RestoreSensor):
 class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     """Implementation of an Integration Sensor with identical behavior to HA core."""
 
-    _attr_state_class = SensorStateClass.TOTAL
     _attr_should_poll = False
 
     def __init__(
@@ -1333,6 +1332,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         )
         # Then initialize RestoreSensor
         RestoreSensor.__init__(self)
+        self._attr_state_class = description.state_class
         self._attr_suggested_display_precision = getattr(
             description, "suggested_display_precision", None
         )
