@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
+from .device_registry_compat import parent_device_info
 from .sigen_entity import SigenergyEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -120,7 +121,11 @@ async def async_setup_entry(
                 name=dc_name,
                 manufacturer="Sigenergy",
                 model="DC Charger",
-                via_device=(DOMAIN, parent_inverter_id),
+                **parent_device_info(
+                    hass,
+                    config_entry.entry_id,
+                    (DOMAIN, parent_inverter_id),
+                ),
             )
             entities.extend(
                 generate_sigen_entity(

@@ -6,7 +6,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
-from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
@@ -19,6 +19,8 @@ from .const import (
 from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusHub
 from .const import CONF_PLANT_CONNECTION
+from .common import generate_device_id
+from .device_registry_compat import register_parent_devices
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +77,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "hub": hub,
     }
 
+    register_parent_devices(
+        hass,
+        config_entry_id=entry.entry_id,
+        domain=DOMAIN,
+        plant_name=entry.data[CONF_NAME],
+        inverter_connections=coordinator.hub.inverter_connections,
+        coordinator_data=coordinator.data or {},
+        device_id_fn=generate_device_id,
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))

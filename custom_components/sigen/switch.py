@@ -23,6 +23,7 @@ from .const import (
     CONF_INVERTER_HAS_DCCHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator # Import coordinator
+from .device_registry_compat import parent_device_info
 from .sigen_entity import SigenergyEntity # Import the new base class
 from .modbusregisterdefinitions import DCChargerRunningState
 
@@ -220,7 +221,11 @@ async def async_setup_entry(
                 name=dc_name,
                 manufacturer="Sigenergy",
                 model="DC Charger",
-                via_device=(DOMAIN, parent_inverter_id),
+                **parent_device_info(
+                    hass,
+                    config_entry.entry_id,
+                    (DOMAIN, parent_inverter_id),
+                ),
             )
             add_entities_for_device(device_name, device_conn, DC_CHARGER_SWITCHES, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
 

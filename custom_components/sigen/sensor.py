@@ -29,6 +29,7 @@ from .modbusregisterdefinitions import (
     ALARM_CODES,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
+from .device_registry_compat import parent_device_info
 from .calculated_sensor import (
     SigenergyCalculations as SC,
     SigenergyCalculatedSensors as SCS,
@@ -134,7 +135,11 @@ async def async_setup_entry(
                         name=pv_string_name,
                         manufacturer="Sigenergy",
                         model="PV String",
-                        via_device=(DOMAIN, parent_inverter_id),
+                        **parent_device_info(
+                            hass,
+                            config_entry.entry_id,
+                            (DOMAIN, parent_inverter_id),
+                        ),
                     )
                     add_entities_for_device(device_name, device_conn, SS.PV_STRING_SENSORS, PVStringSensor, DEVICE_TYPE_INVERTER, hass=hass, device_info=pv_device_info, pv_string_idx=pv_idx)
                     add_entities_for_device(device_name, device_conn, SCS.PV_STRING_SENSORS, PVStringSensor, DEVICE_TYPE_INVERTER, hass=hass, device_info=pv_device_info, pv_string_idx=pv_idx)
@@ -155,7 +160,11 @@ async def async_setup_entry(
                 name=dc_name,
                 manufacturer="Sigenergy",
                 model="DC Charger",
-                via_device=(DOMAIN, parent_inverter_id),
+                **parent_device_info(
+                    hass,
+                    config_entry.entry_id,
+                    (DOMAIN, parent_inverter_id),
+                ),
             )
             add_entities_for_device(device_name, device_conn, SS.DC_CHARGER_SENSORS, SigenergySensor, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
 
