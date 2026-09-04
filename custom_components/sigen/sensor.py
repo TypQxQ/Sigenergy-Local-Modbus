@@ -20,7 +20,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -30,6 +29,7 @@ from .modbusregisterdefinitions import (
     ALARM_CODES,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
+from .device_registry_compat import parent_device_info
 from .calculated_sensor import (
     SigenergyCalculations as SC,
     SigenergyCalculatedSensors as SCS,
@@ -123,17 +123,16 @@ async def async_setup_entry(
                     pv_string_name = f"{device_name} PV{pv_idx}"
                     parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
                     pv_string_id = f"{parent_inverter_id}_pv{pv_idx}"
-                    parent_inverter_device_id = dr.async_get_device_id_by_identifier(
-                        hass,
-                        (DOMAIN, parent_inverter_id),
-                        config_entry_id=config_entry.entry_id,
-                    )
                     pv_device_info = DeviceInfo(
                         identifiers={(DOMAIN, pv_string_id)},
                         name=pv_string_name,
                         manufacturer="Sigenergy",
                         model="PV String",
-                        via_device_id=parent_inverter_device_id,
+                        **parent_device_info(
+                            hass,
+                            config_entry.entry_id,
+                            (DOMAIN, parent_inverter_id),
+                        ),
                     )
                     add_entities_for_device(device_name, device_conn, SS.PV_STRING_SENSORS, PVStringSensor, DEVICE_TYPE_INVERTER, hass=hass, device_info=pv_device_info, pv_string_idx=pv_idx)
                     add_entities_for_device(device_name, device_conn, SCS.PV_STRING_SENSORS, PVStringSensor, DEVICE_TYPE_INVERTER, hass=hass, device_info=pv_device_info, pv_string_idx=pv_idx)
@@ -149,17 +148,16 @@ async def async_setup_entry(
                 dc_name = device_name
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
-            parent_inverter_device_id = dr.async_get_device_id_by_identifier(
-                hass,
-                (DOMAIN, parent_inverter_id),
-                config_entry_id=config_entry.entry_id,
-            )
             dc_device_info = DeviceInfo(
                 identifiers={(DOMAIN, dc_id)},
                 name=dc_name,
                 manufacturer="Sigenergy",
                 model="DC Charger",
-                via_device_id=parent_inverter_device_id,
+                **parent_device_info(
+                    hass,
+                    config_entry.entry_id,
+                    (DOMAIN, parent_inverter_id),
+                ),
             )
             add_entities_for_device(device_name, device_conn, SS.DC_CHARGER_SENSORS, SigenergySensor, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
 

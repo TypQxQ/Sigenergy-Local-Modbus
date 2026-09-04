@@ -5,7 +5,6 @@ import logging
 from typing import Any, Optional
 
 from homeassistant.core import callback
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_registry import (
     RegistryEntryHider,
@@ -21,6 +20,7 @@ from .const import (
     DEVICE_TYPE_DC_CHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
+from .device_registry_compat import parent_device_info
 from .common import (
     generate_device_id,
     generate_unique_entity_id,
@@ -51,10 +51,10 @@ def _generate_device_info(
         "identifiers": {(DOMAIN, f"{config_entry_id}_{generate_device_id(device_name)}")},
         "name": device_name,
         "manufacturer": "Sigenergy",
-        "via_device_id": dr.async_get_device_id_by_identifier(
+        **parent_device_info(
             coordinator.hass,
+            config_entry_id,
             plant_device_identifier,
-            config_entry_id=config_entry_id,
         ),
     }
 

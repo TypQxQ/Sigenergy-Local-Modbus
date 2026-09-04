@@ -9,7 +9,6 @@ from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-i
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
 
 from .const import (
     CONF_SCAN_INTERVAL,
@@ -21,44 +20,9 @@ from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusHub
 from .const import CONF_PLANT_CONNECTION
 from .common import generate_device_id
+from .device_registry_compat import register_parent_devices
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _register_parent_devices(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    coordinator: SigenergyDataUpdateCoordinator,
-) -> None:
-    """Register parent devices before child entity platforms are set up."""
-    device_registry = dr.async_get(hass)
-    plant_device = device_registry.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, f"{entry.entry_id}_plant")},
-        name=entry.data[CONF_NAME],
-        manufacturer="Sigenergy",
-        model="Energy Storage System",
-    )
-
-    for device_name in coordinator.hub.inverter_connections:
-        inverter_data = (coordinator.data or {}).get("inverters", {}).get(
-            device_name, {}
-        )
-        device_registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={
-                (
-                    DOMAIN,
-                    f"{entry.entry_id}_{generate_device_id(device_name)}",
-                )
-            },
-            name=device_name,
-            manufacturer="Sigenergy",
-            model=inverter_data.get("inverter_model_type", "Sigen Inverter"),
-            serial_number=inverter_data.get("inverter_serial_number"),
-            sw_version=inverter_data.get("inverter_machine_firmware_version"),
-            via_device_id=plant_device.id,
-        )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -113,7 +77,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "hub": hub,
     }
 
-    _register_parent_devices(hass, entry, coordinator)
+    register_parent_devices(
+        hass,
+        config_entry_id=entry.entry_id,
+        domain=DOMAIN,
+        plant_name=entry.data[CONF_NAME],
+        inverter_connections=coordinator.hub.inverter_connections,
+        coordinator_data=coordinator.data or {},
+        device_id_fn=generate_device_id,
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))

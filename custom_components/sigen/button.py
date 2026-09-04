@@ -10,7 +10,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -28,6 +27,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
+from .device_registry_compat import parent_device_info
 from .sigen_entity import SigenergyEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -116,17 +116,16 @@ async def async_setup_entry(
             dc_name = f"{device_name} DC Charger"
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
-            parent_inverter_device_id = dr.async_get_device_id_by_identifier(
-                hass,
-                (DOMAIN, parent_inverter_id),
-                config_entry_id=config_entry.entry_id,
-            )
             dc_device_info = DeviceInfo(
                 identifiers={(DOMAIN, dc_id)},
                 name=dc_name,
                 manufacturer="Sigenergy",
                 model="DC Charger",
-                via_device_id=parent_inverter_device_id,
+                **parent_device_info(
+                    hass,
+                    config_entry.entry_id,
+                    (DOMAIN, parent_inverter_id),
+                ),
             )
             entities.extend(
                 generate_sigen_entity(
