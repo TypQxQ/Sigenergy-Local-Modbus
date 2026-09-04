@@ -5,6 +5,7 @@ import logging
 from typing import Any, Optional
 
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_registry import (
     RegistryEntryHider,
@@ -50,7 +51,11 @@ def _generate_device_info(
         "identifiers": {(DOMAIN, f"{config_entry_id}_{generate_device_id(device_name)}")},
         "name": device_name,
         "manufacturer": "Sigenergy",
-        "via_device": plant_device_identifier,
+        "via_device_id": dr.async_get_device_id_by_identifier(
+            coordinator.hass,
+            plant_device_identifier,
+            config_entry_id=config_entry_id,
+        ),
     }
 
     if device_type == DEVICE_TYPE_INVERTER:

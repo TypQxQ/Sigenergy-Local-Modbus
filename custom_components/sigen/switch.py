@@ -9,6 +9,7 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.exceptions import HomeAssistantError
@@ -215,12 +216,17 @@ async def async_setup_entry(
             dc_name = f"{device_name} DC Charger"
             parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
             dc_id = f"{parent_inverter_id}_dc_charger"
+            parent_inverter_device_id = dr.async_get_device_id_by_identifier(
+                hass,
+                (DOMAIN, parent_inverter_id),
+                config_entry_id=config_entry.entry_id,
+            )
             dc_device_info = DeviceInfo(
                 identifiers={(DOMAIN, dc_id)},
                 name=dc_name,
                 manufacturer="Sigenergy",
                 model="DC Charger",
-                via_device=(DOMAIN, parent_inverter_id),
+                via_device_id=parent_inverter_device_id,
             )
             add_entities_for_device(device_name, device_conn, DC_CHARGER_SWITCHES, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
 
