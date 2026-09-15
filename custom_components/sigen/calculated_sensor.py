@@ -239,10 +239,17 @@ class SigenergyCalculations:
             try:
                 voltage_dec = safe_decimal(pv_voltage)
                 current_dec = safe_decimal(pv_current)
-                if voltage_dec and current_dec:
-                    power = voltage_dec * current_dec  # Already in Watts
-                else:
+                if voltage_dec is None or current_dec is None:
+                    return None
+
+                # The signed Modbus inputs can contain small negative offsets
+                # under low-light conditions. A PV string is a production source,
+                # so these offsets must not become negative power and make its
+                # accumulated or daily energy decrease.
+                if voltage_dec <= Decimal("0") or current_dec <= Decimal("0"):
                     return 0.0
+
+                power = voltage_dec * current_dec  # Already in Watts
             except (ValueError, TypeError, InvalidOperation):
                 _LOGGER.warning(
                     "[CS][PV Power] Error converting values to Decimal: V=%s, I=%s",
