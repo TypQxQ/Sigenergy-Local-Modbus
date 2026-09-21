@@ -7,7 +7,11 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntry, async_get as async_get_device_registry
+from homeassistant.helpers.device_registry import (
+    DeviceEntry,
+    async_entries_for_config_entry,
+    async_get as async_get_device_registry,
+)
 
 try:
     from pymodbus import __version__ as pymodbus_version
@@ -28,7 +32,7 @@ async def async_get_config_entry_diagnostics(
 
     # Get all devices for this config entry
     device_registry = async_get_device_registry(hass)
-    devices = device_registry.devices.get_devices_for_config_entry_id(entry.entry_id)
+    devices = async_entries_for_config_entry(device_registry, entry.entry_id)
     
     # Build device diagnostics for all devices
     all_devices_diagnostics = {}
@@ -315,7 +319,9 @@ async def async_get_device_diagnostics(
 
         # Add comprehensive device registry information for all devices in this integration
         device_registry = async_get_device_registry(hass)
-        all_integration_devices = device_registry.devices.get_devices_for_config_entry_id(entry.entry_id)
+        all_integration_devices = async_entries_for_config_entry(
+            device_registry, entry.entry_id
+        )
         
         device_diagnostics["all_integration_devices"] = {}
         for dev in all_integration_devices:
