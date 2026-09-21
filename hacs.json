@@ -1,3 +1,4 @@
 {
-  "name": "Sigenergy ESS"
+  "name": "Sigenergy ESS",
+  "homeassistant": "2026.1.0"
 }
