@@ -16,7 +16,6 @@ from homeassistant.config_entries import (  # pylint: disable=syntax-error
 )
 from homeassistant.const import (
     CONF_NAME,
-    STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -340,11 +339,11 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                     _LOGGER.debug("Value function failed for %s because data is missing: %s", self.entity_id, ex)
                 else:
                     _LOGGER.error("Error in value_fn for %s: %s", self.entity_id, ex, exc_info=True)
-                return None if self.entity_description.state_class else STATE_UNKNOWN
+                return None
 
         # No transformation function, handle raw_value
         if raw_value is None:
-            return None if self.entity_description.state_class else STATE_UNKNOWN
+            return None
 
         # Handle special data types
         if self.entity_description.device_class == SensorDeviceClass.TIMESTAMP:
