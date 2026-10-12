@@ -69,6 +69,13 @@ class _ComponentGroup:
     `readable` components are probed and included in `async_update()`.
     `commands` components are write-only registers (see `sigen_components`)
     that are never updated, only written through.
+
+    Register support is tracked per field, not per component, and persists
+    across probe rounds: a field confirmed supported or unsupported on one
+    round stays known even if another field on the same component is still
+    inconclusive (e.g. a timeout) on that round or a later one. A component
+    is only handed to `restrict_fields()` -- a one-shot, irreversible
+    narrowing -- once every one of its fields has a known answer.
     """
 
     def __init__(
@@ -76,7 +83,7 @@ class _ComponentGroup:
     ) -> None:
         self._readable = readable
         self._commands = commands
-        self._resolved: set[str] = set()
+        self._field_support: dict[str, dict[str, bool]] = {name: {} for name in readable}
         self._last_probe_failure: dict[str, float] = {}
 
     def has_register(self, register_name: str) -> bool:
@@ -91,9 +98,7 @@ class _ComponentGroup:
         for name, component in self._readable.items():
             if register_name not in component.declared_fields:
                 continue
-            if name not in self._resolved:
-                return None
-            return register_name in component.resolved_fields
+            return self._field_support[name].get(register_name)
         for component in self._commands.values():
             if register_name in component.declared_fields:
                 return True  # write-only registers are never probed
@@ -102,17 +107,15 @@ class _ComponentGroup:
     async def async_update(self) -> dict[str, Any]:
         """Read every readable component and return `{register_name: value}`.
 
-        An unresolved (not yet probed, or still backing off) component
-        contributes no keys this cycle, same as a register whose support was
-        still unknown under the old hub.
+        A field whose support is still unknown contributes no key this
+        cycle, same as a register whose support was still unknown under the
+        old hub.
 
         Raises `ModbusConnectionError` if the link itself is down.
         """
         values: dict[str, Any] = {}
         for name, component in self._readable.items():
             await self._async_ensure_resolved(name, component)
-            if name not in self._resolved:
-                continue
             await self._async_read_component(name, component, values)
         return values
 
@@ -129,23 +132,27 @@ class _ComponentGroup:
 
     # -- probing --------------------------------------------------------------
 
-    async def _async_ensure_resolved(self, name: str, component: Component) -> None:
-        """Probe `component`'s register support once, with a retry backoff.
+    def _is_fully_resolved(self, name: str, component: Component) -> bool:
+        support = self._field_support[name]
+        return all(field_name in support for field_name in component.declared_fields)
 
-        Leaves the component alone if it is already resolved, or was probed
-        too recently to retry. Never raises for an incomplete probe -- an
-        unresolved component is simply skipped by the caller this cycle, the
-        same outcome the old hub had while a register's support was unknown.
+    async def _async_ensure_resolved(self, name: str, component: Component) -> None:
+        """Probe `component`'s still-unknown fields once, with a retry backoff.
+
+        Leaves the component alone if every field is already resolved, or it
+        was probed too recently to retry. Never raises for an incomplete
+        probe -- a field whose support is still unknown is simply skipped by
+        the caller this cycle, the same outcome the old hub had.
 
         Raises `ModbusConnectionError` if the link itself is down.
         """
-        if name in self._resolved:
+        if self._is_fully_resolved(name, component):
             return
         last_failure = self._last_probe_failure.get(name)
         if last_failure is not None and time.monotonic() - last_failure < PROBE_RETRY_DELAY:
             return
         try:
-            await self._async_probe(component)
+            await self._async_probe(name, component)
         except ModbusConnectionError:
             raise
         except ModbusError as ex:
@@ -157,30 +164,44 @@ class _ComponentGroup:
                 ex,
             )
         else:
-            self._resolved.add(name)
             self._last_probe_failure.pop(name, None)
+            if self._is_fully_resolved(name, component):
+                supported = {
+                    field_name
+                    for field_name, ok in self._field_support[name].items()
+                    if ok
+                }
+                component.restrict_fields(supported)
 
-    async def _async_probe(self, component: Component) -> None:
-        """Resolve one component's register support, narrowing it if needed.
+    async def _async_probe(self, name: str, component: Component) -> None:
+        """Resolve as many of `component`'s still-unknown fields as possible.
 
         Tries a normal bulk update first, since most components need no
         narrowing at all. Only on failure does it fall back to probing every
-        declared field individually (mirroring the old hub's per-register
-        probe) and call `restrict_fields()` once with the result.
+        still-unknown field individually (mirroring the old hub's
+        per-register probe). A field's result (supported or confirmed
+        unsupported) is recorded immediately and kept regardless of what
+        happens to any other field -- `restrict_fields()` is applied by the
+        caller only once every field has an answer, so one inconclusive
+        field (e.g. a timeout) delays locking the component in without
+        losing progress already made on the rest.
 
-        Raises `ModbusError` if any individual field's support could not be
-        determined this round (e.g. a timeout), so the caller retries the
-        whole component later rather than locking in an incomplete guess --
-        `restrict_fields()` can only narrow a component, never widen it again.
+        Raises `ModbusError` if any field probed this round was inconclusive,
+        so the caller retries the remaining unknown fields later.
         """
-        try:
-            await asyncio.shield(component.async_update(notify=False))
-        except ModbusConnectionError:
-            raise
-        except ModbusError:
-            pass
-        else:
-            return  # every declared field answered; nothing to restrict
+        support = self._field_support[name]
+        if not support:
+            try:
+                await asyncio.shield(component.async_update(notify=False))
+            except ModbusConnectionError:
+                raise
+            except ModbusError:
+                pass
+            else:
+                # Every declared field answered in one go.
+                for field_name in component.declared_fields:
+                    support[field_name] = True
+                return
 
         unit = component.modbus_unit
         read = (
@@ -188,47 +209,84 @@ class _ComponentGroup:
             if component.register_space == "input"
             else unit.read_holding_registers
         )
-        supported: set[str] = set()
+        inconclusive: ModbusError | None = None
         for field_name, field in component.declared_fields.items():
+            if field_name in support:
+                continue
             if not isinstance(field, RegisterField):
-                supported.add(field_name)  # bit fields aren't probed; keep as-is
+                support[field_name] = True  # bit fields aren't probed; keep as-is
                 continue
             try:
                 await asyncio.shield(read(field.address, field.count))
             except IllegalDataAddressError:
-                continue  # confirmed unsupported on this device
+                support[field_name] = False  # confirmed unsupported on this device
             except ModbusConnectionError:
                 raise
-            except ModbusError:
-                raise  # inconclusive (e.g. timeout): retry the whole component later
+            except ModbusError as ex:
+                # Inconclusive (e.g. a timeout): leave unresolved and keep
+                # probing the rest of the fields this round.
+                inconclusive = ex
             else:
-                supported.add(field_name)
-        component.restrict_fields(supported)
+                support[field_name] = True
+        if inconclusive is not None:
+            raise inconclusive
 
     async def _async_read_component(
         self, name: str, component: Component, values: dict[str, Any]
     ) -> None:
-        """Update one component and scatter its decoded values into `values`.
+        """Scatter `component`'s decoded values into `values`.
 
-        A component that fails to update (but whose link is still up) leaves
-        its fields as `None` in `values` rather than failing the whole read,
+        Once every field is resolved, this reads the component as a single
+        batched update. While some fields are still being probed, confirmed-
+        supported fields are read individually instead, so they aren't held
+        back at `None` by siblings still being probed.
+
+        A component/field that fails to read (but whose link is still up)
+        is left as `None` in `values` rather than failing the whole read,
         matching the old hub's per-register-block resilience.
 
         Raises `ModbusConnectionError` if the link itself is down.
         """
-        try:
-            await asyncio.shield(component.async_update())
-        except ModbusConnectionError:
-            raise
-        except ModbusError as ex:
-            _LOGGER.debug(
-                "Reading %s failed; keeping previous values as unknown: %s", name, ex
-            )
+        support = self._field_support[name]
+
+        if self._is_fully_resolved(name, component):
+            try:
+                await asyncio.shield(component.async_update())
+            except ModbusConnectionError:
+                raise
+            except ModbusError as ex:
+                _LOGGER.debug(
+                    "Reading %s failed; keeping previous values as unknown: %s", name, ex
+                )
+                for field_name in component.declared_fields:
+                    values.setdefault(field_name, None)
+                return
             for field_name in component.declared_fields:
-                values.setdefault(field_name, None)
+                values[field_name] = getattr(component, field_name)
             return
-        for field_name in component.declared_fields:
-            values[field_name] = getattr(component, field_name)
+
+        unit = component.modbus_unit
+        read = (
+            unit.read_input_registers
+            if component.register_space == "input"
+            else unit.read_holding_registers
+        )
+        for field_name, field in component.declared_fields.items():
+            if not support.get(field_name):
+                values.setdefault(field_name, None)
+                continue
+            if not isinstance(field, RegisterField):
+                values.setdefault(field_name, None)
+                continue
+            try:
+                words = await asyncio.shield(read(field.address, field.count))
+            except ModbusConnectionError:
+                raise
+            except ModbusError as ex:
+                _LOGGER.debug("Reading %s.%s failed: %s", name, field_name, ex)
+                values.setdefault(field_name, None)
+                continue
+            values[field_name] = field.decode(words)
 
 
 class SigenergyPlant:
