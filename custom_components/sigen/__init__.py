@@ -9,6 +9,8 @@ from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-i
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 
 from .const import (
     CONF_SCAN_INTERVAL,
@@ -23,6 +25,16 @@ from .common import generate_device_id
 from .device_registry_compat import register_parent_devices
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up the Sigenergy ESS integration."""
+    try:
+        integration = await async_get_integration(hass, DOMAIN)
+        await integration.async_get_platform("diagnostics")
+    except Exception as ex:  # noqa: BLE001 - preloading is best-effort
+        _LOGGER.debug("Could not preload the diagnostics platform: %s", ex)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
