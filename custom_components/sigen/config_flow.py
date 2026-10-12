@@ -355,25 +355,25 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 # If this is not answering as a plant return false
                 # Returns error message if failed.
                 if await self._async_try_read_register(
-                    params, DEFAULT_PLANT_SLAVE_ID, DEVICE_CHECKS[DEVICE_TYPE_PLANT]):
+                    params, DEFAULT_PLANT_SLAVE_ID, DEVICE_CHECKS[DEVICE_TYPE_PLANT], timeout):
                     return False
 
                 for device_id in range(1, 247):
 
                     # Check if DC Charger
                     if not await self._async_try_read_register(
-                        params, device_id, DEVICE_CHECKS[DEVICE_TYPE_DC_CHARGER]):
+                        params, device_id, DEVICE_CHECKS[DEVICE_TYPE_DC_CHARGER], timeout):
                         self._discovered_device_type[DEVICE_TYPE_DC_CHARGER].append(device_id)
                         self._discovered_device_type[DEVICE_TYPE_INVERTER].append(device_id)
                         continue
                     # Check if Inverter
                     elif not await self._async_try_read_register(
-                        params, device_id, DEVICE_CHECKS[DEVICE_TYPE_INVERTER]):
+                        params, device_id, DEVICE_CHECKS[DEVICE_TYPE_INVERTER], timeout):
                         self._discovered_device_type[DEVICE_TYPE_INVERTER].append(device_id)
                         continue
                     # Check if AC Charger
                     elif not await self._async_try_read_register(
-                        params, device_id, DEVICE_CHECKS[DEVICE_TYPE_AC_CHARGER]):
+                        params, device_id, DEVICE_CHECKS[DEVICE_TYPE_AC_CHARGER], timeout):
                         self._discovered_device_type[DEVICE_TYPE_AC_CHARGER].append(device_id)
                         continue
                     else:
@@ -515,6 +515,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             ModbusTcpParams(host=host, port=port),
             slave_id,
             register_address,
+            timeout,
         )
         # self.async_check_device_type(host, port, slave_id, timeout)
         if response:
@@ -522,15 +523,34 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         return errors
 
     async def _async_try_read_register(
-        self, params: ModbusTcpParams, slave_id: int, register_address: int
+        self,
+        params: ModbusTcpParams,
+        slave_id: int,
+        register_address: int,
+        timeout: float = 1,
     ) -> str:
-        """Helper to attempt reading a single Modbus register."""
-        try:
+        """Helper to attempt reading a single Modbus register.
+
+        The shared connection's own timeout only ever raises a floor (so it
+        can't be used to make a single check fail fast); `timeout` is
+        enforced here instead, around the whole acquire-and-read, so a
+        device that never answers can't stall a check -- or a 247-slave
+        DHCP scan -- beyond the budget the caller asked for.
+        """
+        async def _read() -> None:
             async with async_get_temporary_unit(self.hass, params, slave_id) as unit:
                 await unit.read_input_registers(register_address, 1)
+
+        try:
+            await asyncio.wait_for(_read(), timeout=timeout)
             _LOGGER.debug("Modbus read successful for register %s on %s:%s, slave %s.",
                         register_address, params.host, params.port, slave_id)
             return ""
+        except asyncio.TimeoutError:
+            err = "Modbus read timed out after %ss for register %s on %s:%s, slave %s" % \
+                (timeout, register_address, params.host, params.port, slave_id)
+            _LOGGER.debug(err)
+            return err
         except ModbusError as e:
             err = "Modbus error during read for register %s on %s:%s, slave %s: %s" % \
                 (register_address, params.host, params.port, slave_id, e)
@@ -555,7 +575,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             for device_type, register_address in DEVICE_CHECKS.items():
                 # Returns error message if failed.
                 if not await self._async_try_read_register(
-                    params, slave_id, register_address):
+                    params, slave_id, register_address, timeout):
                 # Special case: If DC Charger register read succeeds, it's an Inverter *with* DC.
                 # The loop structure handles this implicitly by checking DC first.
                 # If the DC check passes, we return DEVICE_TYPE_DC_CHARGER.
