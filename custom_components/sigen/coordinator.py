@@ -135,7 +135,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         value: Union[int, float, str]
     ) -> None:
         """Write a parameter via the Modbus hub and schedule a update."""
-        try:
+
+        async def _write_and_refresh() -> None:
             await self.hub.async_write_parameter(
                 device_type=device_type,
                 device_identifier=device_identifier,
@@ -144,6 +145,22 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             )
             # Trigger an immediate refresh
             await self.async_request_refresh()
+
+        try:
+            # Shielded as one unit: this is commonly awaited from inside a
+            # service call that an automation's own task is running (e.g. a
+            # select/number entity's async_select_option/async_set_native_value).
+            # Home Assistant cancels that task outright if the automation
+            # retriggers itself (mode: restart) while the previous run is
+            # still in flight. Without shielding, that cancellation can land
+            # mid-refresh: DataUpdateCoordinator's own CancelledError handling
+            # marks last_update_success False *silently* (no log at all) and
+            # does not re-raise unless the current task itself was the one
+            # cancelled with calls still pending -- which briefly makes every
+            # entity on this coordinator unavailable for no logged reason,
+            # until the next refresh succeeds. Shielding lets the write and
+            # the refresh it triggers always run to completion.
+            await asyncio.shield(_write_and_refresh())
         except SigenergyModbusError as ex:
             _LOGGER.error("Failed to write parameter %s to %s '%s': %s",
                           register_name, device_type, device_identifier or 'plant', ex)
