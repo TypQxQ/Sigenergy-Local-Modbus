@@ -62,6 +62,32 @@ _LOGGER = logging.getLogger(__name__)
 #: matching the old hub's `probe_retry_delay`.
 PROBE_RETRY_DELAY = 60.0
 
+#: Modbus per-request register ceiling most gateways honour safely.
+_MAX_BLOCK_SPAN = 123
+
+
+def _group_contiguous_blocks(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Group sorted `(address, count)` spans into strictly-contiguous blocks.
+
+    Mirrors the old hub's interval-building exactly: two spans merge only
+    when there is no gap between them, capped at a safe per-request size, so
+    a batched read can never cross into an address this component doesn't
+    declare.
+    """
+    ordered = sorted(set(spans))
+    if not ordered:
+        return []
+    blocks: list[tuple[int, int]] = []
+    start, end = ordered[0][0], ordered[0][0] + ordered[0][1]
+    for address, count in ordered[1:]:
+        if address == end and (end - start + count) <= _MAX_BLOCK_SPAN:
+            end += count
+        else:
+            blocks.append((start, end - start))
+            start, end = address, address + count
+    blocks.append((start, end - start))
+    return blocks
+
 
 class _ComponentGroup:
     """Probe, read and write one named set of components sharing a unit.
@@ -236,33 +262,34 @@ class _ComponentGroup:
     ) -> None:
         """Scatter `component`'s decoded values into `values`.
 
-        Once every field is resolved, this reads the component as a single
-        batched update. While some fields are still being probed, confirmed-
-        supported fields are read individually instead, so they aren't held
-        back at `None` by siblings still being probed.
+        Reads every currently-known-supported field as a batch of strictly
+        contiguous blocks (same grouping regardless of whether the component
+        is fully resolved yet), with each block's failure isolated from the
+        others -- a failure reading one block leaves only that block's
+        fields `None` this cycle, instead of blanking the whole component
+        the way going through `Component.async_update()` would (it reads
+        every planned block before decoding any of them, so one failing
+        block stops every other block's data from ever being decoded, even
+        already-read ones). This matches the old hub's per-interval
+        resilience, and also means a persistently-unresolved field never
+        costs more than its own block on every poll.
 
-        A component/field that fails to read (but whose link is still up)
-        is left as `None` in `values` rather than failing the whole read,
-        matching the old hub's per-register-block resilience.
+        A field whose support is still unknown, or whose block failed to
+        read this cycle (but whose link is still up), is left as `None`
+        rather than failing the whole read.
 
         Raises `ModbusConnectionError` if the link itself is down.
         """
         support = self._field_support[name]
-
-        if self._is_fully_resolved(name, component):
-            try:
-                await asyncio.shield(component.async_update())
-            except ModbusConnectionError:
-                raise
-            except ModbusError as ex:
-                _LOGGER.debug(
-                    "Reading %s failed; keeping previous values as unknown: %s", name, ex
-                )
-                for field_name in component.declared_fields:
-                    values.setdefault(field_name, None)
-                return
-            for field_name in component.declared_fields:
-                values[field_name] = getattr(component, field_name)
+        known_fields = {
+            field_name: field
+            for field_name, field in component.declared_fields.items()
+            if support.get(field_name) and isinstance(field, RegisterField)
+        }
+        for field_name in component.declared_fields:
+            if field_name not in known_fields:
+                values.setdefault(field_name, None)
+        if not known_fields:
             return
 
         unit = component.modbus_unit
@@ -271,22 +298,33 @@ class _ComponentGroup:
             if component.register_space == "input"
             else unit.read_holding_registers
         )
-        for field_name, field in component.declared_fields.items():
-            if not support.get(field_name):
-                values.setdefault(field_name, None)
-                continue
-            if not isinstance(field, RegisterField):
-                values.setdefault(field_name, None)
-                continue
+        blocks = _group_contiguous_blocks(
+            [(field.address, field.count) for field in known_fields.values()]
+        )
+        raw: dict[int, list[int]] = {}
+        for start, count in blocks:
             try:
-                words = await asyncio.shield(read(field.address, field.count))
+                raw[start] = await asyncio.shield(read(start, count))
             except ModbusConnectionError:
                 raise
             except ModbusError as ex:
-                _LOGGER.debug("Reading %s.%s failed: %s", name, field_name, ex)
+                _LOGGER.debug(
+                    "Reading %s block at address %s (count %s) failed; "
+                    "keeping previous values as unknown: %s",
+                    name, start, count, ex,
+                )
+
+        for field_name, field in known_fields.items():
+            block_start = next(
+                (start for start, count in blocks if start <= field.address < start + count),
+                None,
+            )
+            block = raw.get(block_start) if block_start is not None else None
+            if block is None:
                 values.setdefault(field_name, None)
                 continue
-            values[field_name] = field.decode(words)
+            offset = field.address - block_start
+            values[field_name] = field.decode(block[offset : offset + field.count])
 
 
 class SigenergyPlant:

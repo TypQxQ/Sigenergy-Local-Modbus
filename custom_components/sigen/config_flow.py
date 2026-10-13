@@ -536,17 +536,47 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         enforced here instead, around the whole acquire-and-read, so a
         device that never answers can't stall a check -- or a 247-slave
         DHCP scan -- beyond the budget the caller asked for.
+
+        The read itself is shielded: `wait_for` cancels whatever it's given
+        once `timeout` elapses, and cancelling an in-flight read directly
+        would abandon it mid-transaction -- the device still answers, but
+        nothing is left listening for that response, which orphans it on the
+        shared connection and forces a reconnect (see sigen_devices.py's
+        module docstring for the full mechanism). Shielding lets this check
+        fail on time while the read itself still runs to completion and
+        consumes its own response in the background.
+
+        On a timeout, that background read keeps a reference so its
+        eventual result is still consumed: unlike the prompt-failure paths
+        below, nothing is left awaiting it once this method has already
+        returned, so an error raised there would otherwise surface only as
+        an "exception was never retrieved" warning with none of this read's
+        register/slave context.
         """
         async def _read() -> None:
             async with async_get_temporary_unit(self.hass, params, slave_id) as unit:
                 await unit.read_input_registers(register_address, 1)
 
+        def _log_late_result(task: asyncio.Task) -> None:
+            """Log a read that finished after the caller already timed out."""
+            if task.cancelled():
+                return
+            ex = task.exception()
+            if ex is not None:
+                _LOGGER.debug(
+                    "Modbus read for register %s on %s:%s, slave %s failed after "
+                    "the %ss timeout had already elapsed: %s",
+                    register_address, params.host, params.port, slave_id, timeout, ex,
+                )
+
+        task = asyncio.ensure_future(_read())
         try:
-            await asyncio.wait_for(_read(), timeout=timeout)
+            await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
             _LOGGER.debug("Modbus read successful for register %s on %s:%s, slave %s.",
                         register_address, params.host, params.port, slave_id)
             return ""
         except asyncio.TimeoutError:
+            task.add_done_callback(_log_late_result)
             err = "Modbus read timed out after %ss for register %s on %s:%s, slave %s" % \
                 (timeout, register_address, params.host, params.port, slave_id)
             _LOGGER.debug(err)
