@@ -10,9 +10,10 @@
 
 ### Modbus + polling
 - Keep all I/O async; avoid adding new blocking calls (especially inside coordinator updates).
-- SigenergyModbusHub in modbus.py caches AsyncModbusTcpClient per (host, port) and guards reads/writes with per-connection asyncio locks.
-- Register reads are optimized by probing supported registers and building contiguous read intervals (max ~123 registers/read).
-- Maintain pymodbus compatibility via the safe wrapper that handles slave/device_id arg changes.
+- Connections come from Home Assistant's shared Modbus broker (homeassistant.components.modbus): async_get_unit() in modbus.py, async_get_temporary_unit() in config_flow.py. Do not open sockets or import pymodbus directly; the broker owns connection sharing, locking and reconnects.
+- Register layouts are modbus_connection Components built in sigen_components.py from the tables in modbusregisterdefinitions.py; add or change registers in those tables, not by hand-writing fields.
+- sigen_devices.py probes register support per field and reads supported fields as strictly contiguous blocks (max ~123 registers/read), with each block's failure isolated from the others.
+- Wrap every wire-touching await in asyncio.shield(): cancelling an in-flight request (e.g. an automation restarting mid-write) orphans its response on the shared connection and forces a reconnect.
 
 ### Entities + naming
 - Use SigenergyEntity (sigen_entity.py) as the base and create entities through generate_sigen_entity() (common.py) like existing platform files do.

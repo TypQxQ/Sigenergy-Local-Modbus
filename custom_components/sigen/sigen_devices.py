@@ -3,11 +3,11 @@
 Sigenergy ships different register sets across inverter/firmware variants,
 so (like the old `modbus.py` hub) a device's exact register support is not
 known until it is probed once per connection. `_ComponentGroup` reproduces
-the previous per-register probing (walking each declared field individually
-once a bulk read fails) and then calls `restrict_fields()` to permanently
-narrow the component to what the device actually answers -- the same end
-state the old hub's `register_support` dict and hand-built read intervals
-produced, built on the library's own planner instead.
+the previous probing (contiguous blocks first, then each still-unknown field
+individually) and the old hub's read intervals: strictly contiguous blocks
+of at most 123 registers, each block's failure isolated from the others.
+Once every field of a component has an answer, `restrict_fields()` narrows
+it so a write to an unsupported register is refused.
 
 A DC charger is not a separate Modbus unit: its registers live on the same
 unit as its parent inverter, and were polled as a logically separate read by
@@ -199,12 +199,49 @@ class _ComponentGroup:
                 }
                 component.restrict_fields(supported)
 
+    async def _async_read_blocks(
+        self, name: str, component: Component, fields: Mapping[str, RegisterField]
+    ) -> dict[str, list[int]]:
+        """Read `fields` as strictly-contiguous blocks; return words per field.
+
+        Each block's failure is isolated: a field is missing from the result
+        when its block failed to read (but the link is still up).
+
+        Raises `ModbusConnectionError` if the link itself is down.
+        """
+        unit = component.modbus_unit
+        read = (
+            unit.read_input_registers
+            if component.register_space == "input"
+            else unit.read_holding_registers
+        )
+        words: dict[str, list[int]] = {}
+        for start, count in _group_contiguous_blocks(
+            [(field.address, field.count) for field in fields.values()]
+        ):
+            try:
+                block = await asyncio.shield(read(start, count))
+            except ModbusConnectionError:
+                raise
+            except ModbusError as ex:
+                _LOGGER.debug(
+                    "Reading %s block at address %s (count %s) failed: %s",
+                    name, start, count, ex,
+                )
+                continue
+            for field_name, field in fields.items():
+                if start <= field.address < start + count:
+                    offset = field.address - start
+                    words[field_name] = block[offset : offset + field.count]
+        return words
+
     async def _async_probe(self, name: str, component: Component) -> None:
         """Resolve as many of `component`'s still-unknown fields as possible.
 
-        Tries a normal bulk update first, since most components need no
-        narrowing at all. Only on failure does it fall back to probing every
-        still-unknown field individually (mirroring the old hub's
+        The first round reads every declared field as contiguous blocks:
+        a block the device answers proves all of its fields, so most
+        components resolve without any per-field probing. Fields still
+        unknown after that are probed individually (mirroring the old hub's
         per-register probe). A field's result (supported or confirmed
         unsupported) is recorded immediately and kept regardless of what
         happens to any other field -- `restrict_fields()` is applied by the
@@ -217,17 +254,15 @@ class _ComponentGroup:
         """
         support = self._field_support[name]
         if not support:
-            try:
-                await asyncio.shield(component.async_update(notify=False))
-            except ModbusConnectionError:
-                raise
-            except ModbusError:
-                pass
-            else:
-                # Every declared field answered in one go.
-                for field_name in component.declared_fields:
-                    support[field_name] = True
-                return
+            register_fields = {
+                field_name: field
+                for field_name, field in component.declared_fields.items()
+                if isinstance(field, RegisterField)
+            }
+            for field_name in await self._async_read_blocks(
+                name, component, register_fields
+            ):
+                support[field_name] = True
 
         unit = component.modbus_unit
         read = (
@@ -265,14 +300,11 @@ class _ComponentGroup:
         Reads every currently-known-supported field as a batch of strictly
         contiguous blocks (same grouping regardless of whether the component
         is fully resolved yet), with each block's failure isolated from the
-        others -- a failure reading one block leaves only that block's
-        fields `None` this cycle, instead of blanking the whole component
-        the way going through `Component.async_update()` would (it reads
-        every planned block before decoding any of them, so one failing
-        block stops every other block's data from ever being decoded, even
-        already-read ones). This matches the old hub's per-interval
-        resilience, and also means a persistently-unresolved field never
-        costs more than its own block on every poll.
+        others. `Component.async_update()` is not used: it reads every
+        planned block before decoding any of them, so one failing block
+        would blank the whole component. This matches the old hub's
+        per-interval resilience, and also means a persistently-unresolved
+        field never costs more than its own block on every poll.
 
         A field whose support is still unknown, or whose block failed to
         read this cycle (but whose link is still up), is left as `None`
@@ -286,45 +318,12 @@ class _ComponentGroup:
             for field_name, field in component.declared_fields.items()
             if support.get(field_name) and isinstance(field, RegisterField)
         }
+        words = await self._async_read_blocks(name, component, known_fields)
         for field_name in component.declared_fields:
-            if field_name not in known_fields:
+            if field_name in words:
+                values[field_name] = known_fields[field_name].decode(words[field_name])
+            else:
                 values.setdefault(field_name, None)
-        if not known_fields:
-            return
-
-        unit = component.modbus_unit
-        read = (
-            unit.read_input_registers
-            if component.register_space == "input"
-            else unit.read_holding_registers
-        )
-        blocks = _group_contiguous_blocks(
-            [(field.address, field.count) for field in known_fields.values()]
-        )
-        raw: dict[int, list[int]] = {}
-        for start, count in blocks:
-            try:
-                raw[start] = await asyncio.shield(read(start, count))
-            except ModbusConnectionError:
-                raise
-            except ModbusError as ex:
-                _LOGGER.debug(
-                    "Reading %s block at address %s (count %s) failed; "
-                    "keeping previous values as unknown: %s",
-                    name, start, count, ex,
-                )
-
-        for field_name, field in known_fields.items():
-            block_start = next(
-                (start for start, count in blocks if start <= field.address < start + count),
-                None,
-            )
-            block = raw.get(block_start) if block_start is not None else None
-            if block is None:
-                values.setdefault(field_name, None)
-                continue
-            offset = field.address - block_start
-            values[field_name] = field.decode(block[offset : offset + field.count])
 
 
 class SigenergyPlant:
@@ -375,20 +374,20 @@ class SigenergyInverter:
             {"commands": self.commands},
         )
 
-        self.dc_charger_running_info: DCChargerRunningInfo | None = None
-        self.dc_charger_parameters: DCChargerParameters | None = None
-        self.dc_charger_commands: DCChargerCommands | None = None
+        self.dc_charger_running_info: Component | None = None
+        self.dc_charger_parameters: Component | None = None
+        self.dc_charger_commands: Component | None = None
         self._dc_charger_group: _ComponentGroup | None = None
         if has_dc_charger:
-            self.dc_charger_running_info = DCChargerRunningInfo(unit)
-            self.dc_charger_parameters = DCChargerParameters(unit)
-            self.dc_charger_commands = DCChargerCommands(unit)
+            running_info = DCChargerRunningInfo(unit)
+            parameters = DCChargerParameters(unit)
+            commands = DCChargerCommands(unit)
+            self.dc_charger_running_info = running_info
+            self.dc_charger_parameters = parameters
+            self.dc_charger_commands = commands
             self._dc_charger_group = _ComponentGroup(
-                {
-                    "running_info": self.dc_charger_running_info,
-                    "parameters": self.dc_charger_parameters,
-                },
-                {"commands": self.dc_charger_commands},
+                {"running_info": running_info, "parameters": parameters},
+                {"commands": commands},
             )
 
     def _groups(self) -> tuple[_ComponentGroup, ...]:
