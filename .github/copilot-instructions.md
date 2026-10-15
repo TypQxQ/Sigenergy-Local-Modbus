@@ -1,6 +1,7 @@
 ## Sigenergy Local Modbus (sigen) – AI Coding Notes
 
 - Integration lives in custom_components/sigen/ and follows ConfigEntry + DataUpdateCoordinator.
+- Version 1.3.0 targets Home Assistant 2026.10+ and Python 3.14.2+. Develop and run regression tests on Python 3.14.
 - Core flow: config_flow.py → __init__.py (setup entry) → modbus.py (SigenergyModbusHub) → coordinator.py → platform entities.
 
 ### Domain model
