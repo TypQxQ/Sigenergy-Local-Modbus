@@ -48,6 +48,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Update data via Modbus library."""
+        device_tasks: set[asyncio.Task] = set()
         try:
             async with async_timeout.timeout(60):
                 start_time = dt_util.utcnow()
@@ -65,6 +66,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     for name, cfg in self.hub.inverter_connections.items()
                     if cfg.get(CONF_INVERTER_HAS_DCCHARGER, False)
                 }
+                device_tasks.update(inverter_tasks.values())
+                device_tasks.update(dc_tasks.values())
                 inverter_data: dict[str, Any] = {}
                 for name, task in inverter_tasks.items():
                     try:
@@ -85,6 +88,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     name: asyncio.create_task(self.hub.async_read_ac_charger_data(name))
                     for name in self.hub.ac_charger_connections
                 }
+                device_tasks.update(ac_tasks.values())
                 ac_charger_data: dict[str, Any] = {}
                 for name, task in ac_tasks.items():
                     try:
@@ -126,6 +130,16 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
         except Exception as exception:
             raise UpdateFailed(f"Error communicating with Sigenergy system: {exception}") from exception
+        finally:
+            # A timeout/cancellation otherwise stops only the child currently
+            # awaited, leaving sibling polls running into the next update.
+            # Cancel the read workflows and retrieve every result. The device
+            # layer still lets each in-flight wire transaction finish safely.
+            for task in device_tasks:
+                if not task.done():
+                    task.cancel()
+            if device_tasks:
+                await asyncio.gather(*device_tasks, return_exceptions=True)
 
     async def async_write_parameter(
         self,

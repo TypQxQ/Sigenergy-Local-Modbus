@@ -138,6 +138,41 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(AttributeError):
             await plant.async_write("plant_ess_soh", 1)
 
+    async def test_unsupported_write_is_blocked_while_sibling_probe_is_inconclusive(self) -> None:
+        unit, plant = self._new_plant()
+        unsupported = "plant_active_power_fixed_target"
+        unresolved = "plant_reactive_power_fixed_target"
+        unsupported_addr = self.defs.PLANT_PARAMETER_REGISTERS[unsupported].address
+        unresolved_addr = self.defs.PLANT_PARAMETER_REGISTERS[unresolved].address
+        unit.fail_read(unsupported_addr, IllegalDataAddressError(2), register_type="holding")
+        unit.fail_read(unresolved_addr, ModbusTimeoutError("retry later"), register_type="holding")
+
+        await plant.async_update()
+        self.assertIs(plant.is_supported(unsupported), False)
+        self.assertIsNone(plant.is_supported(unresolved))
+        before = dict(unit.holding)
+
+        with self.assertRaises(AttributeError):
+            await plant.async_write(unsupported, 1000)
+
+        self.assertEqual(before, unit.holding, "an unsupported register must never be written")
+
+    async def test_supported_write_still_works_while_sibling_probe_is_inconclusive(self) -> None:
+        unit, plant = self._new_plant()
+        supported = "plant_active_power_fixed_target"
+        unresolved = "plant_reactive_power_fixed_target"
+        unresolved_addr = self.defs.PLANT_PARAMETER_REGISTERS[unresolved].address
+        unit.fail_read(unresolved_addr, ModbusTimeoutError("retry later"), register_type="holding")
+
+        await plant.async_update()
+        self.assertIs(plant.is_supported(supported), True)
+        self.assertIsNone(plant.is_supported(unresolved))
+
+        await plant.async_write(supported, 1000)
+        field = plant.parameters.declared_fields[supported]
+        actual = [unit.holding[field.address + offset] for offset in range(field.count)]
+        self.assertEqual(field.encode(1000), actual)
+
     async def test_dead_link_propagates_as_connection_error(self) -> None:
         conn = MockModbusConnection()
         unit = conn.for_unit(1)

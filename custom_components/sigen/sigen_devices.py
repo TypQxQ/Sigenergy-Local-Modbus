@@ -165,8 +165,13 @@ class _ComponentGroup:
     async def async_write(self, register_name: str, value: Any) -> None:
         """Write a single register by name.
 
-        Raises `AttributeError` if this group declares no such register.
+        Raises `AttributeError` for an unknown or confirmed-unsupported register.
         """
+        # A sibling can remain inconclusive indefinitely, delaying the
+        # component's one-shot restrict_fields(). Honour what is already
+        # known about this field without blocking unresolved or write-only ones.
+        if self.is_supported(register_name) is False:
+            raise AttributeError(f"unsupported register {register_name!r}")
         for component in (*self._readable.values(), *self._commands.values()):
             if register_name in component.declared_fields:
                 await self._async_request(component.write(register_name, value))
