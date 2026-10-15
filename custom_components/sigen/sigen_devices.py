@@ -112,6 +112,7 @@ class _ComponentGroup:
         self._readable = readable
         self._commands = commands
         self._field_support: dict[str, dict[str, bool]] = {name: {} for name in readable}
+        self._bulk_probed: set[str] = set()
         self._last_probe_failure: dict[str, float] = {}
         self._pending_requests: set[asyncio.Task[Any]] = set()
 
@@ -229,8 +230,8 @@ class _ComponentGroup:
 
     async def _async_read_blocks(
         self, name: str, component: Component, fields: Mapping[str, RegisterField]
-    ) -> dict[str, list[int]]:
-        """Read `fields` as strictly-contiguous blocks; return words per field.
+    ) -> tuple[dict[str, list[int]], dict[str, ModbusError]]:
+        """Read contiguous blocks; return words and failed-block errors per field.
 
         Each block's failure is isolated: a field is missing from the result
         when its block failed to read (but the link is still up).
@@ -244,6 +245,7 @@ class _ComponentGroup:
             else unit.read_holding_registers
         )
         words: dict[str, list[int]] = {}
+        errors: dict[str, ModbusError] = {}
         for start, count in _group_contiguous_blocks(
             [(field.address, field.count) for field in fields.values()]
         ):
@@ -252,6 +254,11 @@ class _ComponentGroup:
             except ModbusConnectionError:
                 raise
             except ModbusError as ex:
+                errors.update(
+                    (field_name, ex)
+                    for field_name, field in fields.items()
+                    if start <= field.address < start + count
+                )
                 _LOGGER.debug(
                     "Reading %s block at address %s (count %s) failed: %s",
                     name, start, count, ex,
@@ -261,7 +268,7 @@ class _ComponentGroup:
                 if start <= field.address < start + count:
                     offset = field.address - start
                     words[field_name] = block[offset : offset + field.count]
-        return words
+        return words, errors
 
     async def _async_probe(self, name: str, component: Component) -> None:
         """Resolve as many of `component`'s still-unknown fields as possible.
@@ -269,8 +276,10 @@ class _ComponentGroup:
         The first round reads every declared field as contiguous blocks:
         a block the device answers proves all of its fields, so most
         components resolve without any per-field probing. Fields still
-        unknown after that are probed individually (mirroring the old hub's
-        per-register probe). A field's result (supported or confirmed
+        unknown after an illegal-address response are probed individually.
+        Other failed blocks remain inconclusive until a later retry: spending
+        their wire timeout twice can prevent the first refresh from finishing.
+        A field's result (supported or confirmed
         unsupported) is recorded immediately and kept regardless of what
         happens to any other field -- `restrict_fields()` is applied by the
         caller only once every field has an answer, so one inconclusive
@@ -281,16 +290,25 @@ class _ComponentGroup:
         so the caller retries the remaining unknown fields later.
         """
         support = self._field_support[name]
-        if not support:
+        deferred: dict[str, ModbusError] = {}
+        if not support and name not in self._bulk_probed:
             register_fields = {
                 field_name: field
                 for field_name, field in component.declared_fields.items()
                 if isinstance(field, RegisterField)
             }
-            for field_name in await self._async_read_blocks(
+            words, errors = await self._async_read_blocks(
                 name, component, register_fields
-            ):
+            )
+            # Even an entirely inconclusive bulk pass must move on to
+            # individual probes after backoff, rather than repeat forever.
+            self._bulk_probed.add(name)
+            for field_name in words:
                 support[field_name] = True
+            deferred = {
+                field_name: error for field_name, error in errors.items()
+                if not isinstance(error, IllegalDataAddressError)
+            }
 
         unit = component.modbus_unit
         read = (
@@ -298,9 +316,9 @@ class _ComponentGroup:
             if component.register_space == "input"
             else unit.read_holding_registers
         )
-        inconclusive: ModbusError | None = None
+        inconclusive: ModbusError | None = next(iter(deferred.values()), None)
         for field_name, field in component.declared_fields.items():
-            if field_name in support:
+            if field_name in support or field_name in deferred:
                 continue
             if not isinstance(field, RegisterField):
                 support[field_name] = True  # bit fields aren't probed; keep as-is
@@ -346,7 +364,7 @@ class _ComponentGroup:
             for field_name, field in component.declared_fields.items()
             if support.get(field_name) and isinstance(field, RegisterField)
         }
-        words = await self._async_read_blocks(name, component, known_fields)
+        words, _errors = await self._async_read_blocks(name, component, known_fields)
         for field_name in component.declared_fields:
             if field_name in words:
                 values[field_name] = known_fields[field_name].decode(words[field_name])

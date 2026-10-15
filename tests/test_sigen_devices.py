@@ -161,7 +161,11 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
     async def test_supported_write_still_works_while_sibling_probe_is_inconclusive(self) -> None:
         unit, plant = self._new_plant()
         supported = "plant_active_power_fixed_target"
-        unresolved = "plant_reactive_power_fixed_target"
+        unresolved = "plant_power_factor_target"
+        # Illegal-address bulk responses permit immediate per-field probing;
+        # the supported write must remain usable while another field times out.
+        absent_addr = self.defs.PLANT_PARAMETER_REGISTERS["plant_reactive_power_fixed_target"].address
+        unit.fail_read(absent_addr, IllegalDataAddressError(2), register_type="holding")
         unresolved_addr = self.defs.PLANT_PARAMETER_REGISTERS[unresolved].address
         unit.fail_read(unresolved_addr, ModbusTimeoutError("retry later"), register_type="holding")
 
@@ -246,6 +250,8 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
                 started.set()
                 await release.wait()
                 raise ModbusTimeoutError("late optional-register timeout")
+            if address <= reg.address < address + count:
+                raise IllegalDataAddressError(2)  # enter individual probing this round
             return await original_read(address, count)
 
         with patch.object(unit, "read_input_registers", slow_optional_read):
@@ -337,7 +343,7 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
         ].address
         unit.fail_read(flaky_addr, ModbusTimeoutError("flaky"), register_type="input")
 
-        await plant.async_update()  # round 1: bulk fails, falls back to per-field probing
+        await plant.async_update()  # keep successful blocks; defer inconclusive ones
         self.assertIsNone(plant.is_supported("plant_ess_average_cell_temperature"))
 
         unit.read_events.clear()
@@ -350,6 +356,126 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
             f"expected a handful of batched block reads for {n_fields - 1} known fields, "
             f"got {len(unit.read_events)} separate requests",
         )
+
+    def _probe_group_with_optional_address(self, error, *, separate_block=True):
+        from modbus_connection.model import Component, gauge
+
+        conn = MockModbusConnection()
+        unit = conn.for_unit(1)
+        unit.load_raw({"input": {100: 123, 101: 0, 500: 456}})
+        fields = {
+            "register_space": "input", "working": gauge(100, 1.0), "optional": gauge(101, 1.0),
+        }
+        if separate_block:
+            fields["separate"] = gauge(500, 1.0)
+        component = type("ProbeFixture", (Component,), fields)(unit)
+        group = self.devices._ComponentGroup({"telemetry": component}, {})
+        original_read = unit.read_input_registers
+        reads = []
+
+        async def read(address, count):
+            reads.append((address, count))
+            if address <= 101 < address + count:
+                raise error
+            return await original_read(address, count)
+
+        return unit, group, reads, read
+
+    async def test_bulk_timeout_defers_fallback_and_keeps_other_blocks(self):
+        unit, group, reads, read = self._probe_group_with_optional_address(
+            ModbusTimeoutError("silent optional address")
+        )
+        with patch.object(unit, "read_input_registers", read):
+            data = await group.async_update()
+
+        self.assertEqual([(100, 2)], [(start, count) for start, count in reads if start < 500])
+        self.assertEqual(456, data["separate"])
+        self.assertIsNone(group.is_supported("working"))
+        self.assertIsNone(group.is_supported("optional"))
+
+    async def test_fallback_after_backoff_makes_progress_when_every_bulk_block_failed(self):
+        unit, group, reads, read = self._probe_group_with_optional_address(
+            ModbusTimeoutError("silent optional address"), separate_block=False,
+        )
+        with patch.object(unit, "read_input_registers", read):
+            await group.async_update()
+            self.assertIsNone(group.is_supported("working"))
+            await group.async_update()
+            self.assertEqual([(100, 2)], reads, "backoff must defer individual probes")
+
+            later = time.monotonic() + self.devices.PROBE_RETRY_DELAY + 1
+            with patch.object(self.devices, "time", types.SimpleNamespace(monotonic=lambda: later)):
+                data = await group.async_update()
+
+        self.assertEqual(123, data["working"])
+        self.assertIs(group.is_supported("working"), True)
+        self.assertIsNone(group.is_supported("optional"))
+        self.assertEqual(1, reads.count((100, 2)), "do not repeat an inconclusive initial bulk pass forever")
+        self.assertIn((100, 1), reads)
+        self.assertIn((101, 1), reads)
+
+    async def test_illegal_address_bulk_still_falls_back_in_the_same_poll(self):
+        unit, group, reads, read = self._probe_group_with_optional_address(
+            IllegalDataAddressError(2)
+        )
+        with patch.object(unit, "read_input_registers", read):
+            data = await group.async_update()
+
+        self.assertEqual(123, data["working"])
+        self.assertIs(group.is_supported("working"), True)
+        self.assertIs(group.is_supported("optional"), False)
+        self.assertIn((100, 1), reads)
+        self.assertIn((101, 1), reads)
+
+    async def test_two_silent_optional_blocks_do_not_exhaust_first_refresh(self):
+        from test_remote_ems_write_readback import _make_coordinator
+
+        unit, plant = self._new_plant()
+        input_address = self.defs.PLANT_RUNNING_INFO_REGISTERS[
+            "plant_ess_average_cell_temperature"
+        ].address
+        holding_address = self.defs.PLANT_ESS_PREHEATING_REGISTERS[
+            "plant_ess_preheating_enable"
+        ].address
+        soc_address = self.defs.PLANT_RUNNING_INFO_REGISTERS["plant_ess_soc"].address
+        unit.load_raw({"input": {soc_address: 955}})
+        input_read, holding_read = unit.read_input_registers, unit.read_holding_registers
+        slow_reads = []
+
+        async def delayed_read(original, optional_address, space, address, count):
+            if address <= optional_address < address + count:
+                slow_reads.append((space, address, count))
+                await asyncio.sleep(1)  # scaled equivalent of the 20s wire timeout
+                raise ModbusTimeoutError("silent optional block")
+            return await original(address, count)
+
+        async def read_input(address, count):
+            return await delayed_read(input_read, input_address, "input", address, count)
+
+        async def read_holding(address, count):
+            return await delayed_read(holding_read, holding_address, "holding", address, count)
+
+        coordinator, hub, namespace = _make_coordinator()
+        hub.async_read_plant_data = plant.async_update
+        # Two wire budgets fit; retrying either silent address in this same
+        # first refresh exceeds the deadline and would trigger a new setup.
+        namespace["async_timeout"].timeout = lambda _seconds: asyncio.timeout(3)
+        with patch.object(unit, "read_input_registers", read_input), patch.object(
+            unit, "read_holding_registers", read_holding
+        ):
+            try:
+                await coordinator.async_refresh()
+            finally:
+                await asyncio.gather(*plant._group._pending_requests, return_exceptions=True)
+
+        self.assertTrue(
+            coordinator.last_update_success,
+            f"first refresh must preserve progress: {coordinator.last_exception!r}; reads={slow_reads!r}",
+        )
+        self.assertEqual(2, len(slow_reads), "each silent block should consume only one wire timeout")
+        self.assertEqual(95.5, coordinator.data["plant"]["plant_ess_soc"])
+        self.assertIsNone(plant.is_supported("plant_ess_average_cell_temperature"))
+        self.assertIsNone(plant.is_supported("plant_ess_preheating_enable"))
 
 
 @unittest.skipUnless(_HAVE_MODBUS_CONNECTION, "modbus-connection is not installed")
