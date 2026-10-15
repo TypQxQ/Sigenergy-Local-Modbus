@@ -167,14 +167,11 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         )
         task.add_done_callback(_consume_result)
 
-        # Shielded as one unit: this is commonly awaited from inside a
-        # service call that an automation's own task is running (e.g. a
-        # select/number entity's async_select_option/async_set_native_value).
-        # Home Assistant cancels that task outright if the automation
-        # retriggers itself (mode: restart) while the previous run is
-        # still in flight. Shielding lets the write and the refresh it
-        # triggers finish without abandoning a shared Modbus transaction.
-        await asyncio.shield(task)
+        # Cancelling the service caller must not cancel the write/refresh.
+        # wait() leaves the tracked task running and avoids shield()'s
+        # separate late-exception reports on Python 3.14.
+        await asyncio.wait({task})
+        task.result()
 
     def mark_sensors_initialized(self) -> None:
         """Mark that static sensors have been initialized and calculated sensors can run."""

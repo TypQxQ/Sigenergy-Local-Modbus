@@ -16,7 +16,7 @@ the old hub/coordinator (two concurrent tasks sharing one connection). Each
 one for the inverter's own registers, one for its optional DC charger's --
 so they keep resolving, updating and failing independently of each other.
 
-Every wire-touching await below runs under `asyncio.shield()`. A write
+Every wire-touching await below uses a tracked task and `asyncio.wait()`. A write
 triggered by an entity service call is awaited inside the caller's own task
 (e.g. an automation's action sequence), and Home Assistant cancels that task
 outright if the automation retriggers itself (`mode: restart`) while the
@@ -26,14 +26,16 @@ it, but nothing is listening for that transaction ID any more, which
 tmodbus logs as "Received unexpected response" and recovers from by
 dropping and reconnecting the link -- a connection blip (and a few seconds
 of every entity on it going unavailable) that has nothing to do with the
-device or the network. Shielding lets the request finish normally
-regardless of whether the caller is still around to see the result.
+device or the network. The request finishes and its result is consumed
+regardless of whether the caller is still around. Unlike `asyncio.shield()`,
+this does not report late errors again through the loop on Python 3.14.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import time
+from collections.abc import Coroutine
 from typing import Any, Mapping
 
 from modbus_connection import ModbusConnectionError, ModbusError, ModbusUnit
@@ -111,6 +113,21 @@ class _ComponentGroup:
         self._commands = commands
         self._field_support: dict[str, dict[str, bool]] = {name: {} for name in readable}
         self._last_probe_failure: dict[str, float] = {}
+        self._pending_requests: set[asyncio.Task[Any]] = set()
+
+    async def _async_request(self, operation: Coroutine[Any, Any, Any]) -> Any:
+        """Let a wire transaction finish even if its caller is cancelled."""
+        task = asyncio.create_task(operation)
+        self._pending_requests.add(task)
+
+        def _consume_result(completed: asyncio.Task[Any]) -> None:
+            self._pending_requests.discard(completed)
+            if not completed.cancelled():
+                completed.exception()
+
+        task.add_done_callback(_consume_result)
+        await asyncio.wait({task})
+        return task.result()
 
     def has_register(self, register_name: str) -> bool:
         """Whether this group declares `register_name`, read-only or writable."""
@@ -152,7 +169,7 @@ class _ComponentGroup:
         """
         for component in (*self._readable.values(), *self._commands.values()):
             if register_name in component.declared_fields:
-                await asyncio.shield(component.write(register_name, value))
+                await self._async_request(component.write(register_name, value))
                 return
         raise AttributeError(f"unknown register {register_name!r}")
 
@@ -220,7 +237,7 @@ class _ComponentGroup:
             [(field.address, field.count) for field in fields.values()]
         ):
             try:
-                block = await asyncio.shield(read(start, count))
+                block = await self._async_request(read(start, count))
             except ModbusConnectionError:
                 raise
             except ModbusError as ex:
@@ -278,7 +295,7 @@ class _ComponentGroup:
                 support[field_name] = True  # bit fields aren't probed; keep as-is
                 continue
             try:
-                await asyncio.shield(read(field.address, field.count))
+                await self._async_request(read(field.address, field.count))
             except IllegalDataAddressError:
                 support[field_name] = False  # confirmed unsupported on this device
             except ModbusConnectionError:

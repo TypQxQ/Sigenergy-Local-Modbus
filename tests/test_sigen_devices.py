@@ -1,4 +1,4 @@
-"""Regression tests for sigen_devices.py's probing, batching and shielding.
+"""Regression tests for probing, batching and cancellation-safe requests.
 
 Uses modbus_connection's own in-memory mock backend (MockModbusConnection)
 to exercise the real Component/field machinery end to end, rather than
@@ -14,6 +14,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SOURCE_PATH = (
     Path(__file__).resolve().parents[1]
@@ -145,6 +146,55 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ModbusConnectionError):
             await plant.async_update()
+
+    async def _assert_cancelled_wire_request_is_quiet(self, stage: str) -> None:
+        unit, plant = self._new_plant()
+        if stage == "read":
+            await plant.async_update()
+        elif stage == "probe":
+            first_field = next(iter(plant.running_info.declared_fields))
+            plant._group._field_support["running_info"][first_field] = True
+
+        loop = asyncio.get_running_loop()
+        errors = []
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: errors.append(context))
+        self.addCleanup(loop.set_exception_handler, previous_handler)
+        started, release, finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+        async def delayed_failure(*args, **kwargs):
+            started.set()
+            await release.wait()
+            finished.set()
+            raise ModbusTimeoutError("late wire failure")
+
+        method = "write_registers" if stage == "write" else "read_input_registers"
+        with patch.object(unit, method, delayed_failure):
+            operation = (
+                plant.async_write("plant_active_power_fixed_target", 1000)
+                if stage == "write" else plant.async_update()
+            )
+            caller = asyncio.create_task(operation)
+            try:
+                await asyncio.wait_for(started.wait(), timeout=1)
+                caller.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await caller
+            finally:
+                release.set()
+            await asyncio.wait_for(finished.wait(), timeout=1)
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+        self.assertEqual([], errors)
+
+    async def test_cancelled_read_consumes_late_wire_failure(self) -> None:
+        await self._assert_cancelled_wire_request_is_quiet("read")
+
+    async def test_cancelled_probe_consumes_late_wire_failure(self) -> None:
+        await self._assert_cancelled_wire_request_is_quiet("probe")
+
+    async def test_cancelled_write_consumes_late_wire_failure(self) -> None:
+        await self._assert_cancelled_wire_request_is_quiet("write")
 
     async def test_one_failing_block_does_not_blank_sibling_blocks(self) -> None:
         """A transient failure confined to one contiguous block must not

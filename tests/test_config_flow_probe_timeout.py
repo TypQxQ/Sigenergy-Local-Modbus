@@ -3,8 +3,8 @@
 config_flow.py pulls in a large chunk of Home Assistant (voluptuous
 selectors, entity/device registry helpers, the sensor platform, ...) that
 isn't worth stubbing just to import the module directly. Instead, following
-this repo's existing pattern (see test_energy_zero_guard.py), the single
-method under test is extracted from the class by AST, compiled in isolation
+this repo's existing pattern (see test_energy_zero_guard.py), the probe and
+discovery methods are extracted from the class by AST, compiled in isolation
 with a minimal namespace, and exercised directly -- no Home Assistant
 install required.
 """
@@ -53,25 +53,50 @@ def _make_try_read_register(async_get_temporary_unit, logger=None):
     talks to (besides asyncio itself and ModbusError), so it's the only
     thing a caller needs to fake to control the scenario under test.
     """
-    func_def = _extract_method("SigenergyConfigFlow", "_async_try_read_register")
-    module = ast.fix_missing_locations(ast.Module(body=[func_def], type_ignores=[]))
+    methods = (
+        "_async_try_read_register", "async_check_device_type", "async_dhcp_check_device_types"
+    )
+    module = ast.fix_missing_locations(ast.Module(
+        body=[_extract_method("SigenergyConfigFlow", name) for name in methods],
+        type_ignores=[],
+    ))
     namespace = {
         "asyncio": asyncio,
         "ModbusError": _FakeModbusError,
-        "ModbusTcpParams": object,
+        "ModbusTcpParams": _Params,
         "async_get_temporary_unit": async_get_temporary_unit,
         "_LOGGER": logger or Mock(),
+        "DEFAULT_PORT": 502,
+        "DEFAULT_PLANT_SLAVE_ID": 247,
+        "DEVICE_TYPE_PLANT": "plant",
+        "DEVICE_TYPE_DC_CHARGER": "dc_charger",
+        "DEVICE_TYPE_INVERTER": "inverter",
+        "DEVICE_TYPE_AC_CHARGER": "ac_charger",
+        "DEVICE_TYPE_UNKNOWN": "unknown",
+        "DEVICE_CHECKS": {
+            "plant": 30003, "dc_charger": 31501,
+            "inverter": 30578, "ac_charger": 32000,
+        },
     }
     exec(compile(module, str(SOURCE_PATH), "exec"), namespace)
 
     fake_self = Mock()
     fake_self.hass = object()
-    return MethodType(namespace["_async_try_read_register"], fake_self)
+    fake_self._pending_probe_task = None
+    fake_self._discovered_device_type = {"inverter": [], "dc_charger": [], "ac_charger": []}
+    fake_self._discovered_ip = "10.0.0.5"
+    for name in methods:
+        setattr(fake_self, name, MethodType(namespace[name], fake_self))
+    return fake_self._async_try_read_register
 
 
 class _Params:
     host = "10.0.0.5"
     port = 502
+
+    def __init__(self, host="10.0.0.5", port=502):
+        self.host = host
+        self.port = port
 
 
 def _slow_unit_factory(delay: float, *, fail_with: Exception | None = None):
@@ -100,6 +125,17 @@ class TestAsyncTryReadRegisterTimeout(unittest.IsolatedAsyncioTestCase):
     still be logged with this helper's usual context instead of becoming an
     unretrieved-task-exception warning.
     """
+
+    async def asyncSetUp(self) -> None:
+        self.loop_errors = []
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: self.loop_errors.append(context))
+        self.addCleanup(loop.set_exception_handler, previous_handler)
+
+    async def asyncTearDown(self) -> None:
+        await asyncio.sleep(0)
+        self.assertEqual([], self.loop_errors)
 
     async def test_short_timeout_fails_fast_against_a_slow_device(self) -> None:
         fake_unit, _started, _finished = _slow_unit_factory(delay=0.2)
@@ -151,6 +187,51 @@ class TestAsyncTryReadRegisterTimeout(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, len(late_messages))
         self.assertIn("30003", late_messages[0])
         self.assertIn("slave 7", late_messages[0])
+
+    def _serial_broker(self, *, dhcp: bool = False):
+        """One shared wire lock, with an optional register that stays silent
+        much longer than each config-flow check's UI budget.
+        """
+        lock = asyncio.Lock()
+
+        class Unit:
+            def __init__(self, unit_id):
+                self.unit_id = unit_id
+
+            async def read_input_registers(self, address, count):
+                async with lock:
+                    silent = 31501 if dhcp else 30003
+                    if self.unit_id == 1 and address == silent:
+                        await asyncio.sleep(0.15)
+                        raise _FakeModbusError("wire timeout on optional register")
+                    if (self.unit_id == 1 and address == 30578) or (
+                        self.unit_id == 247 and address == 30003
+                    ):
+                        return [0] * count
+                    raise _FakeModbusError("unsupported register")
+
+        @asynccontextmanager
+        async def temporary_unit(hass, params, unit_id):
+            yield Unit(unit_id)
+
+        return temporary_unit
+
+    async def test_manual_type_check_drains_prior_probe_before_next_budget(self) -> None:
+        read = _make_try_read_register(self._serial_broker())
+        flow = read.__self__
+        result = await asyncio.wait_for(
+            flow.async_check_device_type("10.0.0.5", 502, 1, timeout=0.01), timeout=1
+        )
+        self.assertEqual("inverter", result)
+
+    async def test_dhcp_scan_does_not_stop_behind_timed_out_dc_probe(self) -> None:
+        read = _make_try_read_register(self._serial_broker(dhcp=True))
+        flow = read.__self__
+        result = await asyncio.wait_for(
+            flow.async_dhcp_check_device_types("10.0.0.5", 502, timeout=0.01), timeout=1
+        )
+        self.assertTrue(result)
+        self.assertEqual([1], flow._discovered_device_type["inverter"])
 
 
 if __name__ == "__main__":

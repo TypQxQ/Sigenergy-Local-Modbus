@@ -11,6 +11,7 @@ jobs:
     runs-on: "ubuntu-latest"
     strategy:
       matrix:
+        python: ["3.12", "3.14"]
         modbus_connection: ["4.12.3", "4.12.4"]
     env:
       SIGEN_REQUIRE_MODBUS_CONNECTION: "1"
@@ -18,7 +19,7 @@ jobs:
       - uses: "actions/checkout@v4"
       - uses: "actions/setup-python@v5"
         with:
-          python-version: "3.12"
+          python-version: "${{ matrix.python }}"
       - name: Install Modbus test dependency
         run: python -m pip install "modbus-connection==${{ matrix.modbus_connection }}"
       - name: Run regression tests
