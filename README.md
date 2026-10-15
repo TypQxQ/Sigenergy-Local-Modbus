@@ -121,6 +121,14 @@ Plant (IP:Port)
 - **Device IDs and topology matter.** AC chargers are normally device ID `1`; inverters must use another ID. DC charger data is read via the inverter, and all devices in a plant should normally use the same host and port.
 
 
+### Remote EMS automation sequencing
+
+Starting with v1.3.0, changing the plant's Remote EMS enable switch or control mode waits for a new device readback before the action completes successfully. A matching cached value or a poll that started before the write is not accepted as confirmation. Confirmation waits for at most 60 seconds and does not repeat the write.
+
+If confirmation fails, the action reports an error explaining that the write was sent but could not be confirmed. The inverter may already have applied it: check the current state before deciding whether another command is needed. Other parameter writes retain batched updates.
+
+Automations should enable Remote EMS, wait for the enabled state and mode-select availability, and then select the desired mode. A fixed sleep is not confirmation. Home Assistant skips service calls targeting unavailable entities before the integration receives them, so this change cannot recover a command that was never delivered. The broader simultaneous loss of several controls in [issue #427](https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues/427) still needs complete debug logs and an automation trace.
+
 ## Quickstart Automation Example
 ```yaml
 alias: "Notify on Low Battery"

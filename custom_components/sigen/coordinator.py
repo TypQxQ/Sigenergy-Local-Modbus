@@ -34,6 +34,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.largest_update_interval : float = 0.0
         self.latest_fetch_time: float = 0.0
         self.data: dict[str, Any] | None = None
+        self._update_sequence = 0
+        self._last_successful_update_sequence = 0
 
         if scan_interval <= 1:
             scan_interval = DEFAULT_SCAN_INTERVAL
@@ -48,6 +50,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Update data via Modbus library."""
+        self._update_sequence += 1
+        update_sequence = self._update_sequence
         device_tasks: set[asyncio.Task] = set()
         try:
             async with async_timeout.timeout(60):
@@ -125,6 +129,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # )
 
                 # Return the updated, complete data structure
+                self._last_successful_update_sequence = update_sequence
                 return self.data
         except asyncio.TimeoutError as exception:
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
@@ -141,6 +146,44 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             if device_tasks:
                 await asyncio.gather(*device_tasks, return_exceptions=True)
 
+    async def _async_confirm_remote_ems_write(
+        self, register_name: str, value: Union[int, float, str]
+    ) -> None:
+        """Confirm one EMS write using a fresh, serialized coordinator poll.
+
+        async_request_refresh() may only queue a refresh during HA's cooldown.
+        In HA 2026.10 async_refresh() waits for the existing refresh lock and
+        performs a new poll, including entity notifications, before returning.
+        Never accept an older in-flight poll or a matching cached value as
+        confirmation, and never repeat the command if confirmation fails.
+        """
+        after_sequence = self._update_sequence
+        try:
+            async with async_timeout.timeout(60):
+                await self.async_refresh()
+        except TimeoutError as ex:
+            raise SigenergyModbusError(
+                f"Write to {register_name} was sent, but fresh readback timed out"
+            ) from ex
+
+        if (
+            not self.last_update_success
+            or self._last_successful_update_sequence <= after_sequence
+        ):
+            raise SigenergyModbusError(
+                f"Write to {register_name} was sent, but no fresh readback is available"
+            )
+        actual = (self.data or {}).get("plant", {}).get(register_name)
+        if actual != value:
+            raise SigenergyModbusError(
+                f"Write to {register_name} was sent, but fresh readback was "
+                f"{actual!r}, expected {value!r}"
+            )
+        _LOGGER.debug(
+            "Confirmed %s=%s by fresh readback in update %s",
+            register_name, actual, self._last_successful_update_sequence,
+        )
+
     async def async_write_parameter(
         self,
         device_type: str,
@@ -148,7 +191,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         register_name: str,
         value: Union[int, float, str]
     ) -> None:
-        """Write a parameter via the Modbus hub and schedule a update."""
+        """Write a parameter; confirm Remote EMS commands before returning."""
 
         async def _write_and_refresh() -> None:
             try:
@@ -158,10 +201,14 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     register_name=register_name,
                     value=value,
                 )
-                # Trigger an immediate refresh
-                await self.async_request_refresh()
+                if device_type == "plant" and register_name in {
+                    "plant_remote_ems_enable", "plant_remote_ems_control_mode"
+                }:
+                    await self._async_confirm_remote_ems_write(register_name, value)
+                else:
+                    await self.async_request_refresh()
             except SigenergyModbusError as ex:
-                _LOGGER.error("Failed to write parameter %s to %s '%s': %s",
+                _LOGGER.error("Failed to complete parameter command %s to %s '%s': %s",
                               register_name, device_type, device_identifier or 'plant', ex)
                 raise
             except Exception as ex:

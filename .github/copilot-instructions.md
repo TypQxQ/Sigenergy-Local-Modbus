@@ -23,6 +23,7 @@
 
 ### Writes / controls safety
 - All writes must go through SigenergyDataUpdateCoordinator.async_write_parameter() (coordinator.py); do not call Modbus write methods directly from entities.
+- Plant Remote EMS enable/mode writes await async_refresh() and verify a successful poll that started after the write plus matching readback. async_request_refresh() alone may only schedule a later read. Keep confirmation bounded, preserve caller-cancellation shielding, and never replay the command when readback is missing or different.
 - Respect read-only behavior (hub.read_only) and keep “dangerous” controls disabled by default (entity_registry_enabled_default=False).
 
 ### Calculated sensors

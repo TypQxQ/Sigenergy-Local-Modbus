@@ -79,6 +79,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
     )
     coordinator = SimpleNamespace(
         hub=hub, data=None, largest_update_interval=0.0, latest_fetch_time=0.0,
+        _update_sequence=0, _last_successful_update_sequence=0,
     )
     coordinator.poll = MethodType(namespace["_async_update_data"], coordinator)
     return coordinator, child_tasks, all_started, release, events
