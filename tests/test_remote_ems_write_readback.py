@@ -248,3 +248,85 @@ class TestRemoteEmsWriteReadback(unittest.IsolatedAsyncioTestCase):
         await coordinator.async_write_parameter("plant", None, "plant_active_power_fixed_target", 1)
         self.assertEqual(1, coordinator.deferred_requests)
         self.assertEqual(0, hub.reads)
+
+    async def test_conflicting_commands_report_superseded_mode_without_replay(self):
+        coordinator, hub, _namespace = _make_coordinator()
+        both_written = asyncio.Event()
+        original_write = hub.async_write_parameter
+
+        async def write_and_notify(**kwargs):
+            await original_write(**kwargs)
+            if len(hub.writes) == 2:
+                both_written.set()
+
+        hub.async_write_parameter = write_and_notify
+        await coordinator.refresh_lock.acquire()
+        first = asyncio.create_task(coordinator.async_write_parameter("plant", None, MODE, 3))
+        second = None
+        try:
+            await asyncio.wait_for(hub.write_finished.wait(), timeout=1)
+            second = asyncio.create_task(coordinator.async_write_parameter("plant", None, MODE, 5))
+            await asyncio.wait_for(both_written.wait(), timeout=1)
+        finally:
+            coordinator.refresh_lock.release()
+            commands = [first] if second is None else [first, second]
+            results = await asyncio.gather(*commands, return_exceptions=True)
+
+        self.assertIsInstance(results[0], _ModbusError)
+        self.assertIn("readback was 5, expected 3", str(results[0]))
+        self.assertIsNone(results[1])
+        self.assertEqual([3, 5], [write[-1] for write in hub.writes])
+        self.assertEqual(5, coordinator.data["plant"][MODE])
+        self.assertEqual(2, hub.reads)
+
+    async def test_readback_timeout_waiting_for_lock_leaves_older_poll_running(self):
+        coordinator, hub, namespace = _make_coordinator()
+        hub.release_read.clear()
+        old_poll = asyncio.create_task(coordinator.async_refresh())
+        try:
+            await asyncio.wait_for(hub.read_started.wait(), timeout=1)
+            # The old poll already entered its original timeout context.
+            # Shorten only the new command's confirmation budget.
+            namespace["async_timeout"].timeout = lambda _seconds: asyncio.timeout(0.01)
+            with self.assertRaisesRegex(_ModbusError, "readback.*timed out"):
+                await coordinator.async_write_parameter("plant", None, ENABLE, 1)
+            self.assertFalse(old_poll.done(), "confirmation must not cancel the refresh lock owner")
+        finally:
+            hub.release_read.set()
+            await asyncio.gather(old_poll, return_exceptions=True)
+
+        self.assertFalse(old_poll.cancelled())
+        self.assertEqual(0, coordinator.data["plant"][ENABLE])
+        await coordinator.async_refresh()
+        self.assertEqual(1, coordinator.data["plant"][ENABLE])
+        self.assertEqual(1, len(hub.writes))
+
+    async def test_late_failed_readback_after_caller_cancellation_is_logged_once(self):
+        coordinator, hub, namespace = _make_coordinator()
+        errors = []
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: errors.append(context))
+        self.addCleanup(loop.set_exception_handler, previous_handler)
+        hub.release_read.clear()
+        hub.fail_read = True
+        command = asyncio.create_task(coordinator.async_write_parameter("plant", None, ENABLE, 1))
+        try:
+            await asyncio.wait_for(hub.read_started.wait(), timeout=1)
+            command.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await command
+        finally:
+            hub.release_read.set()
+            await asyncio.gather(command, *hub.tasks, return_exceptions=True)
+        await asyncio.sleep(0)
+
+        logger = namespace["_LOGGER"]
+        logger.error.assert_called_once()
+        message = logger.error.call_args.args[0] % logger.error.call_args.args[1:]
+        self.assertIn(ENABLE, message)
+        self.assertIn("no fresh readback", message)
+        self.assertFalse(coordinator.last_update_success)
+        self.assertEqual(0, coordinator.data["plant"][ENABLE])
+        self.assertEqual(1, len(hub.writes))
+        self.assertEqual([], errors)
