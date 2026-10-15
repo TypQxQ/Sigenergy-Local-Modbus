@@ -16,6 +16,8 @@
 - sigen_devices.py probes register support per field and reads supported fields as strictly contiguous blocks (max ~123 registers/read), with each block's failure isolated from the others.
 - Only illegal-address bulk errors trigger immediate individual probing. Defer inconclusive blocks until probe backoff expires, then probe their fields individually even when the initial bulk pass confirmed no supported fields; never spend a silent address's wire timeout twice in the first poll.
 - Keep wire requests in tracked tasks and wait with asyncio.wait(): caller cancellation must not abandon an in-flight transaction. Consume late results explicitly; asyncio.shield() reports late failures separately on Python 3.14. Drain a timed-out config-flow probe before starting the next probe's time budget.
+- Before a component group starts a new poll, wait for its surviving broker requests, including queued requests. Cancelling that wait must preserve the requests and must not enqueue replacements.
+- Isolate decoding failures per field: keep healthy siblings, reject incomplete field payloads, and leave the bad value as None without changing support status. Log field/address and error type, never raw payloads or decoder messages that may contain serials.
 
 ### Entities + naming
 - Use SigenergyEntity (sigen_entity.py) as the base and create entities through generate_sigen_entity() (common.py) like existing platform files do.

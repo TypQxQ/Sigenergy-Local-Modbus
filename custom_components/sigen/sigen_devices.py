@@ -117,7 +117,7 @@ class _ComponentGroup:
         self._pending_requests: set[asyncio.Task[Any]] = set()
 
     async def _async_request(self, operation: Coroutine[Any, Any, Any]) -> Any:
-        """Let a wire transaction finish even if its caller is cancelled."""
+        """Let a broker request finish even if its caller is cancelled."""
         task = asyncio.create_task(operation)
         self._pending_requests.add(task)
 
@@ -157,6 +157,14 @@ class _ComponentGroup:
 
         Raises `ModbusConnectionError` if the link itself is down.
         """
+        # A cancelled poll can leave a request queued in the shared broker,
+        # as well as one already on the wire. Do not enqueue another round
+        # behind those survivors. Cancelling this wait must leave them intact;
+        # _async_request's completion callback consumes their late failures.
+        pending = self._pending_requests.copy()
+        if pending:
+            await asyncio.wait(pending)
+
         values: dict[str, Any] = {}
         for name, component in self._readable.items():
             await self._async_ensure_resolved(name, component)
@@ -352,9 +360,9 @@ class _ComponentGroup:
         per-interval resilience, and also means a persistently-unresolved
         field never costs more than its own block on every poll.
 
-        A field whose support is still unknown, or whose block failed to
-        read this cycle (but whose link is still up), is left as `None`
-        rather than failing the whole read.
+        A field whose support is still unknown, whose block failed to read,
+        or whose value failed to decode is left as `None` rather than failing
+        the whole read. Decoder failures do not change register support.
 
         Raises `ModbusConnectionError` if the link itself is down.
         """
@@ -367,7 +375,18 @@ class _ComponentGroup:
         words, _errors = await self._async_read_blocks(name, component, known_fields)
         for field_name in component.declared_fields:
             if field_name in words:
-                values[field_name] = known_fields[field_name].decode(words[field_name])
+                field = known_fields[field_name]
+                try:
+                    if len(words[field_name]) != field.count:
+                        raise ValueError("Incomplete register field")
+                    values[field_name] = field.decode(words[field_name])
+                except Exception as ex:
+                    values[field_name] = None
+                    # Decoder messages can contain serials or raw payloads.
+                    _LOGGER.debug(
+                        "Decoding %s.%s at address %s failed (%s)",
+                        name, field_name, field.address, type(ex).__name__,
+                    )
             else:
                 values.setdefault(field_name, None)
 

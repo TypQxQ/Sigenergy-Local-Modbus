@@ -510,5 +510,179 @@ class TestSigenergyInverterAndDcCharger(unittest.IsolatedAsyncioTestCase):
         self.assertIs(inverter.is_supported("inverter_active_power_fixed_adjustment"), True)
 
 
+@unittest.skipUnless(_HAVE_MODBUS_CONNECTION, "modbus-connection is not installed")
+class TestComponentGroupRecovery(unittest.IsolatedAsyncioTestCase):
+    """Interrupted broker requests and malformed fields must stay isolated."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.devices = _load_sigen_module("sigen_devices")
+
+    def _new_group(self, unit, fields):
+        from modbus_connection.model import Component
+
+        component = type("RecoveryFixture", (Component,), {
+            "register_space": "input", **fields,
+        })(unit)
+        return self.devices._ComponentGroup({"telemetry": component}, {})
+
+    async def _assert_survivors_are_drained(self, *, cancel_drain=False):
+        from modbus_connection.model import gauge
+
+        conn = MockModbusConnection()
+        unit = conn.for_unit(1)
+        unit.load_raw({"input": {100: 123, 500: 456}})
+        groups = [
+            self._new_group(unit, {"value": gauge(address, 1.0)})
+            for address in (100, 500)
+        ]
+        for group in groups:
+            group._field_support["telemetry"]["value"] = True
+
+        broker_lock = asyncio.Lock()
+        submitted, started, release = {}, {}, {}
+        for address in (100, 500):
+            submitted[address] = asyncio.Event()
+            started[address] = asyncio.Event()
+            release[address] = asyncio.Event()
+        calls = []
+        original_read = unit.read_input_registers
+
+        async def broker_read(address, count):
+            first_request = address not in calls
+            calls.append(address)
+            submitted[address].set()
+            async with broker_lock:
+                if first_request:
+                    started[address].set()
+                    await release[address].wait()
+                    raise ModbusTimeoutError("late broker timeout")
+                return await original_read(address, count)
+
+        loop = asyncio.get_running_loop()
+        errors = []
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: errors.append(context))
+        self.addCleanup(loop.set_exception_handler, previous_handler)
+        polls = []
+        with patch.object(unit, "read_input_registers", broker_read):
+            try:
+                polls = [asyncio.create_task(group.async_update()) for group in groups]
+                for event in submitted.values():
+                    await asyncio.wait_for(event.wait(), timeout=1)
+                await asyncio.wait_for(started[100].wait(), timeout=1)
+                self.assertFalse(started[500].is_set(), "second request must be queued")
+                for poll in polls:
+                    poll.cancel()
+                await asyncio.gather(*polls, return_exceptions=True)
+                survivors = [task for group in groups for task in group._pending_requests]
+                self.assertEqual(2, len(survivors))
+
+                polls = [asyncio.create_task(group.async_update()) for group in groups]
+                # Let each poll reach its first suspension point: a safe poll
+                # waits for its survivor instead of submitting another read.
+                for _ in range(3):
+                    await asyncio.sleep(0)
+                self.assertEqual([100, 500], calls, "new polls must not grow the broker queue")
+
+                if cancel_drain:
+                    for poll in polls:
+                        poll.cancel()
+                    await asyncio.gather(*polls, return_exceptions=True)
+                    self.assertTrue(all(not task.done() for task in survivors))
+                    polls = [asyncio.create_task(group.async_update()) for group in groups]
+                    for _ in range(3):
+                        await asyncio.sleep(0)
+                    self.assertEqual([100, 500], calls, "cancelling a drain must not bypass it")
+
+                release[100].set()
+                await asyncio.wait_for(started[500].wait(), timeout=1)
+                for _ in range(3):
+                    await asyncio.sleep(0)
+                self.assertEqual(1, calls.count(500), "queued survivor must finish before replacement")
+                release[500].set()
+                data = await asyncio.wait_for(asyncio.gather(*polls), timeout=1)
+
+                self.assertEqual([123, 456], [result["value"] for result in data])
+                self.assertEqual([100, 500, 100, 500], calls)
+                self.assertTrue(all(not task.cancelled() for task in survivors))
+                self.assertTrue(all(not group._pending_requests for group in groups))
+                self.assertEqual([], errors)
+            finally:
+                for event in release.values():
+                    event.set()
+                for poll in polls:
+                    poll.cancel()
+                await asyncio.gather(
+                    *polls, *(task for group in groups for task in group._pending_requests),
+                    return_exceptions=True,
+                )
+
+    async def test_cancelled_poll_drains_surviving_shared_broker_requests(self):
+        await self._assert_survivors_are_drained()
+
+    async def test_cancelled_drain_still_protects_requests_on_the_next_poll(self):
+        await self._assert_survivors_are_drained(cancel_drain=True)
+
+    async def test_short_field_does_not_hide_siblings_and_recovers(self):
+        from modbus_connection.model import gauge
+
+        for signed in (True, False):
+            with self.subTest(signed=signed):
+                conn = MockModbusConnection()
+                unit = conn.for_unit(1)
+                unit.load_raw({"input": {100: 123, 101: 789, 500: 456}})
+                group = self._new_group(unit, {
+                    "working": gauge(100, 1.0),
+                    "truncated": gauge(101, 1.0, signed=signed),
+                    "separate": gauge(500, 1.0),
+                })
+                original_read = unit.read_input_registers
+
+                async def short_read(address, count):
+                    words = await original_read(address, count)
+                    return words[:1] if address == 100 else words
+
+                with patch.object(unit, "read_input_registers", short_read):
+                    data = await group.async_update()
+                self.assertEqual(123, data["working"])
+                self.assertEqual(456, data["separate"])
+                self.assertIsNone(data["truncated"], "a missing word must not decode as zero")
+                self.assertIs(group.is_supported("truncated"), True)
+
+                recovered = await group.async_update()
+                self.assertEqual(789, recovered["truncated"])
+
+    async def test_failed_string_decoder_keeps_numeric_siblings_and_recovers(self):
+        from modbus_connection.model import gauge, string
+
+        conn = MockModbusConnection()
+        unit = conn.for_unit(1)
+        unit.load_raw({"input": {100: 123, 101: 0x4F4B, 102: 0, 103: 456}})
+        group = self._new_group(unit, {
+            "before": gauge(100, 1.0), "text": string(101, 2), "after": gauge(103, 1.0),
+        })
+        original_read = unit.read_input_registers
+
+        async def malformed_read(address, count):
+            words = await original_read(address, count)
+            if address <= 101 < address + count:
+                words[101 - address] = "sensitive malformed payload"
+            return words
+
+        with patch.object(unit, "read_input_registers", malformed_read):
+            with self.assertLogs(self.devices._LOGGER, level="DEBUG") as captured:
+                data = await group.async_update()
+        self.assertEqual(123, data["before"])
+        self.assertEqual(456, data["after"])
+        self.assertIsNone(data["text"])
+        self.assertIs(group.is_supported("text"), True)
+        self.assertIn("text", " ".join(captured.output))
+        self.assertNotIn("sensitive malformed payload", " ".join(captured.output))
+
+        recovered = await group.async_update()
+        self.assertEqual("OK", recovered["text"])
+
+
 if __name__ == "__main__":
     unittest.main()
