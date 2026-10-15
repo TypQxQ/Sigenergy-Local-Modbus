@@ -10,6 +10,7 @@ docstring for why).
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 import types
 import unittest
@@ -25,6 +26,8 @@ SOURCE_PATH = (
 try:
     import modbus_connection  # noqa: F401
 except ImportError:
+    if os.environ.get("SIGEN_REQUIRE_MODBUS_CONNECTION") == "1":
+        raise
     _HAVE_MODBUS_CONNECTION = False
 else:
     _HAVE_MODBUS_CONNECTION = True

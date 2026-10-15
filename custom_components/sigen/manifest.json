@@ -29,7 +29,7 @@
   ],
   "quality_scale": "custom",
   "requirements": [
-    "modbus-connection>=4.12.4"
+    "modbus-connection>=4.12.3"
   ],
   "version": "1.3.0.0"
 }

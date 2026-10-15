@@ -137,40 +137,44 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         """Write a parameter via the Modbus hub and schedule a update."""
 
         async def _write_and_refresh() -> None:
-            await self.hub.async_write_parameter(
-                device_type=device_type,
-                device_identifier=device_identifier,
-                register_name=register_name,
-                value=value,
-            )
-            # Trigger an immediate refresh
-            await self.async_request_refresh()
+            try:
+                await self.hub.async_write_parameter(
+                    device_type=device_type,
+                    device_identifier=device_identifier,
+                    register_name=register_name,
+                    value=value,
+                )
+                # Trigger an immediate refresh
+                await self.async_request_refresh()
+            except SigenergyModbusError as ex:
+                _LOGGER.error("Failed to write parameter %s to %s '%s': %s",
+                              register_name, device_type, device_identifier or 'plant', ex)
+                raise
+            except Exception as ex:
+                _LOGGER.error("Unexpected error writing parameter %s to %s '%s': %s",
+                              register_name, device_type, device_identifier or 'plant', ex)
+                raise
 
-        try:
-            # Shielded as one unit: this is commonly awaited from inside a
-            # service call that an automation's own task is running (e.g. a
-            # select/number entity's async_select_option/async_set_native_value).
-            # Home Assistant cancels that task outright if the automation
-            # retriggers itself (mode: restart) while the previous run is
-            # still in flight. Without shielding, that cancellation can land
-            # mid-refresh: DataUpdateCoordinator's own CancelledError handling
-            # marks last_update_success False *silently* (no log at all) and
-            # does not re-raise unless the current task itself was the one
-            # cancelled with calls still pending -- which briefly makes every
-            # entity on this coordinator unavailable for no logged reason,
-            # until the next refresh succeeds. Shielding lets the write and
-            # the refresh it triggers always run to completion.
-            await asyncio.shield(_write_and_refresh())
-        except SigenergyModbusError as ex:
-            _LOGGER.error("Failed to write parameter %s to %s '%s': %s",
-                          register_name, device_type, device_identifier or 'plant', ex)
-            # Re-raise the exception so the calling entity knows the write failed
-            raise
-        except Exception as ex:
-            _LOGGER.error("Unexpected error writing parameter %s to %s '%s': %s",
-                          register_name, device_type, device_identifier or 'plant', ex)
-            # Re-raise for visibility
-            raise
+        def _consume_result(task: asyncio.Task[None]) -> None:
+            # Errors are logged with their device/register context inside
+            # the task, even if the caller has already been cancelled.
+            if not task.cancelled():
+                task.exception()
+
+        # Keep the task tracked by the config entry after caller cancellation.
+        task = self.hub.config_entry.async_create_task(
+            self.hass, _write_and_refresh(), name=f"Sigenergy write {register_name}"
+        )
+        task.add_done_callback(_consume_result)
+
+        # Shielded as one unit: this is commonly awaited from inside a
+        # service call that an automation's own task is running (e.g. a
+        # select/number entity's async_select_option/async_set_native_value).
+        # Home Assistant cancels that task outright if the automation
+        # retriggers itself (mode: restart) while the previous run is
+        # still in flight. Shielding lets the write and the refresh it
+        # triggers finish without abandoning a shared Modbus transaction.
+        await asyncio.shield(task)
 
     def mark_sensors_initialized(self) -> None:
         """Mark that static sensors have been initialized and calculated sensors can run."""

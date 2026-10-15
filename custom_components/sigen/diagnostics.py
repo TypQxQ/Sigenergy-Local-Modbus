@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.components.modbus import async_get_connection_info
+from homeassistant.components.modbus.connection import async_get_connection_info
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant

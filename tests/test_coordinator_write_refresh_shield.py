@@ -42,7 +42,7 @@ def _extract_method(class_name: str, method_name: str) -> ast.AsyncFunctionDef:
     )
 
 
-def _make_write_parameter(*, write_delay: float = 0.0, refresh_delay: float = 0.0):
+def _make_write_parameter(*, write_delay: float = 0.0, refresh_delay: float = 0.0, logger=None):
     """Compile `async_write_parameter` in isolation, bound to a fake self
     whose hub.async_write_parameter / async_request_refresh are fakes that
     report when they start and finish, so a test can observe whether
@@ -53,7 +53,7 @@ def _make_write_parameter(*, write_delay: float = 0.0, refresh_delay: float = 0.
     namespace = {
         "asyncio": asyncio,
         "SigenergyModbusError": _FakeSigenergyModbusError,
-        "_LOGGER": Mock(),
+        "_LOGGER": logger if logger is not None else Mock(),
         "Optional": object,
         "Union": object,
     }
@@ -79,6 +79,11 @@ def _make_write_parameter(*, write_delay: float = 0.0, refresh_delay: float = 0.
     fake_self = Mock()
     fake_self.hub.async_write_parameter = fake_write_parameter
     fake_self.async_request_refresh = fake_request_refresh
+
+    def fake_create_task(hass, target, name=None):
+        return asyncio.create_task(target, name=name)
+
+    fake_self.hub.config_entry.async_create_task = fake_create_task
 
     bound = MethodType(namespace["async_write_parameter"], fake_self)
     return bound, events
@@ -132,7 +137,8 @@ class TestCoordinatorWriteRefreshShield(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(events["refresh_finished"].wait(), timeout=1)
 
     async def test_hub_error_is_logged_and_reraised(self) -> None:
-        write_parameter, _events = _make_write_parameter()
+        logger = Mock()
+        write_parameter, _events = _make_write_parameter(logger=logger)
         write_parameter.__func__  # sanity: bound method exists
 
         async def failing_write(**kwargs):
@@ -142,6 +148,58 @@ class TestCoordinatorWriteRefreshShield(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(_FakeSigenergyModbusError):
             await write_parameter("plant", None, "plant_ess_soc", 1)
+        logger.error.assert_called_once()
+
+    async def _assert_late_error_is_logged(self, stage: str, error: Exception) -> None:
+        logger = Mock()
+        write_parameter, _events = _make_write_parameter(logger=logger)
+        loop = asyncio.get_running_loop()
+        unhandled_errors = []
+        original_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: unhandled_errors.append(context))
+        self.addCleanup(loop.set_exception_handler, original_handler)
+        started = asyncio.Event()
+        release = asyncio.Event()
+        finished = asyncio.Event()
+
+        async def fail_after_cancellation(*args, **kwargs):
+            started.set()
+            try:
+                await release.wait()
+                raise error
+            finally:
+                finished.set()
+
+        if stage == "write":
+            write_parameter.__self__.hub.async_write_parameter = fail_after_cancellation
+        else:
+            write_parameter.__self__.async_request_refresh = fail_after_cancellation
+
+        caller = asyncio.create_task(
+            write_parameter("inverter", "Sigen Inverter", "inverter_start_stop", 1)
+        )
+        try:
+            await asyncio.wait_for(started.wait(), timeout=1)
+            caller.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await caller
+        finally:
+            release.set()
+        await asyncio.wait_for(finished.wait(), timeout=1)
+        await asyncio.sleep(0)  # allow the shield's completion callback to run
+
+        logger.error.assert_called_once()
+        message = logger.error.call_args.args[0] % logger.error.call_args.args[1:]
+        self.assertIn("inverter_start_stop", message)
+        self.assertIn("Sigen Inverter", message)
+        self.assertIn(str(error), message)
+        self.assertEqual([], unhandled_errors)
+
+    async def test_late_write_error_is_logged_after_caller_cancellation(self) -> None:
+        await self._assert_late_error_is_logged("write", _FakeSigenergyModbusError("late write"))
+
+    async def test_late_refresh_error_is_logged_after_caller_cancellation(self) -> None:
+        await self._assert_late_error_is_logged("refresh", RuntimeError("late refresh"))
 
 
 if __name__ == "__main__":
