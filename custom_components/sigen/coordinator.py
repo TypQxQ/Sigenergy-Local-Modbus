@@ -34,6 +34,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.largest_update_interval : float = 0.0
         self.latest_fetch_time: float = 0.0
         self.data: dict[str, Any] | None = None
+        self._update_sequence = 0
+        self._last_successful_update_sequence = 0
 
         if scan_interval <= 1:
             scan_interval = DEFAULT_SCAN_INTERVAL
@@ -48,6 +50,9 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Update data via Modbus library."""
+        self._update_sequence += 1
+        update_sequence = self._update_sequence
+        device_tasks: set[asyncio.Task] = set()
         try:
             async with async_timeout.timeout(60):
                 start_time = dt_util.utcnow()
@@ -65,6 +70,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     for name, cfg in self.hub.inverter_connections.items()
                     if cfg.get(CONF_INVERTER_HAS_DCCHARGER, False)
                 }
+                device_tasks.update(inverter_tasks.values())
+                device_tasks.update(dc_tasks.values())
                 inverter_data: dict[str, Any] = {}
                 for name, task in inverter_tasks.items():
                     try:
@@ -85,6 +92,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     name: asyncio.create_task(self.hub.async_read_ac_charger_data(name))
                     for name in self.hub.ac_charger_connections
                 }
+                device_tasks.update(ac_tasks.values())
                 ac_charger_data: dict[str, Any] = {}
                 for name, task in ac_tasks.items():
                     try:
@@ -121,11 +129,60 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # )
 
                 # Return the updated, complete data structure
+                self._last_successful_update_sequence = update_sequence
                 return self.data
         except asyncio.TimeoutError as exception:
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
         except Exception as exception:
             raise UpdateFailed(f"Error communicating with Sigenergy system: {exception}") from exception
+        finally:
+            # A timeout/cancellation otherwise stops only the child currently
+            # awaited, leaving sibling polls running into the next update.
+            # Cancel the read workflows and retrieve every result. The device
+            # layer still lets each in-flight wire transaction finish safely.
+            for task in device_tasks:
+                if not task.done():
+                    task.cancel()
+            if device_tasks:
+                await asyncio.gather(*device_tasks, return_exceptions=True)
+
+    async def _async_confirm_remote_ems_write(
+        self, register_name: str, value: Union[int, float, str]
+    ) -> None:
+        """Confirm one EMS write using a fresh, serialized coordinator poll.
+
+        async_request_refresh() may only queue a refresh during HA's cooldown.
+        In HA 2026.10 async_refresh() waits for the existing refresh lock and
+        performs a new poll, including entity notifications, before returning.
+        Never accept an older in-flight poll or a matching cached value as
+        confirmation, and never repeat the command if confirmation fails.
+        """
+        after_sequence = self._update_sequence
+        try:
+            async with async_timeout.timeout(60):
+                await self.async_refresh()
+        except TimeoutError as ex:
+            raise SigenergyModbusError(
+                f"Write to {register_name} was sent, but fresh readback timed out"
+            ) from ex
+
+        if (
+            not self.last_update_success
+            or self._last_successful_update_sequence <= after_sequence
+        ):
+            raise SigenergyModbusError(
+                f"Write to {register_name} was sent, but no fresh readback is available"
+            )
+        actual = (self.data or {}).get("plant", {}).get(register_name)
+        if actual != value:
+            raise SigenergyModbusError(
+                f"Write to {register_name} was sent, but fresh readback was "
+                f"{actual!r}, expected {value!r}"
+            )
+        _LOGGER.debug(
+            "Confirmed %s=%s by fresh readback in update %s",
+            register_name, actual, self._last_successful_update_sequence,
+        )
 
     async def async_write_parameter(
         self,
@@ -134,26 +191,48 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         register_name: str,
         value: Union[int, float, str]
     ) -> None:
-        """Write a parameter via the Modbus hub and schedule a update."""
-        try:
-            await self.hub.async_write_parameter(
-                device_type=device_type,
-                device_identifier=device_identifier,
-                register_name=register_name,
-                value=value,
-            )
-            # Trigger an immediate refresh
-            await self.async_request_refresh()
-        except SigenergyModbusError as ex:
-            _LOGGER.error("Failed to write parameter %s to %s '%s': %s",
-                          register_name, device_type, device_identifier or 'plant', ex)
-            # Re-raise the exception so the calling entity knows the write failed
-            raise
-        except Exception as ex:
-            _LOGGER.error("Unexpected error writing parameter %s to %s '%s': %s",
-                          register_name, device_type, device_identifier or 'plant', ex)
-            # Re-raise for visibility
-            raise
+        """Write a parameter; confirm Remote EMS commands before returning."""
+
+        async def _write_and_refresh() -> None:
+            try:
+                await self.hub.async_write_parameter(
+                    device_type=device_type,
+                    device_identifier=device_identifier,
+                    register_name=register_name,
+                    value=value,
+                )
+                if device_type == "plant" and register_name in {
+                    "plant_remote_ems_enable", "plant_remote_ems_control_mode"
+                }:
+                    await self._async_confirm_remote_ems_write(register_name, value)
+                else:
+                    await self.async_request_refresh()
+            except SigenergyModbusError as ex:
+                _LOGGER.error("Failed to complete parameter command %s to %s '%s': %s",
+                              register_name, device_type, device_identifier or 'plant', ex)
+                raise
+            except Exception as ex:
+                _LOGGER.error("Unexpected error writing parameter %s to %s '%s': %s",
+                              register_name, device_type, device_identifier or 'plant', ex)
+                raise
+
+        def _consume_result(task: asyncio.Task[None]) -> None:
+            # Errors are logged with their device/register context inside
+            # the task, even if the caller has already been cancelled.
+            if not task.cancelled():
+                task.exception()
+
+        # Keep the task tracked by the config entry after caller cancellation.
+        task = self.hub.config_entry.async_create_task(
+            self.hass, _write_and_refresh(), name=f"Sigenergy write {register_name}"
+        )
+        task.add_done_callback(_consume_result)
+
+        # Cancelling the service caller must not cancel the write/refresh.
+        # wait() leaves the tracked task running and avoids shield()'s
+        # separate late-exception reports on Python 3.14.
+        await asyncio.wait({task})
+        task.result()
 
     def mark_sensors_initialized(self) -> None:
         """Mark that static sensors have been initialized and calculated sensors can run."""

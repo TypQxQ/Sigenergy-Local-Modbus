@@ -35,7 +35,7 @@ More add-ons and enhancements are coming; stay tuned!
 
 ## Requirements
 - Sigenergy ESS firmware `SPC109` or newer is required starting with version `v1.1.0` of the integration. If your device runs older firmware and does not auto-update, upgrade the firmware or use a previous integration release until you have updated the firmware.
-- [Home Assistant](https://www.home-assistant.io/) at least version `2026.1`.
+- [Home Assistant](https://www.home-assistant.io/) at least version `2026.10` (requires Python `3.14.2` or newer).
 - [Sigenergy ESS](https://www.sigenergy.com/) with Modbus‑TCP enabled by your installer. And preferably confirmed with a screenshot of your `DeviceID`. If using an AC Charger, that will have the id `1` and the inverter has to be set to a higher ID, for example `2`.
 - Preferably assign a **static IP** to your Sigenergy device in your router to ensure it always receives the same IP address.
 
@@ -120,6 +120,14 @@ Plant (IP:Port)
 - **Controls and diagnostic entities are conservative by default.** Write controls and many diagnostic sensors are disabled by default. To use controls, disable read-only mode in the integration options and enable the specific entity in Home Assistant only if you understand the setting.
 - **Device IDs and topology matter.** AC chargers are normally device ID `1`; inverters must use another ID. DC charger data is read via the inverter, and all devices in a plant should normally use the same host and port.
 
+
+### Remote EMS automation sequencing
+
+Starting with v1.3.0, changing the plant's Remote EMS enable switch or control mode waits for a new device readback before the action completes successfully. A matching cached value or a poll that started before the write is not accepted as confirmation. Confirmation waits for at most 60 seconds and does not repeat the write.
+
+If confirmation fails, the action reports an error explaining that the write was sent but could not be confirmed. The inverter may already have applied it: check the current state before deciding whether another command is needed. Other parameter writes retain batched updates.
+
+Automations should enable Remote EMS, wait for the enabled state and mode-select availability, and then select the desired mode. A fixed sleep is not confirmation. Home Assistant skips service calls targeting unavailable entities before the integration receives them, so this change cannot recover a command that was never delivered. The broader simultaneous loss of several controls in [issue #427](https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues/427) still needs complete debug logs and an automation trace.
 
 ## Quickstart Automation Example
 ```yaml
