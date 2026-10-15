@@ -1,0 +1,80 @@
+name: Publish installation ZIP
+
+on:
+  push:
+    tags:
+      - "v.*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: github.repository == 'TypQxQ/Sigenergy-Local-Modbus'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      SIGEN_REQUIRE_MODBUS_CONNECTION: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Test supported Modbus versions
+        run: |
+          for version in 4.12.3 4.12.4; do
+            python -m pip install "modbus-connection==$version"
+            python -m unittest discover -s tests -v
+          done
+      - name: Validate integration metadata
+        uses: home-assistant/actions/hassfest@master
+      - name: Validate HACS metadata
+        uses: hacs/action@main
+        with:
+          category: Integration
+      - name: Build and verify committed installation files
+        id: package
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/build_release.py --tag "$RELEASE_TAG" --github-output "$GITHUB_OUTPUT"
+      - name: Upload and verify draft before publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_VERSION: ${{ steps.package.outputs.version }}
+          IS_PRERELEASE: ${{ steps.package.outputs.prerelease }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/existing-release.json" 2>/dev/null; then
+            if [ "$(jq -r .isDraft "$RUNNER_TEMP/existing-release.json")" != true ]; then
+              echo "::error::Refusing to replace a published release."
+              exit 1
+            fi
+          else
+            notes="docs/releases/$RELEASE_VERSION.md"
+            notes_args=(--generate-notes)
+            if [ -f "$notes" ]; then
+              notes_args=(--notes-file "$notes")
+            fi
+            gh release create "$RELEASE_TAG" --verify-tag --target "$RELEASE_COMMIT" \
+              --draft --prerelease="$IS_PRERELEASE" --latest=false \
+              --title "Sigenergy ESS $RELEASE_VERSION" "${notes_args[@]}"
+          fi
+          gh release upload "$RELEASE_TAG" dist/sigen.zip --clobber
+          gh release download "$RELEASE_TAG" --pattern sigen.zip --dir "$RUNNER_TEMP/release-verification"
+          cmp dist/sigen.zip "$RUNNER_TEMP/release-verification/sigen.zip"
+          latest=true
+          if [ "$IS_PRERELEASE" = true ]; then
+            latest=false
+          fi
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$IS_PRERELEASE" \
+            --latest="$latest" --discussion-category Announcements

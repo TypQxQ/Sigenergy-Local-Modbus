@@ -37,5 +37,6 @@
 - diagnostics.py must redact host/credentials/serials/MACs via async_redact_data; never log secrets.
 
 ### CI / repo checks
+- Release tags (`v.<manifest version>`) run release.yaml: test both Modbus versions, validate, build sigen.zip from committed files with scripts/build_release.py, upload to a draft, verify the uploaded bytes, then publish. Never replace published release assets or move existing tags. ZIP contents go directly into custom_components/sigen, without an enclosing directory.
 - This repo is validated by hassfest and HACS Action workflows (.github/workflows/).
 - Type checking uses pyright “basic” (pyrightconfig.json); Reference/ is intentionally excluded.

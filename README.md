@@ -54,9 +54,11 @@ You first need to [install and configure](https://www.hacs.xyz/docs/use/) it bef
 3. Restart Home Assistant
 
 ### Manual
-1. Download the latest `.zip` from the [Releases](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases) page
-2. Extract and copy `custom_components/sigen` into your HA `custom_components/` folder
+1. Download `sigen.zip` from the desired [release](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases).
+2. Extract its contents directly into your HA `custom_components/sigen/` folder. Starting with v1.3.0b2, `manifest.json` and the Python files are at the ZIP root. For older releases using GitHub's source archive, copy the archive's `custom_components/sigen` directory instead.
 3. Restart Home Assistant
+
+Starting with v1.3.0b2, HACS installs the dedicated `sigen.zip` release asset. Its download count measures downloads of that file for the release; older source-archive downloads are not included.
 
 ## Configuration & Usage
 ### Plant Concept
