@@ -11,6 +11,7 @@ import asyncio
 import importlib
 import os
 import sys
+import time
 import types
 import unittest
 from pathlib import Path
@@ -227,6 +228,64 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
 
     async def test_cancelled_probe_consumes_late_wire_failure(self) -> None:
         await self._assert_cancelled_wire_request_is_quiet("probe")
+
+    async def _assert_cancelled_probe_backoff(self, *, timeout: bool = False) -> None:
+        unit, plant = self._new_plant()
+        flaky = "plant_ess_average_cell_temperature"
+        reg = self.defs.PLANT_RUNNING_INFO_REGISTERS[flaky]
+        soc_addr = self.defs.PLANT_RUNNING_INFO_REGISTERS["plant_ess_soc"].address
+        unit.load_raw({"input": {soc_addr: 955}})
+        unit.fail_read(reg.address, ModbusTimeoutError("silent optional register"), register_type="input")
+        original_read = unit.read_input_registers
+        started, release = asyncio.Event(), asyncio.Event()
+        probe_attempts = []
+
+        async def slow_optional_read(address, count):
+            if address == reg.address and count == reg.count:
+                probe_attempts.append(address)
+                started.set()
+                await release.wait()
+                raise ModbusTimeoutError("late optional-register timeout")
+            return await original_read(address, count)
+
+        with patch.object(unit, "read_input_registers", slow_optional_read):
+            poll = asyncio.create_task(plant.async_update())
+            try:
+                await asyncio.wait_for(started.wait(), timeout=1)
+                if timeout:
+                    with self.assertRaises(TimeoutError):
+                        await asyncio.wait_for(poll, timeout=0)
+                else:
+                    poll.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await poll
+            finally:
+                release.set()
+                poll.cancel()
+                await asyncio.gather(poll, *plant._group._pending_requests, return_exceptions=True)
+
+            self.assertIs(plant.is_supported("plant_ess_soc"), True)
+            self.assertIsNone(plant.is_supported(flaky))
+            data = await plant.async_update()
+
+        self.assertEqual(95.5, data["plant_ess_soc"])
+        self.assertIsNone(data[flaky])
+        self.assertEqual(1, len(probe_attempts), "the next poll must honour the probe retry delay")
+
+        # Backoff is temporary: retry the unknown register and recover when
+        # the optional read starts answering again. Never classify it as absent.
+        unit.fail_read(reg.address, None, register_type="input")
+        later = time.monotonic() + self.devices.PROBE_RETRY_DELAY + 1
+        with patch.object(self.devices, "time", types.SimpleNamespace(monotonic=lambda: later)):
+            recovered = await plant.async_update()
+        self.assertIs(plant.is_supported(flaky), True)
+        self.assertIsNotNone(recovered[flaky])
+
+    async def test_cancelled_probe_backs_off_and_exposes_known_readings(self) -> None:
+        await self._assert_cancelled_probe_backoff()
+
+    async def test_timed_out_probe_backs_off_and_exposes_known_readings(self) -> None:
+        await self._assert_cancelled_probe_backoff(timeout=True)
 
     async def test_cancelled_write_consumes_late_wire_failure(self) -> None:
         await self._assert_cancelled_wire_request_is_quiet("write")

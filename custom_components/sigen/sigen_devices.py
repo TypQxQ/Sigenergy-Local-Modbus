@@ -201,6 +201,12 @@ class _ComponentGroup:
             return
         try:
             await self._async_probe(name, component)
+        except asyncio.CancelledError:
+            # The coordinator's deadline can cancel probing before the wire
+            # timeout is delivered. Back off here too, so the next poll reads
+            # known fields instead of immediately repeating the slow probe.
+            self._last_probe_failure[name] = time.monotonic()
+            raise
         except ModbusConnectionError:
             raise
         except ModbusError as ex:
