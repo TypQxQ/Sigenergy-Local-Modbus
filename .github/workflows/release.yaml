@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      discussions: write
     env:
       SIGEN_REQUIRE_MODBUS_CONNECTION: "1"
     steps:
