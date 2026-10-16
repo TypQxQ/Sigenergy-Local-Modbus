@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import time
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -106,12 +107,20 @@ class _Hub:
 def _make_coordinator():
     tree = ast.parse(SOURCE_PATH.read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef))
+    constants = [
+        node for node in tree.body if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id in {
+            "STARTUP_TIMEOUT", "UPDATE_TIMEOUT"
+        } for target in node.targets)
+    ]
     module = ast.fix_missing_locations(ast.Module(
-        body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), cls],
+        body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0),
+              *constants, cls],
         type_ignores=[],
     ))
     namespace = {
         "asyncio": asyncio,
+        "time": time,
         "async_timeout": SimpleNamespace(timeout=asyncio.timeout),
         "timedelta": timedelta,
         "DataUpdateCoordinator": _CoordinatorBase,

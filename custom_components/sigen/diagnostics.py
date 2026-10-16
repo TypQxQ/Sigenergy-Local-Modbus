@@ -194,6 +194,10 @@ async def async_get_config_entry_diagnostics(
                 if coordinator.last_exception else None,
             "latest_fetch_time": coordinator.latest_fetch_time,
             "largest_update_interval": coordinator.largest_update_interval,
+            "startup_fetch_time": coordinator.startup_fetch_time,
+            "update_timeout_count": coordinator.update_timeout_count,
+            "update_failure_count": coordinator.update_failure_count,
+            "latest_update_timing": coordinator.latest_update_timing,
         },
         "data": async_redact_data(coordinator.data, TO_REDACT),
         "hub_info": {
@@ -298,6 +302,10 @@ async def async_get_device_diagnostics(
             "last_exception": str(coordinator.last_exception) if coordinator.last_exception else None,
             "latest_fetch_time": coordinator.latest_fetch_time,
             "largest_update_interval": coordinator.largest_update_interval,
+            "startup_fetch_time": coordinator.startup_fetch_time,
+            "update_timeout_count": coordinator.update_timeout_count,
+            "update_failure_count": coordinator.update_failure_count,
+            "latest_update_timing": coordinator.latest_update_timing,
             "sensors_initialized": coordinator.data.get("_sensors_initialized", False) if coordinator.data else False,
         },
         "hub_connection": {

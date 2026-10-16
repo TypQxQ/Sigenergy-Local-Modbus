@@ -237,7 +237,8 @@ class _ComponentGroup:
                 component.restrict_fields(supported)
 
     async def _async_read_blocks(
-        self, name: str, component: Component, fields: Mapping[str, RegisterField]
+        self, name: str, component: Component, fields: Mapping[str, RegisterField],
+        *, probing: bool = False,
     ) -> tuple[dict[str, list[int]], dict[str, ModbusError]]:
         """Read contiguous blocks; return words and failed-block errors per field.
 
@@ -276,6 +277,10 @@ class _ComponentGroup:
                 if start <= field.address < start + count:
                     offset = field.address - start
                     words[field_name] = block[offset : offset + field.count]
+                    if probing:
+                        # Commit each completed block before awaiting the next
+                        # one. A later cancellation must not discard progress.
+                        self._field_support[name][field_name] = True
         return words, errors
 
     async def _async_probe(self, name: str, component: Component) -> None:
@@ -299,20 +304,18 @@ class _ComponentGroup:
         """
         support = self._field_support[name]
         deferred: dict[str, ModbusError] = {}
-        if not support and name not in self._bulk_probed:
+        if name not in self._bulk_probed:
             register_fields = {
                 field_name: field
                 for field_name, field in component.declared_fields.items()
-                if isinstance(field, RegisterField)
+                if isinstance(field, RegisterField) and field_name not in support
             }
-            words, errors = await self._async_read_blocks(
-                name, component, register_fields
+            _words, errors = await self._async_read_blocks(
+                name, component, register_fields, probing=True
             )
             # Even an entirely inconclusive bulk pass must move on to
             # individual probes after backoff, rather than repeat forever.
             self._bulk_probed.add(name)
-            for field_name in words:
-                support[field_name] = True
             deferred = {
                 field_name: error for field_name, error in errors.items()
                 if not isinstance(error, IllegalDataAddressError)
