@@ -3,18 +3,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 from typing import Any, Dict, Optional, Union # Added Optional, Union
 
 import async_timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=syntax-error
-from homeassistant.util import dt as dt_util
 
 from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
 from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
+
+STARTUP_TIMEOUT = 180
+UPDATE_TIMEOUT = 60
 
 
 class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
@@ -36,6 +39,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.data: dict[str, Any] | None = None
         self._update_sequence = 0
         self._last_successful_update_sequence = 0
+        self.startup_fetch_time: float | None = None
+        self.update_timeout_count = 0
+        self.update_failure_count = 0
+        self.latest_update_timing: dict[str, Any] = {}
 
         if scan_interval <= 1:
             scan_interval = DEFAULT_SCAN_INTERVAL
@@ -53,20 +60,45 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self._update_sequence += 1
         update_sequence = self._update_sequence
         device_tasks: set[asyncio.Task] = set()
+        phase = "startup" if self._last_successful_update_sequence == 0 else "poll"
+        timeout = STARTUP_TIMEOUT if phase == "startup" else UPDATE_TIMEOUT
+        start_time = time.perf_counter()
+        status = "cancelled"
+        device_timings: dict[str, dict[str, Any]] = {}
+
+        async def timed_read(device: str, read, *args) -> Dict[str, Any]:
+            started = time.perf_counter()
+            device_status = "cancelled"
+            try:
+                result = await read(*args)
+                device_status = "success"
+                return result
+            except Exception:
+                device_status = "error"
+                raise
+            finally:
+                device_timings[device] = {
+                    "duration": time.perf_counter() - started,
+                    "status": device_status,
+                }
+
         try:
-            async with async_timeout.timeout(60):
-                start_time = dt_util.utcnow()
+            async with async_timeout.timeout(timeout):
 
                 # Fetch all data at once
-                plant_data = await self.hub.async_read_plant_data()
+                plant_data = await timed_read("plant", self.hub.async_read_plant_data)
 
                 # Fetch inverter and DC charger data concurrently
                 inverter_tasks = {
-                    name: asyncio.create_task(self.hub.async_read_inverter_data(name))
+                    name: asyncio.create_task(timed_read(
+                        f"inverter:{name}", self.hub.async_read_inverter_data, name
+                    ))
                     for name in self.hub.inverter_connections
                 }
                 dc_tasks = {
-                    name: asyncio.create_task(self.hub.async_read_dc_charger_data(name))
+                    name: asyncio.create_task(timed_read(
+                        f"dc_charger:{name}", self.hub.async_read_dc_charger_data, name
+                    ))
                     for name, cfg in self.hub.inverter_connections.items()
                     if cfg.get(CONF_INVERTER_HAS_DCCHARGER, False)
                 }
@@ -89,7 +121,9 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Fetch AC charger data concurrently
                 ac_tasks = {
-                    name: asyncio.create_task(self.hub.async_read_ac_charger_data(name))
+                    name: asyncio.create_task(timed_read(
+                        f"ac_charger:{name}", self.hub.async_read_ac_charger_data, name
+                    ))
                     for name in self.hub.ac_charger_connections
                 }
                 device_tasks.update(ac_tasks.values())
@@ -113,38 +147,50 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 }
                 _LOGGER.debug("RBS-coordinator-106-coordinator-post Merged fetched, len: %s data: %s", len(self.data), self.data)
                 
-                timetaken = (dt_util.utcnow() - start_time).total_seconds()
-                self.latest_fetch_time = timetaken
-
-                # Update latest fetch time and max fetch time
-                if self.largest_update_interval < timetaken:
-                    self.largest_update_interval = timetaken
-
-                # log_level = logging.WARNING if timetaken > update_interval else logging.DEBUG
-                # self.logger.log(
-                #     log_level,
-                #     "Fetching all data took %.3f seconds%s",
-                #     timetaken,
-                #     " - exceeds update interval!" if timetaken > update_interval else ""
-                # )
-
                 # Return the updated, complete data structure
+                status = "success"
                 self._last_successful_update_sequence = update_sequence
                 return self.data
         except asyncio.TimeoutError as exception:
+            status = "timeout"
+            self.update_timeout_count += 1
+            self.update_failure_count += 1
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
         except Exception as exception:
+            status = "error"
+            self.update_failure_count += 1
             raise UpdateFailed(f"Error communicating with Sigenergy system: {exception}") from exception
         finally:
             # A timeout/cancellation otherwise stops only the child currently
             # awaited, leaving sibling polls running into the next update.
             # Cancel the read workflows and retrieve every result. The device
             # layer still lets each in-flight wire transaction finish safely.
-            for task in device_tasks:
-                if not task.done():
-                    task.cancel()
-            if device_tasks:
-                await asyncio.gather(*device_tasks, return_exceptions=True)
+            fetch_time = time.perf_counter() - start_time
+            cleanup_started = time.perf_counter()
+            try:
+                for task in device_tasks:
+                    if not task.done():
+                        task.cancel()
+                if device_tasks:
+                    await asyncio.gather(*device_tasks, return_exceptions=True)
+            finally:
+                # Include failed attempts, and keep workflow cleanup separate
+                # from the fetch deadline. Device times include broker waits;
+                # they overlap and must not be summed as wire transaction time.
+                self.latest_fetch_time = fetch_time
+                self.largest_update_interval = max(self.largest_update_interval, fetch_time)
+                if phase == "startup" and status == "success":
+                    self.startup_fetch_time = fetch_time
+                self.latest_update_timing = {
+                    "phase": phase,
+                    "status": status,
+                    "timeout": timeout,
+                    "fetch_time": fetch_time,
+                    "cleanup_time": time.perf_counter() - cleanup_started,
+                    "total_time": time.perf_counter() - start_time,
+                    "devices": device_timings,
+                }
+                _LOGGER.debug("Sigenergy update timing: %s", self.latest_update_timing)
 
     async def _async_confirm_remote_ems_write(
         self, register_name: str, value: Union[int, float, str]

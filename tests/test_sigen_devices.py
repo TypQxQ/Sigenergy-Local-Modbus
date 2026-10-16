@@ -526,6 +526,53 @@ class TestComponentGroupRecovery(unittest.IsolatedAsyncioTestCase):
         })(unit)
         return self.devices._ComponentGroup({"telemetry": component}, {})
 
+    async def test_cancelled_bulk_probe_keeps_completed_blocks_and_resumes_unknown_only(self):
+        from modbus_connection.model import gauge
+
+        unit = MockModbusConnection().for_unit(1)
+        unit.load_raw({"input": {100: 123, 500: 456}})
+        group = self._new_group(unit, {
+            "first": gauge(100, 1.0), "second": gauge(500, 1.0),
+        })
+        original_read = unit.read_input_registers
+        blocked = asyncio.Event()
+        release = asyncio.Event()
+        reads = []
+
+        async def read(address, count):
+            reads.append((address, count))
+            if address == 500 and not blocked.is_set():
+                blocked.set()
+                await release.wait()
+            return await original_read(address, count)
+
+        with patch.object(unit, "read_input_registers", read):
+            poll = asyncio.create_task(group.async_update())
+            try:
+                await asyncio.wait_for(blocked.wait(), timeout=1)
+                self.assertIs(group.is_supported("first"), True)
+                self.assertIsNone(group.is_supported("second"))
+                poll.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await poll
+                self.assertIs(group.is_supported("first"), True)
+                self.assertNotIn("telemetry", group._bulk_probed)
+                release.set()
+                await asyncio.gather(*group._pending_requests, return_exceptions=True)
+                reads.clear()
+                later = time.monotonic() + self.devices.PROBE_RETRY_DELAY + 1
+                with patch.object(self.devices, "time", types.SimpleNamespace(monotonic=lambda: later)):
+                    data = await group.async_update()
+            finally:
+                release.set()
+                poll.cancel()
+                await asyncio.gather(poll, *group._pending_requests, return_exceptions=True)
+
+        self.assertEqual({"first": 123, "second": 456}, data)
+        # Resume discovery at 500; the following 100/500 requests are normal
+        # data reads. The already-confirmed first block is not probed again.
+        self.assertEqual([(500, 1), (100, 1), (500, 1)], reads)
+
     async def _assert_survivors_are_drained(self, *, cancel_drain=False):
         from modbus_connection.model import gauge
 
