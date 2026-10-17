@@ -199,7 +199,7 @@ class _ComponentGroup:
                           if isinstance(field, RegisterField)
                           and (self._field_support[name].get(field_name) is False if negative
                                else field_name not in self._field_support[name])
-                          and (not negative or (name, field_name) not in self._checked_fields)}
+                          and (name, field_name) not in self._checked_fields}
                 self._queue_contiguous(name, fields)
         self.discovery_prepared = True
         self._support_changed()
@@ -234,7 +234,10 @@ class _ComponentGroup:
                 if (isinstance(item, (list, tuple)) and len(item) == 2
                         and all(isinstance(value, str) for value in item)
                         and item[0] in self._readable
-                        and item[1] in self._field_support[item[0]]):
+                        and isinstance(self._readable[item[0]].declared_fields.get(item[1]), RegisterField)):
+                    # Same-process pass bookkeeping can survive a reload even
+                    # without verified identity. It does not restore negative
+                    # capabilities; a new HA boot rechecks these fields.
                     self._checked_fields.add(tuple(item))
         rejected = progress.get("rejected_blocks", {})
         if isinstance(rejected, dict):

@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import asyncio
 import time
+from contextlib import AsyncExitStack, asynccontextmanager
 from uuid import uuid4
 from typing import Any, Dict, Optional, Union
 
@@ -196,19 +197,26 @@ class SigenergyModbusHub:
         if self._cache is not None:
             loaded = self._loaded_cache.get(key, {})
             identity = self._endpoint_identity.get(endpoint, {})
+            fingerprint = group.fingerprint()
+            loaded_progress = {}
+            if (loaded.get("fingerprint") == fingerprint
+                    and (not identity or not loaded.get("identity") or loaded["identity"] == identity)):
+                loaded_progress = loaded.get("discovery", {})
+                if not identity:
+                    loaded_progress = loaded.get("provisional_discovery", loaded_progress)
+            discovery = (group.discovery_progress(_DISCOVERY_SESSION)
+                         if group.discovery_prepared else loaded_progress)
             if (not identity and loaded.get("identity")
-                    and loaded.get("fingerprint") == group.fingerprint()):
+                    and loaded.get("fingerprint") == fingerprint):
                 # Keep the verified generation intact until live identity is
                 # available. Early/late replies belong to an unverified overlay,
                 # whose positives alone can be reused on a subsequent retry.
-                self._cache.update(key, group.fingerprint(), loaded["identity"],
+                self._cache.update(key, fingerprint, loaded["identity"],
                                    loaded.get("support", {}), loaded.get("discovery", {}),
-                                   provisional=group._field_support)
+                                   provisional=group._field_support,
+                                   provisional_discovery=discovery)
                 return
-            discovery = (group.discovery_progress(_DISCOVERY_SESSION)
-                         if group.discovery_prepared else
-                         self._loaded_cache.get(key, {}).get("discovery", {}))
-            self._cache.update(key, group.fingerprint(), self._endpoint_identity.get(endpoint, {}),
+            self._cache.update(key, fingerprint, identity,
                                group._field_support, discovery)
 
     async def async_initialize(self, cache=None) -> None:
@@ -264,6 +272,8 @@ class SigenergyModbusHub:
             await group.async_bootstrap(names)
             progress = (self._loaded_cache[key].get("discovery", {})
                         if status in {"hit", "positive_only"} else {})
+            if status == "positive_only":
+                progress = self._loaded_cache[key].get("provisional_discovery", progress)
             group.restore_discovery(progress, _DISCOVERY_SESSION)
             self._discovery_backoff[endpoint] = max(
                 self._discovery_backoff.get(endpoint, 0), group.discovery_retry_at
@@ -304,10 +314,24 @@ class SigenergyModbusHub:
         if discovery is not None and not discovery.done():
             discovery.cancel()
             await asyncio.gather(discovery, return_exceptions=True)
-        pending = {task for _key, ep, _role, group in self._bindings if ep == endpoint
-                   for task in group._pending_requests}
-        if pending:
-            await asyncio.wait(pending)
+        async with self._async_pause_endpoint_polls(endpoint):
+            await self._async_reset_identity(name, identity, endpoint)
+
+    @asynccontextmanager
+    async def _async_pause_endpoint_polls(self, endpoint):
+        # Hold every group's poll lock, not merely a snapshot of its current
+        # wire tasks: an active workflow can enqueue another block after one
+        # request finishes. Also drain protected replies from cancelled polls.
+        groups = [group for _key, ep, _role, group in self._bindings if ep == endpoint]
+        async with AsyncExitStack() as stack:
+            for group in groups:
+                await stack.enter_async_context(group._poll_lock)
+            pending = {task for group in groups for task in group._pending_requests}
+            if pending:
+                await asyncio.wait(pending)
+            yield
+
+    async def _async_reset_identity(self, name, identity, endpoint):
         # Old discovery callbacks must finish under the old identity stamp.
         self._identities[name] = identity
         self._refresh_endpoint_identities()
@@ -336,7 +360,8 @@ class SigenergyModbusHub:
 
     async def _async_resume_identity_rebuild(self, endpoint):
         async with self._identity_rebuild_locks.setdefault(endpoint, asyncio.Lock()):
-            await self._async_resume_identity_rebuild_locked(endpoint)
+            async with self._async_pause_endpoint_polls(endpoint):
+                await self._async_resume_identity_rebuild_locked(endpoint)
 
     async def _async_resume_identity_rebuild_locked(self, endpoint):
         rebuild = self._identity_rebuilds.get(endpoint, [])
@@ -380,6 +405,9 @@ class SigenergyModbusHub:
             self._discovery_tasks[endpoint] = task
 
     async def _async_discover_endpoint(self, endpoint):
+        rebuild_lock = self._identity_rebuild_locks.get(endpoint)
+        if rebuild_lock is not None and rebuild_lock.locked():
+            return
         groups = [group for _key, ep, _role, group in self._bindings if ep == endpoint]
         if self._active_polls or self._active_writes or any(g._pending_requests for g in groups):
             return

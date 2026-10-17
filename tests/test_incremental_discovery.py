@@ -328,3 +328,246 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("hit", group.cache_status)
         self.assertIs(group.is_supported("inverter_alarm1"), False)
         self.assertIn(("running_info", "inverter_alarm1"), group._checked_fields)
+
+    async def test_identity_rebuild_drains_the_entire_sibling_poll_before_resetting_support(self):
+        await self.hub.async_initialize(self.cache())
+        plant = self.hub._plant._group
+        plant.reset_poll_progress()
+        names = ("plant_running_state", "plant_ess_soc")
+        for states in plant._field_support.values():
+            states.clear()
+        plant._field_support["running_info"].update({name: True for name in names})
+        fields = plant._readable["running_info"].declared_fields
+        addresses = sorted(fields[name].address for name in names)
+        first, second, release_first, release_second = (asyncio.Event() for _ in range(4))
+        original = self.plant_unit.read_input_registers
+        async def read(address, count):
+            if address == addresses[0]:
+                first.set()
+                await release_first.wait()
+            elif address == addresses[1]:
+                second.set()
+                await release_second.wait()
+            return await original(address, count)
+        previous = dict(self.hub._identities["Inverter"])
+        identity = {name: "new-identity" for name in self.modbus.IDENTITY_REGISTERS}
+        tasks = []
+        try:
+            with patch.object(self.plant_unit, "read_input_registers", read), \
+                 patch.object(plant, "async_bootstrap", AsyncMock()):
+                poll = asyncio.create_task(self.hub.async_read_plant_data())
+                tasks.append(poll)
+                await asyncio.wait_for(first.wait(), 2)
+                rebuild = asyncio.create_task(self.hub._async_observe_identity("Inverter", identity))
+                tasks.append(rebuild)
+                await asyncio.sleep(0)
+                release_first.set()
+                await asyncio.wait_for(second.wait(), 2)
+                # Let the old one-request snapshot wait finish if it is still used.
+                for _ in range(5):
+                    await asyncio.sleep(0)
+                self.assertEqual(previous, self.hub._identities["Inverter"],
+                                 "the second block still belongs to the old poll generation")
+                self.assertFalse(rebuild.done())
+                self.assertTrue(all(plant.is_supported(name) for name in names))
+                release_second.set()
+                await asyncio.wait_for(asyncio.gather(*tasks), 2)
+                self.assertEqual(identity, self.hub._identities["Inverter"])
+        finally:
+            release_first.set()
+            release_second.set()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def test_cancelled_rebuild_wait_leaves_identity_and_sibling_poll_locks_usable(self):
+        await self.hub.async_initialize(self.cache())
+        group = self.hub._inverters["Inverter"]._inverter_group
+        previous = dict(self.hub._identities["Inverter"])
+        identity = {name: "new-identity" for name in self.modbus.IDENTITY_REGISTERS}
+        await group._poll_lock.acquire()
+        task = asyncio.create_task(self.hub._async_observe_identity("Inverter", identity))
+        try:
+            for _ in range(5):
+                await asyncio.sleep(0)
+            self.assertEqual(previous, self.hub._identities["Inverter"])
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+        finally:
+            group._poll_lock.release()
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        # The plant lock is acquired before the inverter lock; cancelling the
+        # wait must release it so ordinary polling remains possible.
+        self.assertIsInstance(await asyncio.wait_for(self.hub.async_read_plant_data(), 2), dict)
+
+    async def test_identity_bootstrap_blocks_new_polls_and_background_discovery_on_the_endpoint(self):
+        await self.hub.async_initialize(self.cache())
+        plant = self.hub._plant._group
+        started, finish = asyncio.Event(), asyncio.Event()
+        async def bootstrap(names):
+            started.set()
+            await finish.wait()
+        identity = {name: "new-identity" for name in self.modbus.IDENTITY_REGISTERS}
+        tasks = []
+        try:
+            with patch.object(plant, "async_bootstrap", bootstrap):
+                rebuild = asyncio.create_task(self.hub._async_observe_identity("Inverter", identity))
+                tasks.append(rebuild)
+                await asyncio.wait_for(started.wait(), 2)
+                poll = asyncio.create_task(self.hub.async_read_plant_data())
+                tasks.append(poll)
+                await asyncio.sleep(0)
+                self.assertFalse(poll.done())
+                before = sum(group.discovery_requests for _, _, _, group in self.hub._bindings)
+                await self.hub._async_discover_endpoint(("test", 502))
+                self.assertEqual(before, sum(group.discovery_requests for _, _, _, group in self.hub._bindings))
+                finish.set()
+                await asyncio.wait_for(asyncio.gather(*tasks), 2)
+        finally:
+            finish.set()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def test_identity_rebuild_drains_late_wire_reply_from_a_cancelled_sibling_poll(self):
+        await self.hub.async_initialize(self.cache())
+        plant = self.hub._plant._group
+        plant.reset_poll_progress()
+        started, finish = asyncio.Event(), asyncio.Event()
+        original = self.plant_unit.read_input_registers
+        async def read(address, count):
+            started.set()
+            await finish.wait()
+            return await original(address, count)
+        previous = dict(self.hub._identities["Inverter"])
+        identity = {name: "new-identity" for name in self.modbus.IDENTITY_REGISTERS}
+        tasks = []
+        try:
+            with patch.object(self.plant_unit, "read_input_registers", read), \
+                 patch.object(plant, "async_bootstrap", AsyncMock()):
+                poll = asyncio.create_task(self.hub.async_read_plant_data())
+                tasks.append(poll)
+                await asyncio.wait_for(started.wait(), 2)
+                poll.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await poll
+                rebuild = asyncio.create_task(self.hub._async_observe_identity("Inverter", identity))
+                tasks.append(rebuild)
+                for _ in range(5):
+                    await asyncio.sleep(0)
+                self.assertEqual(previous, self.hub._identities["Inverter"])
+                self.assertFalse(rebuild.done())
+                self.assertTrue(plant._pending_requests)
+                finish.set()
+                await asyncio.wait_for(rebuild, 2)
+                self.assertEqual(identity, self.hub._identities["Inverter"])
+                self.assertFalse(plant._pending_requests)
+        finally:
+            finish.set()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _save_discovery_without_verified_identity(self):
+        await self.hub.async_initialize(self.cache())
+        names = ("plant_phase_a_active_power", "plant_phase_b_active_power",
+                 "plant_phase_c_active_power")
+        plant = self.hub._plant._group
+        for name in names:
+            plant._field_support["running_info"][name] = False
+        for key, endpoint, _role, group in self.hub._bindings:
+            self.hub._checkpoint(key, endpoint, group)
+        await self.hub._cache.async_flush()
+        self.verified_record = self.store.data["devices"][self.hub._bindings[0][0]]
+        firmware = self.hub._inverters["Inverter"].running_info.declared_fields[
+            "inverter_machine_firmware_version"]
+        original_inverter_read = self.inv_unit.read_input_registers
+        async def missing_identity(address, count):
+            if address <= firmware.address < address + count:
+                raise IllegalDataAddressError(2)
+            return await original_inverter_read(address, count)
+        self.missing_identity = missing_identity
+        warm = self.modbus.SigenergyModbusHub(object(), _ConfigEntry(self.data))
+        with patch.object(self.inv_unit, "read_input_registers", missing_identity):
+            await warm.async_initialize(self.cache())
+        self.assertFalse(warm._endpoint_identity[("test", 502)])
+        group = warm._plant._group
+        group._probe_queue.clear()
+        group._queued_fields.clear()
+        group._enqueue("running_info", names)
+        fields = group._readable["running_info"].declared_fields
+        original_plant_read = self.plant_unit.read_input_registers
+        async def failing(address, count):
+            if address <= fields[names[1]].address < address + count:
+                raise IllegalDataAddressError(2)
+            if address == fields[names[2]].address:
+                raise ModbusTimeoutError("slow link")
+            return await original_plant_read(address, count)
+        with patch.object(self.plant_unit, "read_input_registers", failing):
+            # Rejected ABC -> A/BC -> A succeeds -> B/C -> B unsupported.
+            for _ in range(4):
+                await group.async_discover_one()
+            with self.assertRaises(ModbusTimeoutError):
+                await group.async_discover_one()
+        self.saved_progress = group.discovery_progress(self.modbus._DISCOVERY_SESSION)
+        await warm.async_close()
+        return names
+
+    async def test_unverified_reload_restores_split_jobs_negative_checks_and_retry_pacing(self):
+        names = await self._save_discovery_without_verified_identity()
+        record = self.store.data["devices"][self.hub._bindings[0][0]]
+        for name in ("identity", "support", "discovery"):
+            self.assertEqual(self.verified_record[name], record[name])
+        retry = self.modbus.SigenergyModbusHub(object(), _ConfigEntry(self.data))
+        with patch.object(self.inv_unit, "read_input_registers", self.missing_identity):
+            await retry.async_initialize(self.cache())
+        group = retry._plant._group
+        self.assertEqual("positive_only", group.cache_status)
+        self.assertEqual(("running_info", (names[2],)), group._probe_queue[0])
+        self.assertEqual(self.saved_progress["pending"], record["provisional_discovery"]["pending"])
+        self.assertIn(("running_info", names[1]), group._checked_fields)
+        self.assertNotIn(("running_info", names[1]), group._queued_fields)
+        self.assertIsNone(group.is_supported(names[1]), "unverified negatives are pass bookkeeping only")
+        self.assertIs(group.is_supported(names[0]), True)
+        self.assertGreater(group.discovery_retry_at, self.modbus.time.monotonic() + 50)
+        self.assertGreater(retry._discovery_backoff[("test", 502)], self.modbus.time.monotonic() + 50)
+        self.assertAlmostEqual(self.saved_progress["last_request"],
+                               group.discovery_progress(self.modbus._DISCOVERY_SESSION)["last_request"], delta=1)
+        await retry.async_close()
+
+    async def test_new_ha_boot_rechecks_negatives_from_an_unverified_discovery_pass(self):
+        names = await self._save_discovery_without_verified_identity()
+        retry = self.modbus.SigenergyModbusHub(object(), _ConfigEntry(self.data))
+        with patch.object(self.inv_unit, "read_input_registers", self.missing_identity), \
+             patch.object(self.modbus, "_DISCOVERY_SESSION", "next-ha-boot"):
+            await retry.async_initialize(self.cache())
+        group = retry._plant._group
+        self.assertNotIn(("running_info", names[1]), group._checked_fields)
+        self.assertIn(("running_info", names[1]), group._queued_fields)
+        await retry.async_close()
+
+    async def test_failed_changed_identity_setup_does_not_relabel_old_completed_checks(self):
+        await self.hub.async_initialize(self.cache())
+        plant = self.hub._plant._group
+        absent = "plant_ess_preheating_enable"
+        plant._field_support["preheating"][absent] = False
+        plant._checked_fields.add(("preheating", absent))
+        for key, endpoint, _role, group in self.hub._bindings:
+            self.hub._checkpoint(key, endpoint, group)
+        await self.hub._cache.async_flush()
+        field = self.hub._inverters["Inverter"].running_info.declared_fields[
+            "inverter_machine_firmware_version"]
+        self.inv_unit.load_raw({"input": {field.address+i: word
+            for i, word in enumerate(field.encode("new-firmware"))}})
+        warm = self.modbus.SigenergyModbusHub(object(), _ConfigEntry(self.data))
+        async def interrupted(names):
+            warm._plant._group._set_support("running_info", "plant_running_state", True)
+            raise ModbusConnectionError("offline during changed-device bootstrap")
+        with patch.object(warm._plant._group, "async_bootstrap", interrupted):
+            with self.assertRaises(ModbusConnectionError):
+                await warm.async_initialize(self.cache())
+        await warm.async_close()
+        retry = self.modbus.SigenergyModbusHub(object(), _ConfigEntry(self.data))
+        await retry.async_initialize(self.cache())
+        group = retry._plant._group
+        self.assertIsNone(group.is_supported(absent))
+        self.assertNotIn(("preheating", absent), group._checked_fields)
+        self.assertIn(("preheating", absent), group._queued_fields)
+        await retry.async_close()

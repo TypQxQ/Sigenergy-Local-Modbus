@@ -51,7 +51,7 @@ class TestSupportCache(unittest.IsolatedAsyncioTestCase):
     async def test_provisional_overlay_reuses_only_positives_before_identity_validation(self):
         self.cache.update("device", "schema", self.identity,
                           {"input": {"good": True, "absent": False}},
-                          provisional={"input": {"new_good": True, "new_absent": False}})
+                          provisional={"input": {"good": True, "new_good": True, "new_absent": False}})
         states, status = self.cache.restore("device", "schema", {})
         self.assertEqual("positive_only", status)
         self.assertEqual({"input": {"good": True, "new_good": True}}, states)
@@ -61,10 +61,24 @@ class TestSupportCache(unittest.IsolatedAsyncioTestCase):
 
     async def test_validated_checkpoint_removes_the_provisional_overlay(self):
         self.cache.update("device", "schema", self.identity, {"input": {"verified": True}},
-                          provisional={"input": {"unverified": True}})
+                          provisional={"input": {"unverified": True}},
+                          provisional_discovery={"session": "unverified"})
         self.cache.update("device", "schema", self.identity, {"input": {"verified": True}})
         await self.cache.async_flush()
         self.assertNotIn("provisional", self.store.data["devices"]["device"])
+        self.assertNotIn("provisional_discovery", self.store.data["devices"]["device"])
+
+    async def test_provisional_progress_does_not_resurrect_old_positives_rejected_or_reset(self):
+        self.cache.update("device", "schema", self.identity,
+                          {"input": {"rejected": True, "reset": True, "good": True}},
+                          provisional={"input": {"rejected": False, "good": True}},
+                          provisional_discovery={"session": "current"})
+        await self.cache.async_flush()
+        retry = self.module.SupportCache(None, "entry", store=self.store)
+        await retry.async_load()
+        states, status = retry.restore("device", "schema", {})
+        self.assertEqual("positive_only", status)
+        self.assertEqual({"input": {"good": True}}, states)
 
     async def test_identity_or_definition_change_rejects_cache(self):
         self.cache.update("device", "schema", self.identity, {"input": {"good": True}})
