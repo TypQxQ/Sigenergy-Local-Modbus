@@ -399,10 +399,7 @@ def generate_sigen_entity(
                 )
                 if restored:
                     deferred_descriptions.remove(deferred)
-                    coordinator.hub.config_entry.async_create_task(
-                        coordinator.hass, platform.async_add_entities(restored),
-                        name="Restore newly supported Sigenergy entities",
-                    )
+                    platform.async_add_entities(restored)
             if not deferred_descriptions:
                 unsubscribe()
 

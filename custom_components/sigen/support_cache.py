@@ -69,17 +69,27 @@ class SupportCache:
             # verified hardware identity, negatives must be rediscovered.
             result = {name: {field: value for field, value in fields.items() if value}
                       for name, fields in result.items()}
+            provisional = record.get("provisional", {})
+            if isinstance(provisional, dict):
+                for name, fields in provisional.items():
+                    if isinstance(fields, dict):
+                        result.setdefault(name, {}).update(
+                            {field: True for field, value in fields.items() if value is True}
+                        )
             return result, "positive_only"
         return deepcopy(result), "hit"
 
     def update(self, key: str, fingerprint: str, identity: dict, support: dict,
-               discovery: dict | None = None) -> None:
+               discovery: dict | None = None, *, provisional: dict | None = None) -> None:
         record = {"fingerprint": fingerprint, "identity": deepcopy(identity),
                   "support": deepcopy(support)}
         if discovery is not None:
             record["discovery"] = deepcopy(discovery)
+        if provisional is not None:
+            record["provisional"] = deepcopy(provisional)
         previous = self._devices.get(key, {})
-        if all(previous.get(key) == value for key, value in record.items()):
+        if (all(previous.get(key) == value for key, value in record.items())
+                and ("provisional" in previous) == (provisional is not None)):
             return
         record["saved_at"] = time.time()
         self._devices[key] = record

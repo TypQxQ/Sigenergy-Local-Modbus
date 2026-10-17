@@ -101,6 +101,8 @@ class SigenergyModbusHub:
         self._bindings = []
         self._loaded_cache = {}
         self._identities = {}
+        self._identity_rebuilds = {}
+        self._identity_rebuild_locks = {}
         self._endpoint_identity = {}
         self._discovery_tasks = {}
         self._discovery_cursor = {}
@@ -192,6 +194,17 @@ class SigenergyModbusHub:
 
     def _checkpoint(self, key, endpoint, group):
         if self._cache is not None:
+            loaded = self._loaded_cache.get(key, {})
+            identity = self._endpoint_identity.get(endpoint, {})
+            if (not identity and loaded.get("identity")
+                    and loaded.get("fingerprint") == group.fingerprint()):
+                # Keep the verified generation intact until live identity is
+                # available. Early/late replies belong to an unverified overlay,
+                # whose positives alone can be reused on a subsequent retry.
+                self._cache.update(key, group.fingerprint(), loaded["identity"],
+                                   loaded.get("support", {}), loaded.get("discovery", {}),
+                                   provisional=group._field_support)
+                return
             discovery = (group.discovery_progress(_DISCOVERY_SESSION)
                          if group.discovery_prepared else
                          self._loaded_cache.get(key, {}).get("discovery", {}))
@@ -280,6 +293,13 @@ class SigenergyModbusHub:
             return
         info = self.inverter_connections[name]
         endpoint = (info[CONF_HOST], info[CONF_PORT])
+        async with self._identity_rebuild_locks.setdefault(endpoint, asyncio.Lock()):
+            # Inverters sharing an endpoint can report identity changes in the
+            # same poll. Serialize invalidation as well as bootstrap retries.
+            if identity != self._identities.get(name):
+                await self._async_rebuild_identity(name, identity, endpoint)
+
+    async def _async_rebuild_identity(self, name, identity, endpoint):
         discovery = self._discovery_tasks.get(endpoint)
         if discovery is not None and not discovery.done():
             discovery.cancel()
@@ -292,6 +312,7 @@ class SigenergyModbusHub:
         self._identities[name] = identity
         self._refresh_endpoint_identities()
         self._discovery_backoff.pop(endpoint, None)
+        rebuild = []
         for key, binding_endpoint, role, group in self._bindings:
             if binding_endpoint != endpoint:
                 continue
@@ -300,15 +321,34 @@ class SigenergyModbusHub:
             group._probe_queue.clear()
             group._queued_fields.clear()
             group._rejected_blocks.clear()
-            group._prefetched.clear()
             group.reset_poll_progress()
             group._checked_fields.clear()
             group.discovery_retry_at = 0
             group._discovery_failure_streak = 0
             group.cache_status = "identity_changed"
-            await group.async_bootstrap(self._bootstrap_names(role))
             group.queue_discovery()
             self._checkpoint(key, endpoint, group)
+            rebuild.append((key, role, group))
+        # Invalidate and queue EVERY group before any cancellable reads. Keep
+        # unfinished bootstrap work retryable even though identity is now new.
+        self._identity_rebuilds[endpoint] = rebuild
+        await self._async_resume_identity_rebuild_locked(endpoint)
+
+    async def _async_resume_identity_rebuild(self, endpoint):
+        async with self._identity_rebuild_locks.setdefault(endpoint, asyncio.Lock()):
+            await self._async_resume_identity_rebuild_locked(endpoint)
+
+    async def _async_resume_identity_rebuild_locked(self, endpoint):
+        rebuild = self._identity_rebuilds.get(endpoint, [])
+        for key, role, group in rebuild[:]:
+            if group._pending_requests:
+                await asyncio.wait(group._pending_requests.copy())
+            names = {name for name in self._bootstrap_names(role)
+                     if group.is_supported(name) is None}
+            await group.async_bootstrap(names)
+            self._checkpoint(key, endpoint, group)
+            rebuild.remove((key, role, group))
+        self._identity_rebuilds.pop(endpoint, None)
 
     def start_discovery(self, coordinator):
         self._coordinator = coordinator
@@ -424,6 +464,10 @@ class SigenergyModbusHub:
         if inverter is None:
             _LOGGER.error("Unknown inverter name provided for reading data: %s", inverter_name)
             return {}
+        info = self.inverter_connections[inverter_name]
+        endpoint = (info[CONF_HOST], info[CONF_PORT])
+        if endpoint in self._identity_rebuilds:
+            await self._async_resume_identity_rebuild(endpoint)
         data = await self._async_read(
             inverter.async_update_inverter(), f"inverter '{inverter_name}'"
         )

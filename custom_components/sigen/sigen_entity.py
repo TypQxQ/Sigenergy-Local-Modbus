@@ -195,6 +195,8 @@ class SigenergyEntity(CoordinatorEntity):
                 getattr(self.entity_description, "register_support_keys", None)
                 or getattr(self.entity_description, "register_support_alternatives", None)
                 or getattr(self.entity_description, "source_key", None)
+                or any(self.hub.has_register(self._device_type, self._device_name, key)
+                       for key in _keys)
             )
             if support is False or (support is None and dependencies):
                 return False

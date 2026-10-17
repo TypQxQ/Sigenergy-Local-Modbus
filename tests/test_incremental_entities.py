@@ -73,7 +73,7 @@ class TestIncrementalEntities(unittest.IsolatedAsyncioTestCase):
         self.tasks.append(task)
         return task
 
-    async def add_entities(self, entities):
+    def add_entities(self, entities):
         self.added.extend(entities)
 
     def generate_optional(self, **overrides):
@@ -117,6 +117,18 @@ class TestIncrementalEntities(unittest.IsolatedAsyncioTestCase):
         await asyncio.gather(*self.tasks)
         self.assertEqual(1, len(self.added))
 
+    async def test_all_deferred_entities_restore_in_one_notification_without_tasks(self):
+        descriptions = [types.SimpleNamespace(key=f"optional_{i}", name=f"Optional {i}")
+                        for i in range(3)]
+        self.assertEqual([], self.generate("plant", "plant", None, self.coordinator,
+                         lambda **kwargs: types.SimpleNamespace(**kwargs), descriptions,
+                         "plant", self.hass))
+        self.state = True
+        self.listeners[0]()
+        self.assertEqual(3, len(self.added))
+        self.assertEqual([], self.tasks, "HA's add-entities callback returns None")
+        self.assertEqual([], self.listeners)
+
     async def test_synthetic_diagnostic_key_does_not_wait_for_discovery(self):
         self.state = None
         self.coordinator.hub.has_register = lambda *args: False
@@ -148,7 +160,10 @@ class TestIncrementalEntities(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(entity.available)
         self.assertIsNone(self.registry_entry.hidden_by)
         self.assertEqual("user", self.registry_entry.disabled_by)
-        self.state = None  # Diagnostic/calculated keys need not be Modbus fields.
+        self.state = None
+        self.assertFalse(entity.available, "implicit register dependencies must wait for support")
+        self.coordinator.hub.has_register = lambda *args: False
+        # Diagnostic/calculated keys need not be Modbus fields.
         self.assertTrue(entity.available)
         entity.entity_description.register_support_keys = ("voltage", "current")
         self.assertFalse(entity.available, "wait for declared calculation dependencies")

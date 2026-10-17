@@ -138,6 +138,7 @@ class _ComponentGroup:
         self._discovery_failure_streak = 0
         self._rejected_blocks: dict[str, int] = {}
         self._prefetched: dict[str, dict[str, list[int]]] = {}
+        self._prefetched_at: dict[str, float] = {}
         self.discovery_requests = 0
         self.discovery_failures = 0
         self.discovery_time = 0.0
@@ -272,6 +273,7 @@ class _ComponentGroup:
                       if key in register_names and isinstance(field, RegisterField)}
             if not fields:
                 continue
+            started = time.monotonic()
             words, errors = await self._async_read_blocks(name, component, fields, probing=True)
             # Identity groups are tiny. Isolate a rejected identity field so
             # one optional field cannot prevent validating serial/firmware.
@@ -293,6 +295,8 @@ class _ComponentGroup:
             elif count_error is not None:
                 raise count_error
             self._prefetched.setdefault(name, {}).update(words)
+            if words:
+                self._prefetched_at[name] = min(self._prefetched_at.get(name, started), started)
 
     async def async_discover_one(self) -> bool:
         """Issue at most one request; fallback work goes into later intervals."""
@@ -422,6 +426,7 @@ class _ComponentGroup:
         """Invalidate pre-write/identity samples without losing capabilities."""
         self._read_round = None
         self._prefetched.clear()
+        self._prefetched_at.clear()
 
     async def _async_update_locked(self) -> dict[str, Any]:
         # A cancelled poll can leave a request queued in the shared broker,
@@ -432,6 +437,13 @@ class _ComponentGroup:
         if pending:
             await asyncio.wait(pending)
 
+        # Bootstrap samples retain their original age, including across an
+        # outage before the first ordinary poll. Never retime them as fresh.
+        now = time.monotonic()
+        for name in list(self._prefetched):
+            if now - self._prefetched_at.get(name, -float("inf")) > _POLL_PROGRESS_MAX_AGE:
+                self._prefetched.pop(name, None)
+                self._prefetched_at.pop(name, None)
         progress = None
         if self.incremental:
             if (self._read_round is not None
@@ -439,7 +451,8 @@ class _ComponentGroup:
                 self._read_round = None
                 self.poll_expired_rounds += 1
             if self._read_round is None:
-                self._read_round = {"started": time.monotonic(), "words": {}, "attempted": {}}
+                oldest = min([now, *self._prefetched_at.values()])
+                self._read_round = {"started": oldest, "words": {}, "attempted": {}}
             else:
                 self.poll_resumes += 1
             progress = self._read_round
@@ -447,8 +460,10 @@ class _ComponentGroup:
         for name, component in self._readable.items():
             if not self.incremental:
                 await self._async_ensure_resolved(name, component)
+            prefetched = self._prefetched.pop(name, {})
+            self._prefetched_at.pop(name, None)
             await self._async_read_component(
-                name, component, values, self._prefetched.pop(name, {}), progress=progress
+                name, component, values, prefetched, progress=progress
             )
             if progress is not None and progress is not self._read_round:
                 raise ModbusError("Read round invalidated by a write or identity change")

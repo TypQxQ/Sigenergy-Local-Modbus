@@ -47,6 +47,71 @@ class TestPollingRecovery(unittest.IsolatedAsyncioTestCase):
     def support_all(self):
         self.group._field_support["telemetry"].update(first=True, second=True, separate=True)
 
+    async def test_expired_bootstrap_words_are_read_again_after_an_outage(self):
+        self.support_all()
+        clock = [100.0]
+        with patch.object(self.devices, "time", SimpleNamespace(monotonic=lambda: clock[0])):
+            await self.group.async_bootstrap({"first", "second"})
+            self.unit.load_raw({"input": {100: 999, 101: 888}})
+            clock[0] = 281.0
+            with patch.object(self.unit, "read_input_registers",
+                              wraps=self.unit.read_input_registers) as read:
+                data = await self.group.async_update()
+            self.assertEqual((999, 888), (data["first"], data["second"]))
+            self.assertEqual([(100, 2), (500, 1)], [call.args for call in read.call_args_list])
+
+    async def test_fresh_bootstrap_words_keep_their_age_and_avoid_duplicate_reads(self):
+        self.support_all()
+        clock = [100.0]
+        with patch.object(self.devices, "time", SimpleNamespace(monotonic=lambda: clock[0])):
+            await self.group.async_bootstrap({"first", "second"})
+            clock[0] = 150.0
+            with patch.object(self.unit, "read_input_registers",
+                              wraps=self.unit.read_input_registers) as read:
+                self.assertEqual(123, (await self.group.async_update())["first"])
+            self.assertEqual([(500, 1)], [call.args for call in read.call_args_list])
+            self.assertEqual(50.0, self.group.poll_last_round_span)
+
+    async def test_bootstrap_words_expiring_during_the_first_poll_are_not_published(self):
+        self.support_all()
+        clock = [100.0]
+        with patch.object(self.devices, "time", SimpleNamespace(monotonic=lambda: clock[0])):
+            await self.group.async_bootstrap({"first", "second"})
+            clock[0] = 279.0
+            original = self.unit.read_input_registers
+            async def read(address, count):
+                clock[0] = 281.0
+                return await original(address, count)
+            with patch.object(self.unit, "read_input_registers", read):
+                with self.assertRaises(self.devices.ModbusError):
+                    await self.group.async_update()
+            self.assertEqual(181.0, self.group.poll_last_round_span)
+            self.assertIsNone(self.group._read_round)
+
+    async def test_cancelled_first_poll_does_not_leave_bootstrap_timestamps_in_the_next_round(self):
+        self.support_all()
+        clock = [100.0]
+        started, finish = asyncio.Event(), asyncio.Event()
+        original = self.unit.read_input_registers
+        async def read(address, count):
+            if address == 500 and not finish.is_set():
+                started.set()
+                await finish.wait()
+            return await original(address, count)
+        with patch.object(self.devices, "time", SimpleNamespace(monotonic=lambda: clock[0])):
+            await self.group.async_bootstrap({"first", "second"})
+            with patch.object(self.unit, "read_input_registers", read):
+                task = asyncio.create_task(self.group.async_update())
+                await started.wait()
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                clock[0] = 281.0
+                self.unit.load_raw({"input": {100: 999}})
+                finish.set()
+                self.assertEqual(999, (await self.group.async_update())["first"])
+                self.assertEqual({}, self.group._prefetched_at)
+
     async def test_deadline_resume_keeps_late_reply_and_does_not_repeat_completed_reads(self):
         self.support_all()
         started, finish = asyncio.Event(), asyncio.Event()
