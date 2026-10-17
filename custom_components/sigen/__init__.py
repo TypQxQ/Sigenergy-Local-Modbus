@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -18,7 +19,7 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
-from .coordinator import SigenergyDataUpdateCoordinator
+from .coordinator import STARTUP_TIMEOUT, SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusHub
 from .const import CONF_PLANT_CONNECTION
 from .common import generate_device_id
@@ -63,13 +64,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         _LOGGER.debug("async_setup_entry: Connecting to Modbus hub and performing first refresh...")
-        await coordinator.async_config_entry_first_refresh()
+        async with asyncio.timeout(STARTUP_TIMEOUT):
+            await hub.async_initialize()
+            await coordinator.async_config_entry_first_refresh()
         _LOGGER.debug("async_setup_entry: Modbus hub connected and coordinator first refresh completed")
+    except asyncio.CancelledError:
+        await hub.async_close()
+        raise
+    except TimeoutError as ex:
+        await hub.async_close()
+        raise ConfigEntryNotReady("Sigenergy initialization exceeded the startup deadline") from ex
     except ConfigEntryNotReady:
         # This exception is already logged by the coordinator
         # We can optionally add more context here if needed
         _LOGGER.error("async_setup_entry: Initial data fetch failed. Deferring setup for %s.", entry.title)
         # The coordinator's first refresh will re-raise ConfigEntryNotReady, which is what we want.
+        await hub.async_close()
         raise
     except Exception as ex:
         _LOGGER.error(
@@ -99,6 +109,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         device_id_fn=generate_device_id,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    hub.start_discovery(coordinator)
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     _LOGGER.debug("async_setup_entry: Setup completed successfully for entry: %s", entry.title)

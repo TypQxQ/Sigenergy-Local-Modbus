@@ -203,6 +203,8 @@ def generate_sigen_entity(
         hass: Optional[HomeAssistant] = None,
         device_info: Optional[DeviceInfo] = None,
         pv_string_idx: Optional[int] = None,
+        *,
+        _defer: bool = True,
         ) -> list:
     """
     Generate entities for Sigenergy components.
@@ -230,6 +232,7 @@ def generate_sigen_entity(
         ).append(registry_entry)
 
     entities = []
+    deferred_descriptions = []
     for description in entity_description:
         # _LOGGER.debug("Generating entity for description: %s", description.name)
 
@@ -240,7 +243,21 @@ def generate_sigen_entity(
             description,
             pv_string_idx,
         )
+        if register_support is None and getattr(coordinator.hub, "incremental_discovery", False):
+            targets = (
+                [(DEVICE_TYPE_INVERTER, name) for name in coordinator.hub.inverter_connections]
+                if getattr(description, "register_support_scope", "entity") == "inverters"
+                else [(device_type, device_name)]
+            )
+            if any(coordinator.hub.has_register(target_type, target_name, key)
+                   for target_type, target_name in targets for key in register_support_keys):
+                # Wait for evidence before adding optional entities. Synthetic
+                # diagnostic/calculation keys still use their existing path.
+                deferred_descriptions.append(description)
+                continue
         if register_support is False:
+            if getattr(coordinator.hub, "incremental_discovery", False):
+                deferred_descriptions.append(description)
             unique_id = generate_unique_entity_id(
                 device_type,
                 device_name,
@@ -330,6 +347,8 @@ def generate_sigen_entity(
             if source_entity_id:
                 entity_kwargs["source_entity_id"] = source_entity_id
             else:
+                if getattr(coordinator.hub, "incremental_discovery", False):
+                    deferred_descriptions.append(description)
                 _LOGGER.warning(
                     "No source entity ID found for source key '%s' (device: %s). Skipping entity '%s'.",
                     description.source_key,
@@ -359,6 +378,33 @@ def generate_sigen_entity(
             _LOGGER.debug(
                 "Entity creation failed with kwargs: %s",
                  entity_kwargs)
+    if deferred_descriptions and _defer:
+        # Remember the actual platform from setup context; later discovery
+        # notifications run outside that context. HA's add path respects
+        # user-disabled registry entries and preserves unique/entity IDs.
+        from homeassistant.helpers.entity_platform import async_get_current_platform
+        platform = async_get_current_platform()
+
+        def restore_supported_entities():
+            for deferred in deferred_descriptions[:]:
+                support, _keys = get_entity_register_support(
+                    coordinator.hub, device_type, device_name, deferred, pv_string_idx
+                )
+                if support is not True:
+                    continue
+                restored = generate_sigen_entity(
+                    plant_name, device_name, device_conn, coordinator, entity_class,
+                    [deferred], device_type, hass, device_info, pv_string_idx,
+                    _defer=False,
+                )
+                if restored:
+                    deferred_descriptions.remove(deferred)
+                    platform.async_add_entities(restored)
+            if not deferred_descriptions:
+                unsubscribe()
+
+        unsubscribe = coordinator.async_add_listener(restore_supported_entities)
+        coordinator.hub.config_entry.async_on_unload(unsubscribe)
     return entities
 
 def get_source_entity_id(device_type, device_name, source_key, coordinator, hass, pv_string_idx: Optional[int] = None): # Add pv_string_idx

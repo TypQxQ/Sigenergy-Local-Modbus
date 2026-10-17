@@ -2,12 +2,11 @@
 
 Sigenergy ships different register sets across inverter/firmware variants,
 so (like the old `modbus.py` hub) a device's exact register support is not
-known until it is probed once per connection. `_ComponentGroup` reproduces
-the previous probing (contiguous blocks first, then each still-unknown field
-individually) and the old hub's read intervals: strictly contiguous blocks
-of at most 123 registers, each block's failure isolated from the others.
-Once every field of a component has an answer, `restrict_fields()` narrows
-it so a write to an unsupported register is refused.
+validated through live reads. `_ComponentGroup` restores cached capabilities
+and discovers remaining fields incrementally, using strictly contiguous blocks
+of at most 123 registers. Each block's failure is isolated from the others.
+Declared fields stay intact so an unsupported field can become supported later;
+the support map guards both polling and writes.
 
 A DC charger is not a separate Modbus unit: its registers live on the same
 unit as its parent inverter, and were polled as a logically separate read by
@@ -35,7 +34,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import deque
 from collections.abc import Coroutine
+from copy import deepcopy
+import hashlib
+import json
 from typing import Any, Mapping
 
 from modbus_connection import ModbusConnectionError, ModbusError, ModbusUnit
@@ -66,6 +69,15 @@ PROBE_RETRY_DELAY = 60.0
 
 #: Modbus per-request register ceiling most gateways honour safely.
 _MAX_BLOCK_SPAN = 123
+
+# Keep incomplete read rounds in memory for recovery, never on disk. Older
+# rounds are discarded so a long outage cannot revive arbitrarily old data.
+_POLL_PROGRESS_MAX_AGE = 180.0
+_MAX_DISCOVERY_BACKOFF = 300.0
+
+IDENTITY_REGISTERS = {
+    "inverter_model_type", "inverter_serial_number", "inverter_machine_firmware_version",
+}
 
 
 def _group_contiguous_blocks(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
@@ -101,9 +113,8 @@ class _ComponentGroup:
     Register support is tracked per field, not per component, and persists
     across probe rounds: a field confirmed supported or unsupported on one
     round stays known even if another field on the same component is still
-    inconclusive (e.g. a timeout) on that round or a later one. A component
-    is only handed to `restrict_fields()` -- a one-shot, irreversible
-    narrowing -- once every one of its fields has a known answer.
+    inconclusive (e.g. a timeout) on that round or a later one. Only an
+    illegal-address response can confirm a field unsupported.
     """
 
     def __init__(
@@ -115,6 +126,267 @@ class _ComponentGroup:
         self._bulk_probed: set[str] = set()
         self._last_probe_failure: dict[str, float] = {}
         self._pending_requests: set[asyncio.Task[Any]] = set()
+        self.incremental = False
+        self._support_changed = lambda: None
+        self._probe_queue: deque[tuple[str, tuple[str, ...]]] = deque()
+        self._queued_fields: set[tuple[str, str]] = set()
+        self._checked_fields: set[tuple[str, str]] = set()
+        self._current_probe = None
+        self.discovery_prepared = False
+        self.restored_discovery_jobs = 0
+        self.discovery_retry_at = 0.0
+        self.last_discovery_at = None
+        self._discovery_failure_streak = 0
+        self._rejected_blocks: dict[str, int] = {}
+        self._prefetched: dict[str, dict[str, list[int]]] = {}
+        self._prefetched_at: dict[str, float] = {}
+        self.discovery_requests = 0
+        self.discovery_failures = 0
+        self.discovery_time = 0.0
+        self.cache_status = "disabled"
+        self.cache_age: float | None = None
+        self._poll_lock = asyncio.Lock()
+        self._read_round = None
+        self._identity_snapshot = lambda: None
+        self._confirm_endpoint_identity = None
+        self.poll_resumes = 0
+        self.poll_expired_rounds = 0
+        self.poll_last_round_span = 0.0
+        self._on_write = self.reset_poll_progress
+
+    def fingerprint(self) -> str:
+        # Field objects have address-bearing reprs, which change on restart.
+        # Hash the declared wire/decoding schema, never object identity.
+        attributes = ("address", "count", "signed", "scale", "offset", "word_order", "writable")
+        fields = [(name, component.register_space, field_name, type(field).__name__,
+                   {attr: getattr(field, attr, None) for attr in attributes})
+                  for name, component in self._readable.items()
+                  for field_name, field in component.declared_fields.items()]
+        return hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()
+
+    def _set_support(self, component: str, field: str, value: bool | None) -> None:
+        support = self._field_support[component]
+        previous = support.get(field)
+        if value is None:
+            support.pop(field, None)
+            self._checked_fields.discard((component, field))
+        else:
+            support[field] = value
+            self._checked_fields.add((component, field))
+        if previous is not value:
+            self._support_changed()
+
+    def enable_incremental(self, support: dict, changed, status: str) -> None:
+        self.incremental = True
+        self._support_changed = changed
+        self.cache_status = status
+        for name, component in self._readable.items():
+            for field, value in support.get(name, {}).items():
+                if field in component.declared_fields and type(value) is bool:
+                    self._field_support[name].setdefault(field, value)
+
+    def _enqueue(self, name: str, fields) -> None:
+        fields = tuple(sorted(
+            (field for field in fields if (name, field) not in self._queued_fields),
+            key=lambda field: self._readable[name].declared_fields[field].address,
+        ))
+        if fields:
+            self._queued_fields.update((name, field) for field in fields)
+            self._probe_queue.append((name, fields))
+
+    def queue_discovery(self) -> None:
+        """Queue unknown blocks and one recheck of each cached negative."""
+        for name, component in self._readable.items():
+            for negative in (False, True):
+                fields = {field_name: field for field_name, field in component.declared_fields.items()
+                          if isinstance(field, RegisterField)
+                          and (self._field_support[name].get(field_name) is False if negative
+                               else field_name not in self._field_support[name])
+                          and (name, field_name) not in self._checked_fields}
+                self._queue_contiguous(name, fields)
+        self.discovery_prepared = True
+        self._support_changed()
+
+    def _queue_contiguous(self, name, names):
+        fields = {key: self._readable[name].declared_fields[key] for key in names}
+        for start, count in _group_contiguous_blocks(
+            [(field.address, field.count) for field in fields.values()]
+        ):
+            self._enqueue(name, [key for key, field in fields.items()
+                                 if start <= field.address < start + count])
+
+    def discovery_progress(self, session: str) -> dict:
+        """Serialize capability work, excluding every measurement/raw word."""
+        pending = list(self._probe_queue)
+        if self._current_probe is not None:
+            pending.insert(0, self._current_probe)
+        remaining_backoff = max(0, self.discovery_retry_at - time.monotonic())
+        return {"session": session, "pending": pending,
+                "checked": sorted(self._checked_fields),
+                "rejected_blocks": dict(self._rejected_blocks),
+                "failure_streak": self._discovery_failure_streak,
+                "last_request": (time.time() - max(0, time.monotonic() - self.last_discovery_at)
+                                 if self.last_discovery_at is not None else None),
+                "retry_after": time.time() + remaining_backoff if remaining_backoff else 0}
+
+    def restore_discovery(self, progress: dict, session: str) -> None:
+        """Resume split jobs on setup retry; new HA boots recheck negatives."""
+        progress = progress if isinstance(progress, dict) else {}
+        if progress.get("session") == session and isinstance(progress.get("checked"), list):
+            for item in progress["checked"]:
+                if (isinstance(item, (list, tuple)) and len(item) == 2
+                        and all(isinstance(value, str) for value in item)
+                        and item[0] in self._readable
+                        and isinstance(self._readable[item[0]].declared_fields.get(item[1]), RegisterField)):
+                    # Same-process pass bookkeeping can survive a reload even
+                    # without verified identity. It does not restore negative
+                    # capabilities; a new HA boot rechecks these fields.
+                    self._checked_fields.add(tuple(item))
+        rejected = progress.get("rejected_blocks", {})
+        if isinstance(rejected, dict):
+            self._rejected_blocks.update({key: min(value, 3) for key, value in rejected.items()
+                if key in self._readable and type(value) is int and value >= 0})
+        streak = progress.get("failure_streak", 0)
+        self._discovery_failure_streak = min(streak, 4) if type(streak) is int and streak > 0 else 0
+        retry_after = progress.get("retry_after", 0)
+        if type(retry_after) in (int, float) and retry_after > time.time():
+            self.discovery_retry_at = time.monotonic() + min(
+                retry_after - time.time(), _MAX_DISCOVERY_BACKOFF
+            )
+        last_request = progress.get("last_request")
+        if type(last_request) in (int, float) and last_request > 0:
+            self.last_discovery_at = time.monotonic() - max(0, time.time() - last_request)
+        pending = progress.get("pending", [])
+        if isinstance(pending, list):
+            for item in pending:
+                if not (isinstance(item, (list, tuple)) and len(item) == 2
+                        and isinstance(item[0], str) and item[0] in self._readable
+                        and isinstance(item[1], (list, tuple))):
+                    continue
+                name, names = item
+                fields = [field for field in names
+                          if isinstance(field, str) and field in self._readable[name].declared_fields
+                          and self._field_support[name].get(field) is not True
+                          and (name, field) not in self._checked_fields]
+                self._queue_contiguous(name, fields)
+        self.restored_discovery_jobs = len(self._probe_queue)
+        self.queue_discovery()
+
+    async def async_bootstrap(self, register_names: set[str]) -> None:
+        """Read a small startup set and reuse its live words in the first poll."""
+        for name, component in self._readable.items():
+            fields = {key: field for key, field in component.declared_fields.items()
+                      if key in register_names and isinstance(field, RegisterField)}
+            if not fields:
+                continue
+            started = time.monotonic()
+            words, errors = await self._async_read_blocks(name, component, fields, probing=True)
+            # Identity groups are tiny. Isolate a rejected identity field so
+            # one optional field cannot prevent validating serial/firmware.
+            if register_names & IDENTITY_REGISTERS:
+                for field_name, error in errors.items():
+                    if field_name not in IDENTITY_REGISTERS or not isinstance(error, IllegalDataAddressError):
+                        continue
+                    field_words, field_errors = await self._async_read_blocks(
+                        name, component, {field_name: fields[field_name]}, probing=True
+                    )
+                    words.update(field_words)
+                    if isinstance(field_errors.get(field_name), IllegalDataAddressError):
+                        self._set_support(name, field_name, False)
+            # PV child entities are created during platform setup. Do not
+            # silently start with zero strings after an inconclusive read.
+            count_error = errors.get("inverter_pv_string_count")
+            if isinstance(count_error, IllegalDataAddressError):
+                self._set_support(name, "inverter_pv_string_count", False)
+            elif count_error is not None:
+                raise count_error
+            elif "inverter_pv_string_count" in fields:
+                count_words = words.get("inverter_pv_string_count", ())
+                if len(count_words) != fields["inverter_pv_string_count"].count:
+                    raise ModbusError("Incomplete PV string count bootstrap response")
+            self._prefetched.setdefault(name, {}).update(words)
+            if words:
+                self._prefetched_at[name] = min(self._prefetched_at.get(name, started), started)
+
+    async def async_discover_one(self) -> bool:
+        """Issue at most one request; fallback work goes into later intervals."""
+        if not self._probe_queue or self._pending_requests:
+            return False
+        name, names = self._probe_queue.popleft()
+        self._current_probe = (name, names)
+        self._queued_fields.difference_update((name, field) for field in names)
+        component = self._readable[name]
+        fields = [component.declared_fields[field] for field in names]
+        start = min(field.address for field in fields)
+        count = max(field.address + field.count for field in fields) - start
+        read = (component.modbus_unit.read_input_registers if component.register_space == "input"
+                else component.modbus_unit.read_holding_registers)
+        started = time.monotonic()
+        self.last_discovery_at = started
+        self.discovery_requests += 1
+        try:
+            words = await self._async_request(read(start, count))
+            if len(words) != count:
+                raise ModbusError("Incomplete discovery response")
+        except IllegalDataAddressError:
+            self._discovery_failure_streak = 0
+            self.discovery_retry_at = 0
+            self._rejected_blocks[name] = self._rejected_blocks.get(name, 0) + 1
+            if len(names) == 1:
+                self._set_support(name, names[0], False)
+            elif (self._rejected_blocks[name] >= 3
+                  or all(self._field_support[name].get(field) is False for field in names)):
+                # An all-negative region is cheaper to check individually
+                # than traversing an entirely failing binary tree.
+                for field in names:
+                    self._enqueue(name, (field,))
+            else:
+                middle = len(names) // 2
+                self._enqueue(name, names[:middle])
+                self._enqueue(name, names[middle:])
+        except asyncio.CancelledError:
+            self._enqueue(name, names)
+            raise
+        except ModbusError:
+            self.discovery_failures += 1
+            self._discovery_failure_streak += 1
+            delay = min(PROBE_RETRY_DELAY * 2 ** min(self._discovery_failure_streak - 1, 3),
+                        _MAX_DISCOVERY_BACKOFF)
+            self.discovery_retry_at = time.monotonic() + delay
+            self._enqueue(name, names)
+            raise
+        else:
+            self._discovery_failure_streak = 0
+            self.discovery_retry_at = 0
+            self._rejected_blocks[name] = 0
+            for field in names:
+                self._set_support(name, field, True)
+        finally:
+            self._current_probe = None
+            self.discovery_time += time.monotonic() - started
+            self._support_changed()
+        return True
+
+    def discovery_diagnostics(self) -> dict:
+        states = [self.is_supported(field) for component in self._readable.values()
+                  for field in component.declared_fields]
+        return {"cache": self.cache_status, "supported": states.count(True),
+                "cache_age": self.cache_age,
+                "unsupported": states.count(False), "unknown": states.count(None),
+                "pending_requests": len(self._probe_queue),
+                "restored_jobs": self.restored_discovery_jobs,
+                "discovery_requests": self.discovery_requests,
+                "discovery_failures": self.discovery_failures,
+                "discovery_time": self.discovery_time,
+                "retry_in": max(0, self.discovery_retry_at - time.monotonic()),
+                "poll_recovery": {"resumes": self.poll_resumes,
+                    "expired_rounds": self.poll_expired_rounds,
+                    "last_round_span": self.poll_last_round_span,
+                    "saved_fields": sum(len(words) for words in self._read_round["words"].values())
+                                    if self._read_round else 0,
+                    "round_age": time.monotonic() - self._read_round["started"]
+                                 if self._read_round else None},
+                "in_flight": len(self._pending_requests)}
 
     async def _async_request(self, operation: Coroutine[Any, Any, Any]) -> Any:
         """Let a broker request finish even if its caller is cancelled."""
@@ -157,6 +429,22 @@ class _ComponentGroup:
 
         Raises `ModbusConnectionError` if the link itself is down.
         """
+        async with self._poll_lock:
+            return await self._async_update_locked()
+
+    def reset_poll_progress(self) -> None:
+        """Invalidate pre-write/identity samples without losing capabilities."""
+        self._read_round = None
+        self._prefetched.clear()
+        self._prefetched_at.clear()
+
+    async def _async_confirm_poll_identity(self, progress) -> bool:
+        """Confirm the whole endpoint, including groups without local identity."""
+        if self._confirm_endpoint_identity is None:
+            return False
+        return await self._confirm_endpoint_identity(progress.get("identity"))
+
+    async def _async_update_locked(self) -> dict[str, Any]:
         # A cancelled poll can leave a request queued in the shared broker,
         # as well as one already on the wire. Do not enqueue another round
         # behind those survivors. Cancelling this wait must leave them intact;
@@ -165,10 +453,55 @@ class _ComponentGroup:
         if pending:
             await asyncio.wait(pending)
 
+        # Bootstrap samples retain their original age, including across an
+        # outage before the first ordinary poll. Never retime them as fresh.
+        now = time.monotonic()
+        for name in list(self._prefetched):
+            if now - self._prefetched_at.get(name, -float("inf")) > _POLL_PROGRESS_MAX_AGE:
+                self._prefetched.pop(name, None)
+                self._prefetched_at.pop(name, None)
+        progress = None
+        if self.incremental:
+            if (self._read_round is not None
+                    and time.monotonic() - self._read_round["started"] > _POLL_PROGRESS_MAX_AGE):
+                self._read_round = None
+                self.poll_expired_rounds += 1
+            if self._read_round is not None:
+                saved_round = self._read_round
+                try:
+                    confirmed = await self._async_confirm_poll_identity(saved_round)
+                except (ModbusError, asyncio.CancelledError):
+                    self.reset_poll_progress()
+                    raise
+                if saved_round is not self._read_round:
+                    raise ModbusError("Read round invalidated during identity validation")
+                if not confirmed:
+                    self.reset_poll_progress()
+            if self._read_round is None:
+                oldest = min([time.monotonic(), *self._prefetched_at.values()])
+                self._read_round = {"started": oldest, "words": {}, "attempted": {},
+                                    "identity": deepcopy(self._identity_snapshot())}
+            else:
+                self.poll_resumes += 1
+            progress = self._read_round
         values: dict[str, Any] = {}
         for name, component in self._readable.items():
-            await self._async_ensure_resolved(name, component)
-            await self._async_read_component(name, component, values)
+            if not self.incremental:
+                await self._async_ensure_resolved(name, component)
+            prefetched = self._prefetched.pop(name, {})
+            self._prefetched_at.pop(name, None)
+            await self._async_read_component(
+                name, component, values, prefetched, progress=progress
+            )
+            if progress is not None and progress is not self._read_round:
+                raise ModbusError("Read round invalidated by a write or identity change")
+        if progress is not None:
+            self.poll_last_round_span = time.monotonic() - progress["started"]
+            if self.poll_last_round_span > _POLL_PROGRESS_MAX_AGE:
+                self._read_round = None
+                self.poll_expired_rounds += 1
+                raise ModbusError("Read recovery expired; starting a fresh round")
+        self._read_round = None
         return values
 
     async def async_write(self, register_name: str, value: Any) -> None:
@@ -176,14 +509,23 @@ class _ComponentGroup:
 
         Raises `AttributeError` for an unknown or confirmed-unsupported register.
         """
-        # A sibling can remain inconclusive indefinitely, delaying the
-        # component's one-shot restrict_fields(). Honour what is already
-        # known about this field without blocking unresolved or write-only ones.
+        # Honour per-field support without blocking unresolved or write-only
+        # fields. Keep component declarations intact for later rediscovery.
         if self.is_supported(register_name) is False:
             raise AttributeError(f"unsupported register {register_name!r}")
         for component in (*self._readable.values(), *self._commands.values()):
             if register_name in component.declared_fields:
-                await self._async_request(component.write(register_name, value))
+                self._on_write()
+
+                async def write_and_invalidate():
+                    try:
+                        await component.write(register_name, value)
+                    finally:
+                        # This runs even when the caller was cancelled while
+                        # the actual protected wire write was still pending.
+                        self._on_write()
+
+                await self._async_request(write_and_invalidate())
                 return
         raise AttributeError(f"unknown register {register_name!r}")
 
@@ -228,17 +570,12 @@ class _ComponentGroup:
             )
         else:
             self._last_probe_failure.pop(name, None)
-            if self._is_fully_resolved(name, component):
-                supported = {
-                    field_name
-                    for field_name, ok in self._field_support[name].items()
-                    if ok
-                }
-                component.restrict_fields(supported)
+            # Keep declared fields intact so later discovery can expand them.
+            # async_write() enforces the per-field support guard.
 
     async def _async_read_blocks(
         self, name: str, component: Component, fields: Mapping[str, RegisterField],
-        *, probing: bool = False,
+        *, probing: bool = False, progress: dict | None = None,
     ) -> tuple[dict[str, list[int]], dict[str, ModbusError]]:
         """Read contiguous blocks; return words and failed-block errors per field.
 
@@ -258,11 +595,41 @@ class _ComponentGroup:
         for start, count in _group_contiguous_blocks(
             [(field.address, field.count) for field in fields.values()]
         ):
+            affected = {key: field for key, field in fields.items()
+                        if start <= field.address < start + count}
+
+            async def read_and_commit(start=start, count=count, affected=affected):
+                try:
+                    block = await read(start, count)
+                except ModbusError as ex:
+                    if progress is self._read_round and progress is not None:
+                        if not isinstance(ex, ModbusConnectionError):
+                            progress["attempted"].setdefault(name, set()).update(affected)
+                    raise
+                # Commit in the protected task, so late successful answers
+                # are retained even after the caller's deadline expires.
+                for field_name, field in affected.items():
+                    offset = field.address - start
+                    field_words = block[offset:offset + field.count]
+                    if progress is self._read_round and progress is not None:
+                        progress["words"].setdefault(name, {})[field_name] = field_words
+                        progress["attempted"].setdefault(name, set()).add(field_name)
+                    if probing and self.incremental and len(field_words) == field.count:
+                        self._set_support(name, field_name, True)
+                return block
+
             try:
-                block = await self._async_request(read(start, count))
+                block = await self._async_request(read_and_commit())
             except ModbusConnectionError:
                 raise
             except ModbusError as ex:
+                if self.incremental and not probing and isinstance(ex, IllegalDataAddressError):
+                    affected = [field_name for field_name, field in fields.items()
+                                if start <= field.address < start + count]
+                    for field_name in affected:
+                        self._set_support(name, field_name, False if len(affected) == 1 else None)
+                    if len(affected) > 1:
+                        self._enqueue(name, affected)
                 errors.update(
                     (field_name, ex)
                     for field_name, field in fields.items()
@@ -277,10 +644,8 @@ class _ComponentGroup:
                 if start <= field.address < start + count:
                     offset = field.address - start
                     words[field_name] = block[offset : offset + field.count]
-                    if probing:
-                        # Commit each completed block before awaiting the next
-                        # one. A later cancellation must not discard progress.
-                        self._field_support[name][field_name] = True
+                    if probing and not self.incremental and len(words[field_name]) == field.count:
+                        self._set_support(name, field_name, True)
         return words, errors
 
     async def _async_probe(self, name: str, component: Component) -> None:
@@ -292,12 +657,9 @@ class _ComponentGroup:
         unknown after an illegal-address response are probed individually.
         Other failed blocks remain inconclusive until a later retry: spending
         their wire timeout twice can prevent the first refresh from finishing.
-        A field's result (supported or confirmed
-        unsupported) is recorded immediately and kept regardless of what
-        happens to any other field -- `restrict_fields()` is applied by the
-        caller only once every field has an answer, so one inconclusive
-        field (e.g. a timeout) delays locking the component in without
-        losing progress already made on the rest.
+        Each field's result is recorded immediately and kept regardless of
+        what happens to any other field. Inconclusive fields do not discard
+        progress already made on the rest.
 
         Raises `ModbusError` if any field probed this round was inconclusive,
         so the caller retries the remaining unknown fields later.
@@ -350,7 +712,9 @@ class _ComponentGroup:
             raise inconclusive
 
     async def _async_read_component(
-        self, name: str, component: Component, values: dict[str, Any]
+        self, name: str, component: Component, values: dict[str, Any],
+        prefetched: dict[str, list[int]] | None = None,
+        *, progress: dict | None = None,
     ) -> None:
         """Scatter `component`'s decoded values into `values`.
 
@@ -375,9 +739,15 @@ class _ComponentGroup:
             for field_name, field in component.declared_fields.items()
             if support.get(field_name) and isinstance(field, RegisterField)
         }
-        words, _errors = await self._async_read_blocks(name, component, known_fields)
+        words = (progress["words"].setdefault(name, {}) if progress is not None else {})
+        words.update(prefetched or {})
+        attempted = (progress["attempted"].setdefault(name, set()) if progress is not None else set())
+        attempted.update(words)
+        unread = {key: field for key, field in known_fields.items() if key not in attempted}
+        fresh, _errors = await self._async_read_blocks(name, component, unread, progress=progress)
+        words.update(fresh)
         for field_name in component.declared_fields:
-            if field_name in words:
+            if field_name in words and field_name in known_fields:
                 field = known_fields[field_name]
                 try:
                     if len(words[field_name]) != field.count:

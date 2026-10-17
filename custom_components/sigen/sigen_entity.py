@@ -153,7 +153,6 @@ class SigenergyEntity(CoordinatorEntity):
             )
 
         if register_support is False:
-            self._unsupported_removal_requested = True
             if registry_entry is not None:
                 if registry_entry.hidden_by is None:
                     entity_registry = async_get_entity_registry(self.hass)
@@ -161,6 +160,13 @@ class SigenergyEntity(CoordinatorEntity):
                         self.entity_id,
                         hidden_by=RegistryEntryHider.INTEGRATION,
                     )
+            if getattr(self.hub, "incremental_discovery", False):
+                # Keep the runtime entity so rediscovery can revive it without
+                # losing identity/history or overriding a user's disabled flag.
+                super()._handle_coordinator_update()
+                return
+            self._unsupported_removal_requested = True
+            if registry_entry is not None:
                 self.hass.async_create_task(self.async_remove())
             else:
                 self.hass.async_create_task(self.async_remove(force_remove=True))
@@ -179,6 +185,21 @@ class SigenergyEntity(CoordinatorEntity):
         """Return if entity is available."""
         if not self.coordinator.last_update_success or self.coordinator.data is None:
             return False
+
+        if getattr(self.hub, "incremental_discovery", False):
+            support, _keys = get_entity_register_support(
+                self.hub, self._device_type, self._device_name,
+                self.entity_description, self._pv_string_idx,
+            )
+            dependencies = (
+                getattr(self.entity_description, "register_support_keys", None)
+                or getattr(self.entity_description, "register_support_alternatives", None)
+                or getattr(self.entity_description, "source_key", None)
+                or any(self.hub.has_register(self._device_type, self._device_name, key)
+                       for key in _keys)
+            )
+            if support is False or (support is None and dependencies):
+                return False
 
         data = self.coordinator.data
         if self._device_type == DEVICE_TYPE_PLANT:
