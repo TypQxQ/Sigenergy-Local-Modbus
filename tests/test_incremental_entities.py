@@ -21,9 +21,10 @@ class TestIncrementalEntities(unittest.IsolatedAsyncioTestCase):
             unique_id="entry_plant_optional", entity_id="sensor.original_name",
             disabled_by="user", hidden_by=None)
         self.listeners, self.tasks, self.added = [], [], []
+        self.unload_callbacks = []
         self.registry = types.SimpleNamespace(async_update_entity=self.update_registry)
         self.hass = object()
-        entry = types.SimpleNamespace(entry_id="entry", async_on_unload=lambda cb: None,
+        entry = types.SimpleNamespace(entry_id="entry", async_on_unload=self.unload_callbacks.append,
                                       async_create_task=self.create_task)
         hub = types.SimpleNamespace(incremental_discovery=True, config_entry=entry)
         hub.has_register = lambda *args: True
@@ -66,14 +67,17 @@ class TestIncrementalEntities(unittest.IsolatedAsyncioTestCase):
 
     def add_listener(self, callback):
         self.listeners.append(callback)
-        return lambda: self.listeners.remove(callback) if callback in self.listeners else None
+        # Match DataUpdateCoordinator: removing a listener twice raises.
+        return lambda: self.listeners.remove(callback)
 
     def create_task(self, hass, coro, **kwargs):
         task = asyncio.create_task(coro)
         self.tasks.append(task)
         return task
 
-    def add_entities(self, entities):
+    async def add_entities(self, entities):
+        # Match EntityPlatform.async_add_entities, rather than HA's separate
+        # synchronous AddEntitiesCallback used during platform setup.
         self.added.extend(entities)
 
     def generate_optional(self, **overrides):
@@ -117,16 +121,42 @@ class TestIncrementalEntities(unittest.IsolatedAsyncioTestCase):
         await asyncio.gather(*self.tasks)
         self.assertEqual(1, len(self.added))
 
-    async def test_all_deferred_entities_restore_in_one_notification_without_tasks(self):
+    async def test_all_deferred_entities_are_scheduled_once_and_restore(self):
         descriptions = [types.SimpleNamespace(key=f"optional_{i}", name=f"Optional {i}")
                         for i in range(3)]
         self.assertEqual([], self.generate("plant", "plant", None, self.coordinator,
                          lambda **kwargs: types.SimpleNamespace(**kwargs), descriptions,
                          "plant", self.hass))
         self.state = True
-        self.listeners[0]()
+        listener = self.listeners[0]
+        listener()
+        self.assertEqual([], self.added, "entity creation runs in a scheduled task")
+        self.assertEqual(3, len(self.tasks))
+        self.assertEqual([], self.listeners)
+        # A notification already queued before unsubscription must not
+        # schedule the same entities again while their add tasks are pending.
+        listener()
+        self.assertEqual(3, len(self.tasks))
+        await asyncio.gather(*self.tasks)
         self.assertEqual(3, len(self.added))
-        self.assertEqual([], self.tasks, "HA's add-entities callback returns None")
+
+    async def test_unload_after_discovery_does_not_remove_listener_twice(self):
+        self.assertEqual([], self.generate_optional())
+        self.state = True
+        self.listeners[0]()
+        await asyncio.gather(*self.tasks)
+        self.assertEqual([], self.listeners)
+        self.unload_callbacks[0]()
+        self.assertEqual(1, len(self.added))
+
+    async def test_unload_before_discovery_ignores_queued_notification(self):
+        self.assertEqual([], self.generate_optional())
+        listener = self.listeners[0]
+        self.unload_callbacks[0]()
+        self.state = True
+        listener()
+        self.assertEqual([], self.tasks)
+        self.assertEqual([], self.added)
         self.assertEqual([], self.listeners)
 
     async def test_synthetic_diagnostic_key_does_not_wait_for_discovery(self):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
@@ -40,6 +41,9 @@ from .common import (
     safe_float,
 )
 from .sigen_entity import SigenergyEntity # Import the new base class
+from .pv_restore import (
+    ENERGY_TO_KWH, choose_restore, energy_in_kwh, read_recorder_restore, snapshot_sample,
+)
 
 if TYPE_CHECKING:
     from .coordinator import SigenergyDataUpdateCoordinator
@@ -69,14 +73,11 @@ _POWER_TO_KILO_WATT: dict[str, Decimal] = {
     "TW": Decimal("1000000000"),
 }
 
-_ENERGY_TO_KILO_WATT_HOUR: dict[str, Decimal] = {
-    "mWh": Decimal("0.000001"),
-    "Wh": Decimal("0.001"),
-    "kWh": Decimal("1"),
-    "MWh": Decimal("1000"),
-    "GWh": Decimal("1000000"),
-    "TWh": Decimal("1000000000"),
-}
+_ENERGY_TO_KILO_WATT_HOUR = ENERGY_TO_KWH
+
+_PV_RESTORE_TIMEOUT = 10
+_PV_RESTORE_RETRY = 60
+_PV_INTEGRATOR_KEYS = {"pv_string_accumulated_energy", "pv_string_daily_energy"}
 
 
 class SigenergyCalculations:
@@ -1356,6 +1357,15 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self._cancel_max_sub_interval_exceeded_callback = None  # Will store the cancel handle
         self._last_integration_time = dt_util.utcnow()
         self._last_integration_trigger = IntegrationTrigger.STATE_EVENT
+        # Entity registration happens after construction. This also lets us
+        # distinguish a genuinely new counter from an old registry entry whose
+        # snapshots/history are missing.
+        self._pv_restore_cutoff = self._last_integration_time
+        self._pv_restore_pending = False
+        self._pv_restore_removed = False
+        self._pv_restore_retry_cancel = None
+        self._pv_restore_task = None
+        self._pv_restore_read = None
 
         # Device info is now handled by SigenergyEntity's __init__
 
@@ -1410,10 +1420,6 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self, value: Any, unit_of_measurement: Optional[str]
     ) -> Optional[Decimal]:
         """Convert a restored energy value to the sensor's native kWh."""
-        value_dec = safe_decimal(value)
-        if value_dec is None:
-            return None
-
         source_unit = (
             unit_of_measurement
             or self.entity_description.native_unit_of_measurement
@@ -1422,8 +1428,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             _LOGGER.warning("Cannot restore %s: missing energy unit", self.entity_id)
             return None
 
-        conversion_factor = _ENERGY_TO_KILO_WATT_HOUR.get(source_unit)
-        if conversion_factor is None:
+        if source_unit not in _ENERGY_TO_KILO_WATT_HOUR:
             _LOGGER.warning(
                 "Cannot restore %s: unsupported energy unit %s",
                 self.entity_id,
@@ -1431,7 +1436,80 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             )
             return None
 
-        return value_dec * conversion_factor
+        return energy_in_kwh(value, source_unit)
+
+    async def _async_restore_pv_energy(self) -> bool:
+        """Verify startup energy before publishing or scheduling integration."""
+        try:
+            if self._pv_restore_read is None:
+                recorder = get_instance(self.hass)
+                self._pv_restore_read = recorder.async_add_executor_job(
+                    read_recorder_restore, self.hass, self.entity_id,
+                    self._pv_restore_cutoff, self._pv_restore_snapshot,
+                )
+            # Keep a slow executor job for the next attempt instead of stacking
+            # new database queries after each timeout.
+            done, _pending = await asyncio.wait(
+                {self._pv_restore_read}, timeout=_PV_RESTORE_TIMEOUT,
+            )
+            if not done:
+                raise TimeoutError("PV restore history query is still running")
+            finished, self._pv_restore_read = self._pv_restore_read, None
+            result = choose_restore(
+                self._pv_restore_snapshot, finished.result(),
+                self._pv_restore_had_snapshot, self._pv_restore_cutoff,
+                dt_util.now(), "daily" in self.entity_description.key,
+            )
+            if self._pv_restore_removed:
+                return False
+            self._state = self._last_valid_state = result.value
+            self._pv_restore_pending = False
+            _LOGGER.debug("Restored PV energy for %s from %s (%s)",
+                          self.entity_id, result.source, result.updated.isoformat())
+            return True
+        except Exception as error:  # A Recorder outage must not reset energy.
+            _LOGGER.warning("PV energy restore for %s failed (%s); retrying in %s seconds",
+                            self.entity_id, type(error).__name__, _PV_RESTORE_RETRY)
+            self._schedule_pv_restore_retry()
+            return False
+
+    def _schedule_pv_restore_retry(self) -> None:
+        if self._pv_restore_removed or self._pv_restore_retry_cancel is not None:
+            return
+
+        @callback
+        def retry(_now):
+            self._pv_restore_retry_cancel = None
+            if not self._pv_restore_removed:
+                self._pv_restore_task = self.hub.config_entry.async_create_task(
+                    self.hass, self._async_retry_pv_restore(),
+                    name="Restore Sigenergy PV energy",
+                )
+
+        self._pv_restore_retry_cancel = async_call_later(self.hass, _PV_RESTORE_RETRY, retry)
+
+    async def _async_retry_pv_restore(self) -> None:
+        try:
+            if await self._async_restore_pv_energy():
+                self._start_integration_tracking()
+                self.async_write_ha_state()
+        finally:
+            self._pv_restore_task = None
+
+    @callback
+    def _cancel_pv_restore(self) -> None:
+        self._pv_restore_removed = True
+        if self._pv_restore_retry_cancel is not None:
+            self._pv_restore_retry_cancel()
+            self._pv_restore_retry_cancel = None
+        if self._pv_restore_task is not None:
+            self._pv_restore_task.cancel()
+        if self._pv_restore_read is not None:
+            if self._pv_restore_read.done() and not self._pv_restore_read.cancelled():
+                self._pv_restore_read.exception()
+            else:
+                self._pv_restore_read.cancel()
+            self._pv_restore_read = None
 
     def _calculate_trapezoidal(
         self, elapsed_time: Decimal, left: Decimal, right: Decimal
@@ -1441,6 +1519,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
     def _update_integral(self, area: Decimal) -> None:
         """Update the integral with the calculated area."""
+        if self._pv_restore_pending or self._pv_restore_removed:
+            return
         state_before = self._state
         # Convert seconds to hours
         area_scaled = area / Decimal(3600)
@@ -1479,11 +1559,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
     def _setup_midnight_reset(self) -> None:
         """Schedule reset at midnight."""
         now = dt_util.now()
-        # Calculate last second of the current day (23:59:59)
-        midnight = now.replace(hour=23, minute=59, second=59, microsecond=0)
-        # If we're already past midnight, use tomorrow's date
-        if now.hour >= 23 and now.minute >= 59 and now.second >= 59:
-            midnight = (now + timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
         @callback
         def _handle_midnight(current_time):
@@ -1491,6 +1567,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             state_before = self._state
             self._state = Decimal(0)
             self._last_valid_state = self._state
+            self._last_integration_time = dt_util.utcnow()
+            self._last_integration_trigger = IntegrationTrigger.TIME_ELAPSED
             if self.log_this_entity:
                 _LOGGER.debug(
                     "[%s] _handle_midnight - Resetting state from %s to 0",
@@ -1552,6 +1630,25 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
                     # Update the plant's configuration with the new data
                     self.hass.config_entries.async_update_entry(config_entry, data=new_config_data)
+
+        if (self.entity_description.key in _PV_INTEGRATOR_KEYS
+                and not restored_from_config):
+            self._pv_restore_pending = True
+            native_data = await self.async_get_last_sensor_data()
+            last_state = await self.async_get_last_state()
+            self._pv_restore_snapshot = snapshot_sample(native_data, last_state)
+            registry_entry = self.registry_entry
+            created = getattr(registry_entry, "created_at", None)
+            existed = registry_entry is not None and (
+                created is None or created < self._pv_restore_cutoff
+            )
+            self._pv_restore_had_snapshot = (
+                existed or native_data is not None or last_state is not None
+            )
+            self.async_on_remove(self._cancel_pv_restore)
+            if await self._async_restore_pv_energy():
+                self._start_integration_tracking()
+            return
 
         # Restore the previously stored native value so a display unit override
         # cannot rescale the integral across a restart.
@@ -1624,6 +1721,13 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         else:
             _LOGGER.debug("No restore value available for %s, state remains uninitialized.", self.entity_id)
 
+        self._start_integration_tracking()
+
+    def _start_integration_tracking(self) -> None:
+        # Start the clock only after restoration. A source's prior timestamp
+        # must never integrate energy across downtime or a pending restore.
+        self._last_integration_time = dt_util.utcnow()
+        self._last_integration_trigger = IntegrationTrigger.TIME_ELAPSED
         # Set up appropriate handlers based on max_sub_interval
         # Ensure source_entity_id is valid before proceeding
         if not self._source_entity_id:
@@ -1662,6 +1766,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
     async def async_will_remove_from_hass(self) -> None:
         """Handle entity removal."""
+        self._cancel_pv_restore()
         # Cancel any scheduled timers
         if self._cancel_max_sub_interval_exceeded_callback is not None:
             # Only log for specific entities
@@ -1732,6 +1837,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT
             else (new_state.last_reported - self._last_integration_time).total_seconds()
         )
+        if elapsed_seconds <= 0:
+            return
 
         # Calculate area
         area = self._calculate_trapezoidal(elapsed_seconds, *states)
@@ -1782,7 +1889,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                     return
 
                 elapsed_seconds = safe_decimal((now - self._last_integration_time).total_seconds())
-                if not elapsed_seconds:
+                if elapsed_seconds is None or elapsed_seconds <= 0:
                     return
 
                 try:
