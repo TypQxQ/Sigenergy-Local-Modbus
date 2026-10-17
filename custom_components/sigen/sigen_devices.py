@@ -297,6 +297,10 @@ class _ComponentGroup:
                 self._set_support(name, "inverter_pv_string_count", False)
             elif count_error is not None:
                 raise count_error
+            elif "inverter_pv_string_count" in fields:
+                count_words = words.get("inverter_pv_string_count", ())
+                if len(count_words) != fields["inverter_pv_string_count"].count:
+                    raise ModbusError("Incomplete PV string count bootstrap response")
             self._prefetched.setdefault(name, {}).update(words)
             if words:
                 self._prefetched_at[name] = min(self._prefetched_at.get(name, started), started)

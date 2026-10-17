@@ -7,7 +7,7 @@ import unittest
 from datetime import timedelta
 from unittest.mock import patch, AsyncMock
 
-from modbus_connection import ModbusTimeoutError, ModbusConnectionError
+from modbus_connection import ModbusError, ModbusTimeoutError, ModbusConnectionError
 from modbus_connection.exceptions import IllegalDataAddressError
 from modbus_connection.mock import MockModbusConnection
 from modbus_connection.model import Component, gauge
@@ -217,6 +217,49 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
         for role, _info, group in self.hub._all_groups():
             for name in self.hub._bootstrap_names(role):
                 self.assertTrue(group.has_register(name), (role, name))
+
+    async def test_pv_count_bootstrap_rejects_truncated_cold_and_warm_reads(self):
+        await self.hub.async_initialize(self.cache())
+        field = self.hub._inverters["Inverter"].running_info.declared_fields["inverter_pv_string_count"]
+        original = self.inv_unit.read_input_registers
+        async def truncated(address, count):
+            if address <= field.address < address + count:
+                return []
+            return await original(address, count)
+        for warm in (False, True):
+            with self.subTest(warm_cache=warm):
+                hub = self.modbus.SigenergyModbusHub(object(), _ConfigEntry(self.data))
+                cache = self.cache() if warm else self.cache_module.SupportCache(None, "entry", store=MemoryStore())
+                with patch.object(self.inv_unit, "read_input_registers", truncated):
+                    with self.assertRaisesRegex(ModbusError, "Incomplete PV string count"):
+                        await hub.async_initialize(cache)
+                group = hub._inverters["Inverter"]._inverter_group
+                self.assertIsNot(group.is_supported("inverter_pv_string_count"), False)
+                self.assertNotIn("inverter_pv_string_count", group._prefetched.get("running_info", {}))
+                await hub.async_close()
+
+    async def test_pv_count_bootstrap_rejects_missing_requested_words(self):
+        group = self.hub._inverters["Inverter"]._inverter_group
+        group.enable_incremental({}, lambda: None, "test")
+        with patch.object(group, "_async_read_blocks", AsyncMock(return_value=({}, {}))):
+            with self.assertRaisesRegex(ModbusError, "Incomplete PV string count"):
+                await group.async_bootstrap({"inverter_pv_string_count"})
+        self.assertIsNone(group.is_supported("inverter_pv_string_count"))
+
+    async def test_pv_count_bootstrap_accepts_zero_positive_and_confirmed_unsupported(self):
+        field = self.hub._inverters["Inverter"].running_info.declared_fields["inverter_pv_string_count"]
+        for value in (0, 2):
+            with self.subTest(pv_count=value):
+                self.inv_unit.load_raw({"input": {field.address: value}})
+                hub = self.modbus.SigenergyModbusHub(object(), _ConfigEntry(self.data))
+                await hub.async_initialize(self.cache_module.SupportCache(None, "entry", store=MemoryStore()))
+                self.assertEqual(value, (await hub.async_read_inverter_data("Inverter"))["inverter_pv_string_count"])
+                await hub.async_close()
+        self.inv_unit.fail_read(field.address, IllegalDataAddressError(2), register_type="input")
+        hub = self.modbus.SigenergyModbusHub(object(), _ConfigEntry(self.data))
+        await hub.async_initialize(self.cache_module.SupportCache(None, "entry", store=MemoryStore()))
+        self.assertIs(hub._inverters["Inverter"].is_supported("inverter_pv_string_count"), False)
+        await hub.async_close()
 
     async def test_one_endpoint_round_is_one_request_across_all_device_groups(self):
         await self.hub.async_initialize(self.cache())

@@ -166,13 +166,21 @@ class TestPollingRecovery(unittest.IsolatedAsyncioTestCase):
         coordinator, hub, namespace = _make_coordinator()
         hub.async_read_plant_data = self.group.async_update
         coordinator._last_successful_update_sequence = 1
-        namespace["async_timeout"].timeout = lambda seconds: asyncio.timeout(0.05)
+        deadlines = []
+        def deadline(seconds):
+            timer = asyncio.timeout(seconds)
+            deadlines.append(timer)
+            return timer
+        namespace["async_timeout"].timeout = deadline
         original = self.unit.read_input_registers
         finish = asyncio.Event()
         calls = []
         async def read(address, count):
             calls.append((address, count))
             if address == 500:
+                # Expire only when the protected request is in flight. Keep
+                # the retry's real deadline independent of host load.
+                deadlines[0].reschedule(asyncio.get_running_loop().time())
                 await finish.wait()
             return await original(address, count)
         with patch.object(self.unit, "read_input_registers", read):
@@ -417,6 +425,27 @@ class TestStartupRecovery(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(sum(address == 30500 for address, _ in calls), 2,
                                 "identity must still be validated with fresh reads")
         self.assertIs(self.hass.data["sigen"][self.entry.entry_id]["hub"], self.hubs[1])
+
+    async def test_truncated_pv_count_defers_platform_setup_until_a_new_hub_reads_the_count(self):
+        unit = self.fixture.inv_unit
+        field = self.fixture.hub._inverters["Inverter"].running_info.declared_fields["inverter_pv_string_count"]
+        unit.load_raw({"input": {field.address: 2}})
+        original = unit.read_input_registers
+        async def truncated(address, count):
+            if address <= field.address < address + count:
+                return []
+            return await original(address, count)
+        with patch.object(self.modbus, "SupportCache", side_effect=lambda *args: self.fixture.cache()):
+            with patch.object(unit, "read_input_registers", truncated):
+                with self.assertRaises(self.namespace["ConfigEntryNotReady"]):
+                    await self.namespace["async_setup_entry"](self.hass, self.entry)
+            self.hass.config_entries.async_forward_entry_setups.assert_not_awaited()
+            self.assertIsNot(self.hubs[0]._inverters["Inverter"].is_supported("inverter_pv_string_count"), False)
+            self.assertTrue(await self.namespace["async_setup_entry"](self.hass, self.entry))
+        self.assertEqual(2, len(self.hubs))
+        self.hass.config_entries.async_forward_entry_setups.assert_awaited_once()
+        coordinator = self.hass.data["sigen"][self.entry.entry_id]["coordinator"]
+        self.assertEqual(2, coordinator.data["inverters"]["Inverter"]["inverter_pv_string_count"])
 
     async def test_first_coordinator_poll_timeout_keeps_cache_and_next_setup_uses_new_hub(self):
         await self.fixture.hub.async_initialize(self.fixture.cache())
