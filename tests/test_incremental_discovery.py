@@ -614,3 +614,123 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(("preheating", absent), group._checked_fields)
         self.assertIn(("preheating", absent), group._queued_fields)
         await retry.async_close()
+
+    async def _interrupt_inverter_after_identity_and_power(self):
+        await self.hub.async_initialize(self.cache())
+        group = self.hub._inverters["Inverter"]._inverter_group
+        group.reset_poll_progress()
+        fields = group._readable["running_info"].declared_fields
+        for support in group._field_support.values():
+            support.clear()
+        names = self.modbus.IDENTITY_REGISTERS | {"inverter_active_power", "inverter_pv_string_count"}
+        group._field_support["running_info"].update({name: True for name in names})
+        self._load_inverter_power(fields, 123)
+        original = self.inv_unit.read_input_registers
+        async def fail_count(address, count):
+            if address == fields["inverter_pv_string_count"].address:
+                raise ModbusConnectionError("interrupted after identity and power")
+            return await original(address, count)
+        with patch.object(self.inv_unit, "read_input_registers", fail_count):
+            with self.assertRaises(ModbusConnectionError):
+                await group.async_update()
+        self.assertIn("inverter_serial_number", group._read_round["words"]["running_info"])
+        return group, fields
+
+    def _load_inverter_power(self, fields, value):
+        field = fields["inverter_active_power"]
+        self.inv_unit.load_raw({"input": {field.address+i: word
+            for i, word in enumerate(field.encode(value))}})
+
+    async def test_resumed_inverter_revalidates_identity_and_keeps_completed_telemetry(self):
+        group, fields = await self._interrupt_inverter_after_identity_and_power()
+        self._load_inverter_power(fields, 999)
+        with patch.object(self.inv_unit, "read_input_registers", wraps=self.inv_unit.read_input_registers) as read:
+            data = await group.async_update()
+        self.assertEqual(123, data["inverter_active_power"], "unchanged device can reuse a recent sample")
+        addresses = [call.args[0] for call in read.call_args_list]
+        self.assertIn(fields["inverter_model_type"].address, addresses)
+        self.assertNotIn(fields["inverter_active_power"].address, addresses)
+        self.assertEqual(1, group.poll_resumes)
+
+    async def _assert_changed_identity_discards_resumed_samples(self, key):
+        group, fields = await self._interrupt_inverter_after_identity_and_power()
+        field = fields[key]
+        self.inv_unit.load_raw({"input": {field.address+i: word
+            for i, word in enumerate(field.encode("changed-device"))}})
+        self._load_inverter_power(fields, 999)
+        data = await self.hub.async_read_inverter_data("Inverter")
+        self.assertEqual(999, data["inverter_active_power"])
+        self.assertEqual("changed-device", data[key])
+        self.assertEqual("changed-device", self.hub._identities["Inverter"][key])
+        self.assertEqual("identity_changed", self.hub._plant._group.cache_status)
+        self.assertEqual(0, group.poll_resumes)
+
+    async def test_changed_serial_discards_saved_round_before_capability_invalidation(self):
+        await self._assert_changed_identity_discards_resumed_samples("inverter_serial_number")
+
+    async def test_changed_firmware_discards_saved_round_before_capability_invalidation(self):
+        await self._assert_changed_identity_discards_resumed_samples("inverter_machine_firmware_version")
+
+    async def test_unverifiable_identity_discards_saved_samples_without_restoring_old_identity(self):
+        group, fields = await self._interrupt_inverter_after_identity_and_power()
+        self._load_inverter_power(fields, 999)
+        original = self.inv_unit.read_input_registers
+        async def truncated_identity(address, count):
+            if address == fields["inverter_model_type"].address:
+                return []
+            return await original(address, count)
+        with patch.object(self.inv_unit, "read_input_registers", truncated_identity):
+            data = await group.async_update()
+        self.assertEqual(999, data["inverter_active_power"])
+        self.assertIsNone(data["inverter_serial_number"])
+        self.assertEqual(0, group.poll_resumes)
+
+    async def test_blank_unchanged_identity_cannot_validate_saved_measurements(self):
+        fields = self.hub._inverters["Inverter"].running_info.declared_fields
+        for name in self.modbus.IDENTITY_REGISTERS:
+            field = fields[name]
+            self.inv_unit.load_raw({"input": {field.address+i: 0 for i in range(field.count)}})
+        group, fields = await self._interrupt_inverter_after_identity_and_power()
+        self._load_inverter_power(fields, 999)
+        self.assertEqual(999, (await group.async_update())["inverter_active_power"])
+        self.assertEqual(0, group.poll_resumes)
+
+    async def test_identity_check_connection_failure_discards_round_for_the_next_attempt(self):
+        group, fields = await self._interrupt_inverter_after_identity_and_power()
+        with patch.object(self.inv_unit, "read_input_registers", AsyncMock(side_effect=ModbusConnectionError("offline"))):
+            with self.assertRaises(ModbusConnectionError):
+                await group.async_update()
+        self.assertIsNone(group._read_round)
+        self.assertIs(group.is_supported("inverter_serial_number"), True)
+        self._load_inverter_power(fields, 999)
+        self.assertEqual(999, (await group.async_update())["inverter_active_power"])
+
+    async def test_cancelled_resume_identity_check_discards_round_and_drains_late_reply(self):
+        group, fields = await self._interrupt_inverter_after_identity_and_power()
+        started, finish = asyncio.Event(), asyncio.Event()
+        original = self.inv_unit.read_input_registers
+        async def delayed_identity(address, count):
+            if address == fields["inverter_model_type"].address and not finish.is_set():
+                started.set()
+                await finish.wait()
+            return await original(address, count)
+        task = None
+        try:
+            with patch.object(self.inv_unit, "read_input_registers", delayed_identity):
+                task = asyncio.create_task(group.async_update())
+                await asyncio.wait_for(started.wait(), 2)
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                self.assertIsNone(group._read_round)
+                self.assertTrue(group._pending_requests)
+                self._load_inverter_power(fields, 999)
+                finish.set()
+                self.assertEqual(999, (await group.async_update())["inverter_active_power"])
+                self.assertFalse(group._pending_requests)
+        finally:
+            finish.set()
+            if task is not None:
+                await asyncio.gather(task, return_exceptions=True)
+            if group._pending_requests:
+                await asyncio.gather(*group._pending_requests, return_exceptions=True)

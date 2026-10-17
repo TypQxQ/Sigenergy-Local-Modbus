@@ -435,6 +435,38 @@ class _ComponentGroup:
         self._prefetched.clear()
         self._prefetched_at.clear()
 
+    async def _async_confirm_poll_identity(self, progress) -> bool:
+        """Confirm a saved inverter round still belongs to the live device."""
+        identity_fields = {
+            name: {key: field for key, field in component.declared_fields.items()
+                   if key in IDENTITY_REGISTERS}
+            for name, component in self._readable.items()
+        }
+        if not any(identity_fields.values()):
+            return True
+        confirmed = set()
+        for name, fields in identity_fields.items():
+            if not fields:
+                continue
+            saved = progress["words"].get(name, {})
+            if any(len(saved.get(key, ())) != field.count for key, field in fields.items()):
+                return False
+            words, errors = await self._async_read_blocks(
+                name, self._readable[name], fields, probing=True
+            )
+            if errors:
+                return False
+            for key, field in fields.items():
+                if words.get(key) != saved[key]:
+                    return False
+                try:
+                    if not str(field.decode(words[key]) or "").strip():
+                        return False
+                except Exception:
+                    return False
+                confirmed.add(key)
+        return confirmed == IDENTITY_REGISTERS
+
     async def _async_update_locked(self) -> dict[str, Any]:
         # A cancelled poll can leave a request queued in the shared broker,
         # as well as one already on the wire. Do not enqueue another round
@@ -457,8 +489,19 @@ class _ComponentGroup:
                     and time.monotonic() - self._read_round["started"] > _POLL_PROGRESS_MAX_AGE):
                 self._read_round = None
                 self.poll_expired_rounds += 1
+            if self._read_round is not None:
+                saved_round = self._read_round
+                try:
+                    confirmed = await self._async_confirm_poll_identity(saved_round)
+                except (ModbusError, asyncio.CancelledError):
+                    self.reset_poll_progress()
+                    raise
+                if saved_round is not self._read_round:
+                    raise ModbusError("Read round invalidated during identity validation")
+                if not confirmed:
+                    self.reset_poll_progress()
             if self._read_round is None:
-                oldest = min([now, *self._prefetched_at.values()])
+                oldest = min([time.monotonic(), *self._prefetched_at.values()])
                 self._read_round = {"started": oldest, "words": {}, "attempted": {}}
             else:
                 self.poll_resumes += 1
