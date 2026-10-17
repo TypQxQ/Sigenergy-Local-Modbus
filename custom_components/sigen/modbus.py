@@ -156,12 +156,50 @@ class SigenergyModbusHub:
         for _role, info, group in self._all_groups():
             endpoint = (info[CONF_HOST], info[CONF_PORT])
             group._on_write = lambda ep=endpoint: self._reset_poll_progress(ep)
+            group._identity_snapshot = lambda ep=endpoint: self._endpoint_identity.get(ep, {})
+            group._confirm_endpoint_identity = (
+                lambda expected, ep=endpoint: self._async_confirm_endpoint_identity(ep, expected)
+            )
 
     def _reset_poll_progress(self, endpoint):
         """Discard every pre-write sample on the affected physical link."""
         for _role, info, group in self._all_groups():
             if (info[CONF_HOST], info[CONF_PORT]) == endpoint:
                 group.reset_poll_progress()
+
+    async def _async_confirm_endpoint_identity(self, endpoint, expected):
+        """Validate a saved round's endpoint before any sibling reuses it."""
+        if not expected:
+            return False
+        identities = {}
+        for name, info in self.inverter_connections.items():
+            if (info[CONF_HOST], info[CONF_PORT]) != endpoint:
+                continue
+            group = self._inverters[name]._inverter_group
+            data = {}
+            for component_name, component in group._readable.items():
+                fields = {key: field for key, field in component.declared_fields.items()
+                          if key in IDENTITY_REGISTERS}
+                if not fields:
+                    continue
+                words, errors = await group._async_read_blocks(
+                    component_name, component, fields, probing=True
+                )
+                if errors:
+                    return False
+                for key, field in fields.items():
+                    try:
+                        if len(words.get(key, ())) != field.count:
+                            return False
+                        data[key] = field.decode(words[key])
+                    except Exception:
+                        return False
+            identity = self._identity(data)
+            if not identity:
+                return False
+            identities[str(info[CONF_SLAVE_ID])] = identity
+        return (bool(identities) and identities == expected
+                and self._endpoint_identity.get(endpoint) == expected)
 
     def _all_groups(self):
         plant = {**self.plant_connection,

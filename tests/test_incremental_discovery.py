@@ -734,3 +734,87 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
                 await asyncio.gather(task, return_exceptions=True)
             if group._pending_requests:
                 await asyncio.gather(*group._pending_requests, return_exceptions=True)
+
+    async def _interrupt_sibling_round(self, role, initialize=True):
+        if initialize:
+            await self.hub.async_initialize(self.cache())
+        if role == "plant":
+            group, unit = self.hub._plant._group, self.plant_unit
+            names = ("plant_running_state", "plant_ess_soc")
+        else:
+            group, unit = self.hub._inverters["Inverter"]._dc_charger_group, self.inv_unit
+            names = ("dc_charger_running_state", "dc_charger_vehicle_soc")
+        group.reset_poll_progress()
+        fields = group._readable["running_info"].declared_fields
+        for support in group._field_support.values():
+            support.clear()
+        group._field_support["running_info"].update({key: True for key in names})
+        first, last = sorted(names, key=lambda key: fields[key].address)
+        def load_first(value):
+            field = fields[first]
+            unit.load_raw({"input": {field.address+i: word for i, word in enumerate(field.encode(value))}})
+        load_first(11)
+        original = unit.read_input_registers
+        async def interrupted(address, count):
+            if address == fields[last].address:
+                raise ModbusConnectionError("interrupted sibling round")
+            return await original(address, count)
+        with patch.object(unit, "read_input_registers", interrupted):
+            with self.assertRaises(ModbusConnectionError):
+                await group.async_update()
+        load_first(22)
+        return group, first
+
+    async def _assert_sibling_round_checks_endpoint(self, role, changed):
+        group, key = await self._interrupt_sibling_round(role)
+        if changed:
+            field = self.hub._inverters["Inverter"].running_info.declared_fields["inverter_serial_number"]
+            self.inv_unit.load_raw({"input": {field.address+i: word
+                for i, word in enumerate(field.encode("replacement"))}})
+        data = await group.async_update()
+        self.assertEqual(22 if changed else 11, data[key])
+        self.assertEqual(0 if changed else 1, group.poll_resumes)
+
+    async def test_plant_round_discards_old_samples_before_inverter_observes_replacement(self):
+        await self._assert_sibling_round_checks_endpoint("plant", True)
+
+    async def test_dc_round_discards_old_samples_before_inverter_observes_replacement(self):
+        await self._assert_sibling_round_checks_endpoint("dc_charger", True)
+
+    async def test_plant_round_can_resume_after_live_endpoint_identity_is_confirmed(self):
+        await self._assert_sibling_round_checks_endpoint("plant", False)
+
+    async def test_dc_round_can_resume_after_live_endpoint_identity_is_confirmed(self):
+        await self._assert_sibling_round_checks_endpoint("dc_charger", False)
+
+    async def test_sibling_round_uses_original_identity_even_if_hub_has_already_observed_a_change(self):
+        group, key = await self._interrupt_sibling_round("plant")
+        field = self.hub._inverters["Inverter"].running_info.declared_fields["inverter_serial_number"]
+        self.inv_unit.load_raw({"input": {field.address+i: word
+            for i, word in enumerate(field.encode("replacement"))}})
+        identity = dict(self.hub._identities["Inverter"], inverter_serial_number="replacement")
+        self.hub._identities["Inverter"] = identity
+        self.hub._refresh_endpoint_identities()
+        self.assertNotEqual(group._read_round["identity"], self.hub._endpoint_identity[("test", 502)])
+        self.assertEqual(22, (await group.async_update())[key])
+        self.assertEqual(0, group.poll_resumes)
+
+    async def test_coordinator_read_order_cannot_publish_old_siblings_or_deadlock_identity_rebuild(self):
+        plant, plant_key = await self._interrupt_sibling_round("plant")
+        dc, dc_key = await self._interrupt_sibling_round("dc_charger", initialize=False)
+        inverter = self.hub._inverters["Inverter"]._inverter_group
+        inverter.reset_poll_progress()
+        field = inverter._readable["running_info"].declared_fields["inverter_serial_number"]
+        self.inv_unit.load_raw({"input": {field.address+i: word
+            for i, word in enumerate(field.encode("replacement"))}})
+        # Same order as the coordinator: plant first, then inverter/DC together.
+        plant_data = await asyncio.wait_for(self.hub.async_read_plant_data(), 2)
+        inverter_data, dc_data = await asyncio.wait_for(asyncio.gather(
+            self.hub.async_read_inverter_data("Inverter"),
+            self.hub.async_read_dc_charger_data("Inverter")), 2)
+        self.assertEqual(22, plant_data[plant_key])
+        self.assertEqual(22, dc_data[dc_key])
+        self.assertEqual("replacement", inverter_data["inverter_serial_number"])
+        self.assertEqual("replacement", self.hub._identities["Inverter"]["inverter_serial_number"])
+        self.assertEqual((0, 0), (plant.poll_resumes, dc.poll_resumes))
+        self.assertEqual(0, self.hub._active_polls)

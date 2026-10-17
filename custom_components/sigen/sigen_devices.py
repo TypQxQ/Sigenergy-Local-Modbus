@@ -36,6 +36,7 @@ import logging
 import time
 from collections import deque
 from collections.abc import Coroutine
+from copy import deepcopy
 import hashlib
 import json
 from typing import Any, Mapping
@@ -146,6 +147,8 @@ class _ComponentGroup:
         self.cache_age: float | None = None
         self._poll_lock = asyncio.Lock()
         self._read_round = None
+        self._identity_snapshot = lambda: None
+        self._confirm_endpoint_identity = None
         self.poll_resumes = 0
         self.poll_expired_rounds = 0
         self.poll_last_round_span = 0.0
@@ -436,36 +439,10 @@ class _ComponentGroup:
         self._prefetched_at.clear()
 
     async def _async_confirm_poll_identity(self, progress) -> bool:
-        """Confirm a saved inverter round still belongs to the live device."""
-        identity_fields = {
-            name: {key: field for key, field in component.declared_fields.items()
-                   if key in IDENTITY_REGISTERS}
-            for name, component in self._readable.items()
-        }
-        if not any(identity_fields.values()):
-            return True
-        confirmed = set()
-        for name, fields in identity_fields.items():
-            if not fields:
-                continue
-            saved = progress["words"].get(name, {})
-            if any(len(saved.get(key, ())) != field.count for key, field in fields.items()):
-                return False
-            words, errors = await self._async_read_blocks(
-                name, self._readable[name], fields, probing=True
-            )
-            if errors:
-                return False
-            for key, field in fields.items():
-                if words.get(key) != saved[key]:
-                    return False
-                try:
-                    if not str(field.decode(words[key]) or "").strip():
-                        return False
-                except Exception:
-                    return False
-                confirmed.add(key)
-        return confirmed == IDENTITY_REGISTERS
+        """Confirm the whole endpoint, including groups without local identity."""
+        if self._confirm_endpoint_identity is None:
+            return False
+        return await self._confirm_endpoint_identity(progress.get("identity"))
 
     async def _async_update_locked(self) -> dict[str, Any]:
         # A cancelled poll can leave a request queued in the shared broker,
@@ -502,7 +479,8 @@ class _ComponentGroup:
                     self.reset_poll_progress()
             if self._read_round is None:
                 oldest = min([time.monotonic(), *self._prefetched_at.values()])
-                self._read_round = {"started": oldest, "words": {}, "attempted": {}}
+                self._read_round = {"started": oldest, "words": {}, "attempted": {},
+                                    "identity": deepcopy(self._identity_snapshot())}
             else:
                 self.poll_resumes += 1
             progress = self._read_round

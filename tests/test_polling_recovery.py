@@ -42,6 +42,10 @@ class TestPollingRecovery(unittest.IsolatedAsyncioTestCase):
         })(self.unit)
         group = self.devices._ComponentGroup({"telemetry": component}, {"commands": commands})
         group.enable_incremental(support or {}, lambda: None, "test")
+        # The standalone transport fixture has a stable endpoint. Hub tests
+        # separately exercise the real shared-endpoint identity validator.
+        group._identity_snapshot = lambda: {"fixture": "stable"}
+        group._confirm_endpoint_identity = AsyncMock(return_value=True)
         return group
 
     def support_all(self):
@@ -160,6 +164,21 @@ class TestPollingRecovery(unittest.IsolatedAsyncioTestCase):
             data = await self.group.async_update()
         self.assertEqual(789, data["separate"])
         self.assertEqual([(100, 2), (500, 1), (500, 1)], calls)
+
+    async def test_saved_round_without_an_endpoint_identity_validator_is_discarded(self):
+        self.support_all()
+        original = self.unit.read_input_registers
+        async def interrupted(address, count):
+            if address == 500:
+                raise ModbusConnectionError("offline")
+            return await original(address, count)
+        with patch.object(self.unit, "read_input_registers", interrupted):
+            with self.assertRaises(ModbusConnectionError):
+                await self.group.async_update()
+        self.group._confirm_endpoint_identity = None
+        self.unit.load_raw({"input": {100: 999}})
+        self.assertEqual(999, (await self.group.async_update())["first"])
+        self.assertEqual(0, self.group.poll_resumes)
 
     async def test_coordinator_runtime_deadline_recovers_without_stacking_or_repeating_reads(self):
         self.support_all()
