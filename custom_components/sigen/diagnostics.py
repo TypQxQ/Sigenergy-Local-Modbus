@@ -186,6 +186,7 @@ async def async_get_config_entry_diagnostics(
         all_devices_diagnostics[device.name or device_identifier] = device_diagnostics
 
     diagnostics_data = {
+        "discovery": hub.discovery_diagnostics(),
         "entry": async_redact_data(entry.as_dict(), TO_REDACT),
         "coordinator": {
             "last_update_success": coordinator.last_update_success,
@@ -285,6 +286,7 @@ async def async_get_device_diagnostics(
     
     # Base diagnostic data for the device
     device_diagnostics = {
+        "discovery": hub.discovery_diagnostics(),
         "device_info": async_redact_data({
             "name": device.name,
             "model": device.model,

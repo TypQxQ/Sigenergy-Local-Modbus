@@ -19,6 +19,9 @@ the public surface `coordinator.py`, the entity platforms and
 from __future__ import annotations
 
 import logging
+import asyncio
+import time
+from uuid import uuid4
 from typing import Any, Dict, Optional, Union
 
 from homeassistant.components.modbus import async_get_unit
@@ -45,6 +48,8 @@ from .const import (
     DEVICE_TYPE_PLANT,
 )
 from .sigen_devices import PROBE_RETRY_DELAY, SigenergyACCharger, SigenergyInverter, SigenergyPlant
+from .sigen_devices import IDENTITY_REGISTERS
+from .support_cache import SupportCache, device_cache_key
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +65,10 @@ class SigenergyModbusError(HomeAssistantError):
 #: -- surfacing as a "Received unexpected response" transaction-ID mismatch
 #: and a dropped connection.
 _REQUEST_TIMEOUT = 20.0
+
+# Entry setup retries share a pass; a complete HA restart starts a new pass
+# over cached negatives. Nothing here is shared register support or live data.
+_DISCOVERY_SESSION = uuid4().hex
 
 
 def _connection_params(device_info: Dict[str, Any]) -> ModbusTcpParams:
@@ -87,6 +96,20 @@ class SigenergyModbusHub:
         """Initialize the hub and acquire a shared Modbus unit per connection."""
         self.hass = hass
         self.config_entry = config_entry
+        self.incremental_discovery = False
+        self._cache = None
+        self._bindings = []
+        self._loaded_cache = {}
+        self._identities = {}
+        self._endpoint_identity = {}
+        self._discovery_tasks = {}
+        self._discovery_cursor = {}
+        self._discovery_backoff = {}
+        self._last_discovery = {}
+        self._active_polls = 0
+        self._active_writes = 0
+        self._stopping = False
+        self.bootstrap_time = None
 
         # Kept for diagnostics.py, which surfaces the probe retry cadence.
         self.probe_retry_delay = PROBE_RETRY_DELAY
@@ -127,16 +150,251 @@ class SigenergyModbusHub:
             name: SigenergyACCharger(_acquire_unit(hass, config_entry, info, info[CONF_SLAVE_ID]))
             for name, info in self.ac_charger_connections.items()
         }
+        for _role, info, group in self._all_groups():
+            endpoint = (info[CONF_HOST], info[CONF_PORT])
+            group._on_write = lambda ep=endpoint: self._reset_poll_progress(ep)
+
+    def _reset_poll_progress(self, endpoint):
+        """Discard every pre-write sample on the affected physical link."""
+        for _role, info, group in self._all_groups():
+            if (info[CONF_HOST], info[CONF_PORT]) == endpoint:
+                group.reset_poll_progress()
+
+    def _all_groups(self):
+        plant = {**self.plant_connection,
+                 CONF_SLAVE_ID: self.plant_connection.get(CONF_SLAVE_ID, self.plant_id)}
+        yield "plant", plant, self._plant._group
+        for name, inverter in self._inverters.items():
+            info = self.inverter_connections[name]
+            yield "inverter", info, inverter._inverter_group
+            if inverter._dc_charger_group is not None:
+                yield "dc_charger", info, inverter._dc_charger_group
+        for name, charger in self._ac_chargers.items():
+            yield "ac_charger", self.ac_charger_connections[name], charger._group
+
+    @staticmethod
+    def _identity(data):
+        values = {key: str(data.get(key) or "").strip() for key in IDENTITY_REGISTERS}
+        return values if all(values.values()) else {}
+
+    @staticmethod
+    def _bootstrap_names(role):
+        return {
+            "plant": {"plant_grid_sensor_active_power", "plant_ess_soc", "plant_running_state",
+                      "plant_ess_power", "plant_sigen_photovoltaic_power", "plant_general_alarm1",
+                      "plant_remote_ems_enable", "plant_remote_ems_control_mode"},
+            "inverter": IDENTITY_REGISTERS | {"inverter_pv_string_count", "inverter_active_power",
+                         "inverter_running_state", "inverter_ess_charge_discharge_power"},
+            "dc_charger": {"dc_charger_running_state", "dc_charger_output_power",
+                           "dc_charger_vehicle_soc"},
+            "ac_charger": {"ac_charger_system_state"},
+        }[role]
+
+    def _checkpoint(self, key, endpoint, group):
+        if self._cache is not None:
+            discovery = (group.discovery_progress(_DISCOVERY_SESSION)
+                         if group.discovery_prepared else
+                         self._loaded_cache.get(key, {}).get("discovery", {}))
+            self._cache.update(key, group.fingerprint(), self._endpoint_identity.get(endpoint, {}),
+                               group._field_support, discovery)
+
+    async def async_initialize(self, cache=None) -> None:
+        """Restore capabilities after live identity validation, then bootstrap."""
+        started = time.monotonic()
+        self._cache = cache or SupportCache(self.hass, self.config_entry.entry_id)
+        await self._cache.async_load()
+        self.incremental_discovery = True
+        for role, info, group in self._all_groups():
+            endpoint = (info[CONF_HOST], info[CONF_PORT])
+            key = device_cache_key(role, info)
+            self._bindings.append((key, endpoint, role, group))
+            self._loaded_cache[key] = record = self._cache.snapshot(key)
+            # Attach persistence before the very first identity request.
+            # Until identity is live, only cached positives are safe to reuse.
+            positives, _status = self._cache.restore(key, group.fingerprint(), {}, record=record)
+            group.enable_incremental(
+                positives, lambda k=key, e=endpoint, g=group: self._checkpoint(k, e, g),
+                "validating",
+            )
+        for name, inverter in self._inverters.items():
+            group = inverter._inverter_group
+            # Identity and topology must be live before creating child devices.
+            await group.async_bootstrap(IDENTITY_REGISTERS | {"inverter_pv_string_count"})
+            data = {}
+            for component_name, words in group._prefetched.items():
+                component = group._readable[component_name]
+                for field, raw in words.items():
+                    try:
+                        data[field] = component.declared_fields[field].decode(raw)
+                    except Exception:
+                        pass
+            self._identities[name] = self._identity(data)
+        self._refresh_endpoint_identities()
+        for key, endpoint, role, group in self._bindings:
+            restored, status = self._cache.restore(
+                key, group.fingerprint(), self._endpoint_identity.get(endpoint, {}),
+                record=self._loaded_cache[key],
+            )
+            # Provisional cached positives cannot survive an identity/schema
+            # mismatch. Preserve only decisions made by this attempt's reads.
+            group._field_support = {
+                name: {field: value for field, value in states.items()
+                       if (name, field) in group._checked_fields}
+                for name, states in group._field_support.items()
+            }
+            group.enable_incremental(
+                restored, lambda k=key, e=endpoint, g=group: self._checkpoint(k, e, g), status
+            )
+            group.cache_age = self._cache.age(key)
+            names = {field for field in self._bootstrap_names(role)
+                     if group.is_supported(field) is None}
+            await group.async_bootstrap(names)
+            progress = (self._loaded_cache[key].get("discovery", {})
+                        if status in {"hit", "positive_only"} else {})
+            group.restore_discovery(progress, _DISCOVERY_SESSION)
+            self._discovery_backoff[endpoint] = max(
+                self._discovery_backoff.get(endpoint, 0), group.discovery_retry_at
+            )
+            if group.last_discovery_at is not None:
+                self._last_discovery[endpoint] = max(
+                    self._last_discovery.get(endpoint, -float("inf")), group.last_discovery_at
+                )
+            self._checkpoint(key, endpoint, group)
+        await self._cache.async_flush()
+        self.bootstrap_time = time.monotonic() - started
+
+    def _refresh_endpoint_identities(self):
+        for _key, endpoint, _role, _group in self._bindings:
+            identities = {
+                str(info[CONF_SLAVE_ID]): self._identities.get(name, {})
+                for name, info in self.inverter_connections.items()
+                if (info[CONF_HOST], info[CONF_PORT]) == endpoint
+            }
+            self._endpoint_identity[endpoint] = (
+                identities if identities and all(identities.values()) else {}
+            )
+
+    async def _async_observe_identity(self, name, data):
+        identity = self._identity(data)
+        if not identity or identity == self._identities.get(name):
+            return
+        info = self.inverter_connections[name]
+        endpoint = (info[CONF_HOST], info[CONF_PORT])
+        discovery = self._discovery_tasks.get(endpoint)
+        if discovery is not None and not discovery.done():
+            discovery.cancel()
+            await asyncio.gather(discovery, return_exceptions=True)
+        pending = {task for _key, ep, _role, group in self._bindings if ep == endpoint
+                   for task in group._pending_requests}
+        if pending:
+            await asyncio.wait(pending)
+        # Old discovery callbacks must finish under the old identity stamp.
+        self._identities[name] = identity
+        self._refresh_endpoint_identities()
+        self._discovery_backoff.pop(endpoint, None)
+        for key, binding_endpoint, role, group in self._bindings:
+            if binding_endpoint != endpoint:
+                continue
+            for states in group._field_support.values():
+                states.clear()
+            group._probe_queue.clear()
+            group._queued_fields.clear()
+            group._rejected_blocks.clear()
+            group._prefetched.clear()
+            group.reset_poll_progress()
+            group._checked_fields.clear()
+            group.discovery_retry_at = 0
+            group._discovery_failure_streak = 0
+            group.cache_status = "identity_changed"
+            await group.async_bootstrap(self._bootstrap_names(role))
+            group.queue_discovery()
+            self._checkpoint(key, endpoint, group)
+
+    def start_discovery(self, coordinator):
+        self._coordinator = coordinator
+        self.config_entry.async_on_unload(
+            coordinator.async_add_listener(self.async_schedule_discovery)
+        )
+        self.async_schedule_discovery()
+
+    def async_schedule_discovery(self):
+        """At most one background request per endpoint after a successful poll."""
+        if self._stopping or not self._coordinator.last_update_success:
+            return
+        for endpoint in self._endpoint_identity:
+            if not any(ep == endpoint and group._probe_queue
+                       for _key, ep, _role, group in self._bindings):
+                continue
+            interval = self._coordinator.update_interval.total_seconds()
+            if time.monotonic() - self._last_discovery.get(endpoint, -float("inf")) < interval:
+                continue
+            task = self._discovery_tasks.get(endpoint)
+            if task is not None and not task.done():
+                continue
+            if time.monotonic() < self._discovery_backoff.get(endpoint, 0):
+                continue
+            task = self.config_entry.async_create_background_task(
+                self.hass, self._async_discover_endpoint(endpoint),
+                name="Sigenergy capability discovery",
+            )
+            self._discovery_tasks[endpoint] = task
+
+    async def _async_discover_endpoint(self, endpoint):
+        groups = [group for _key, ep, _role, group in self._bindings if ep == endpoint]
+        if self._active_polls or self._active_writes or any(g._pending_requests for g in groups):
+            return
+        start = self._discovery_cursor.get(endpoint, 0)
+        for offset in range(len(groups)):
+            index = (start + offset) % len(groups)
+            if not groups[index]._probe_queue:
+                continue
+            self._discovery_cursor[endpoint] = (index + 1) % len(groups)
+            self._last_discovery[endpoint] = time.monotonic()
+            try:
+                await groups[index].async_discover_one()
+            except ModbusError:
+                self._discovery_backoff[endpoint] = groups[index].discovery_retry_at
+            return
+
+    def discovery_diagnostics(self):
+        return {
+            "bootstrap_time": self.bootstrap_time,
+            "cache_error": self._cache.last_error if self._cache else None,
+            "devices": {f"{role}:{index}": group.discovery_diagnostics()
+                        for index, (_key, _endpoint, role, group) in enumerate(self._bindings)},
+        }
 
     async def async_close(self) -> None:
-        """Release this hub's Modbus units.
+        """Stop workflows, drain protected transactions, checkpoint capabilities."""
+        self._stopping = True
+        for task in self._discovery_tasks.values():
+            task.cancel()
+        await asyncio.gather(*self._discovery_tasks.values(), return_exceptions=True)
+        pending = [task for _role, _info, group in self._all_groups()
+                   for task in group._pending_requests]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        for _role, _info, group in self._all_groups():
+            group.reset_poll_progress()
+        if self._cache is not None:
+            await self._cache.async_flush()
 
-        `async_get_unit()` already registers its release on the config
-        entry's own unload callbacks (`entry.async_on_unload`), which have
-        already run by the time `async_unload_entry` calls this. Kept so the
-        existing `__init__.py` call site needs no change.
-        """
-        return
+    def has_register(self, device_type: str, device_name: Optional[str], register_name: str) -> bool:
+        """Distinguish unresolved registers from calculated/diagnostic keys."""
+        group = None
+        if device_type == DEVICE_TYPE_PLANT:
+            group = self._plant._group
+        elif device_type == DEVICE_TYPE_INVERTER:
+            inverter = self._inverters.get(device_name or "")
+            group = inverter._inverter_group if inverter else None
+        elif device_type == DEVICE_TYPE_DC_CHARGER:
+            inverter_name = (device_name or "").replace(" DC Charger", "").strip()
+            inverter = self._inverters.get(inverter_name)
+            group = inverter._dc_charger_group if inverter else None
+        elif device_type == DEVICE_TYPE_AC_CHARGER:
+            charger = self._ac_chargers.get(device_name or "")
+            group = charger._group if charger else None
+        return group.has_register(register_name) if group else False
 
     def get_register_support(
         self, device_type: str, device_name: Optional[str], register_name: str
@@ -166,9 +424,12 @@ class SigenergyModbusHub:
         if inverter is None:
             _LOGGER.error("Unknown inverter name provided for reading data: %s", inverter_name)
             return {}
-        return await self._async_read(
+        data = await self._async_read(
             inverter.async_update_inverter(), f"inverter '{inverter_name}'"
         )
+        if self.incremental_discovery:
+            await self._async_observe_identity(inverter_name, data)
+        return data
 
     async def async_read_dc_charger_data(self, inverter_name: str) -> Dict[str, Any]:
         """Read all supported DC charger data."""
@@ -192,22 +453,34 @@ class SigenergyModbusHub:
             ac_charger.async_update(), f"AC charger '{ac_charger_name}'"
         )
 
-    @staticmethod
-    async def _async_read(coro, description: str) -> Dict[str, Any]:
+    async def _async_read(self, coro, description: str) -> Dict[str, Any]:
         """Await a device's `async_update()`, translating connection errors.
 
         Raises `SigenergyModbusError` if the link itself is down; any other
         per-register/per-component failure is already handled inside the
         device object, which returns a best-effort (possibly partial) dict.
         """
+        self._active_polls += 1
         try:
             return await coro
         except ModbusConnectionError as ex:
             raise SigenergyModbusError(f"Connection error reading {description}: {ex}") from ex
         except ModbusError as ex:
             raise SigenergyModbusError(f"Modbus error reading {description}: {ex}") from ex
+        finally:
+            self._active_polls -= 1
 
     async def async_write_parameter(
+        self, device_type: str, device_identifier: Optional[str],
+        register_name: str, value: Union[int, float, str],
+    ) -> None:
+        self._active_writes += 1
+        try:
+            await self._async_write_parameter(device_type, device_identifier, register_name, value)
+        finally:
+            self._active_writes -= 1
+
+    async def _async_write_parameter(
         self,
         device_type: str,
         device_identifier: Optional[str],
