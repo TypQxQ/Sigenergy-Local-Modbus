@@ -386,6 +386,8 @@ def generate_sigen_entity(
         platform = async_get_current_platform()
 
         def restore_supported_entities():
+            if remove_listener is None:
+                return
             for deferred in deferred_descriptions[:]:
                 support, _keys = get_entity_register_support(
                     coordinator.hub, device_type, device_name, deferred, pv_string_idx
@@ -398,12 +400,27 @@ def generate_sigen_entity(
                     _defer=False,
                 )
                 if restored:
+                    # This is EntityPlatform's coroutine, not the synchronous
+                    # AddEntitiesCallback passed to platform setup by HA.
+                    coordinator.hub.config_entry.async_create_task(
+                        coordinator.hass,
+                        platform.async_add_entities(restored),
+                        name="Restore newly supported Sigenergy entities",
+                    )
                     deferred_descriptions.remove(deferred)
-                    platform.async_add_entities(restored)
             if not deferred_descriptions:
                 unsubscribe()
 
-        unsubscribe = coordinator.async_add_listener(restore_supported_entities)
+        remove_listener = coordinator.async_add_listener(restore_supported_entities)
+
+        def unsubscribe():
+            # HA's coordinator unsubscribe callback must only be called once:
+            # discovery completion and config-entry unload can both reach here.
+            nonlocal remove_listener
+            if remove_listener is not None:
+                remove, remove_listener = remove_listener, None
+                remove()
+
         coordinator.hub.config_entry.async_on_unload(unsubscribe)
     return entities
 
