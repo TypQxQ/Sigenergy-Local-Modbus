@@ -4,8 +4,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal, DecimalException, InvalidOperation
+import logging
+from time import monotonic
 from typing import Any
 
+
+_LOGGER = logging.getLogger(__name__)
 
 ENERGY_TO_KWH = {
     "mWh": Decimal("0.000001"), "Wh": Decimal("0.001"),
@@ -47,6 +51,8 @@ class EnergySample:
 class RecorderRestore:
     sample: EnergySample | None
     has_history: bool
+    queue_wait: float | None = None
+    query_time: float | None = None
 
 
 def sample_from_state(state: Any) -> EnergySample | None:
@@ -65,20 +71,48 @@ def snapshot_sample(native_data: Any, state: Any) -> EnergySample | None:
     # An unavailable state's timestamp does not date its last valid native
     # value. Do not let it outrank newer numeric Recorder data.
     if state is None or _number(state.state) is None:
+        _LOGGER.debug("PV restore snapshot rejected: missing or invalid numeric state")
         return None
     updated = state.last_updated
     if updated is None or updated.utcoffset() is None:
+        _LOGGER.debug("PV restore snapshot rejected: missing timezone-aware timestamp")
         return None
     value = (energy_in_kwh(native_data.native_value, native_data.native_unit_of_measurement)
              if native_data is not None else None)
     if value is None:
+        _LOGGER.debug("PV restore snapshot native value/unit unavailable; trying stored state")
         candidate = sample_from_state(state)
         value = candidate.value if candidate else None
+    if value is None:
+        _LOGGER.debug("PV restore snapshot rejected: invalid energy value or unit")
     return EnergySample(value, updated, "snapshot") if value is not None else None
 
 
 def read_recorder_restore(hass, entity_id: str, cutoff: datetime,
-                          snapshot: EnergySample | None) -> RecorderRestore:
+                          snapshot: EnergySample | None,
+                          queued_at: float | None = None) -> RecorderRestore:
+    """Measure executor queue time separately from the history query itself."""
+    started = monotonic()
+    queue_wait = max(0.0, started - queued_at) if queued_at is not None else None
+    try:
+        result = _read_recorder_restore(hass, entity_id, cutoff, snapshot)
+    except Exception:
+        _LOGGER.debug(
+            "PV restore Recorder query failed for %s: queue_wait=%s s, query_time=%.3f s",
+            entity_id, queue_wait, monotonic() - started, exc_info=True,
+        )
+        raise
+    query_time = monotonic() - started
+    _LOGGER.debug(
+        "PV restore Recorder query completed for %s: queue_wait=%s s, "
+        "query_time=%.3f s, has_history=%s, sample=%s",
+        entity_id, queue_wait, query_time, result.has_history, result.sample,
+    )
+    return RecorderRestore(result.sample, result.has_history, queue_wait, query_time)
+
+
+def _read_recorder_restore(hass, entity_id: str, cutoff: datetime,
+                           snapshot: EnergySample | None) -> RecorderRestore:
     """Run in Recorder's executor; normally one indexed last-state query.
 
     Only a trailing unavailable/invalid record requires a bounded history read.
@@ -94,8 +128,14 @@ def read_recorder_restore(hass, entity_id: str, cutoff: datetime,
         if (candidate := sample_from_state(state)) is not None:
             return RecorderRestore(candidate, True)
     if not latest:
+        _LOGGER.debug("PV restore Recorder has no history for %s", entity_id)
         return RecorderRestore(None, False)
 
+    _LOGGER.debug(
+        "PV restore Recorder latest state unusable for %s "
+        "(after cutoff or invalid value/unit); searching bounded pre-start history",
+        entity_id,
+    )
     # Snapshots are normally minutes old. Without one, cover two recent days
     # for daily counters without scanning a lifetime of high-frequency states.
     start = snapshot.updated - timedelta(microseconds=1) if snapshot else cutoff - timedelta(days=2)
@@ -112,15 +152,44 @@ def read_recorder_restore(hass, entity_id: str, cutoff: datetime,
 
 def choose_restore(snapshot: EnergySample | None, recorder: RecorderRestore,
                    had_snapshot: bool, cutoff: datetime, now: datetime,
-                   daily: bool) -> EnergySample:
+                   daily: bool, *, entity_id: str | None = None) -> EnergySample:
     """Use the newest valid sample, with native data winning an exact tie."""
-    candidates = [sample for sample in (recorder.sample, snapshot)
-                  if sample is not None and sample.updated <= cutoff]
+    label = entity_id or "<unknown>"
+    _LOGGER.debug(
+        "PV restore candidates for %s: snapshot=%s, recorder=%s, cutoff=%s, "
+        "now=%s, daily=%s, had_snapshot=%s, recorder_has_history=%s; values in kWh",
+        label, snapshot, recorder.sample, cutoff.isoformat(), now.isoformat(),
+        daily, had_snapshot, recorder.has_history,
+    )
+    candidates = []
+    for source, sample in (("recorder", recorder.sample), ("snapshot", snapshot)):
+        if sample is None:
+            _LOGGER.debug("PV restore rejected %s candidate for %s: missing or invalid sample",
+                          source, label)
+        elif sample.updated > cutoff:
+            _LOGGER.debug("PV restore rejected %s candidate for %s: timestamp after startup cutoff",
+                          source, label)
+        else:
+            candidates.append(sample)
     if not candidates:
         if had_snapshot or recorder.has_history:
+            _LOGGER.debug("PV restore decision for %s: no valid existing data; refusing zero",
+                          label)
             raise ValueError("Existing PV energy has no valid restore sample")
+        _LOGGER.debug("PV restore decision for %s: new_sensor, 0 kWh; no prior counter data",
+                      label)
         return EnergySample(Decimal(0), now, "new_sensor")
     sample = max(candidates, key=lambda item: (item.updated, item.source == "snapshot"))
     if daily and sample.updated.astimezone(now.tzinfo).date() < now.date():
+        _LOGGER.debug(
+            "PV restore decision for %s: new_day, 0 kWh; newest sample %s "
+            "belongs to a previous local day (%s)", label, sample, now.tzinfo,
+        )
         return EnergySample(Decimal(0), now, "new_day")
+    reason = "only valid candidate"
+    if len(candidates) > 1:
+        reason = ("native snapshot precision at equal timestamp"
+                  if candidates[0].updated == candidates[1].updated else "newest timestamp")
+    _LOGGER.debug("PV restore decision for %s: %s, %s kWh, timestamp=%s; %s",
+                  label, sample.source, sample.value, sample.updated.isoformat(), reason)
     return sample
