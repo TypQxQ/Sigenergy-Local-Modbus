@@ -102,6 +102,40 @@ class RestoreSelectionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.choose(future, None)
 
+    def test_debug_decision_identifies_newer_recorder_and_normalized_candidates(self):
+        snapshot = pv.snapshot_sample(None, state("12.471733", NOW - timedelta(minutes=7)))
+        recorded = pv.sample_from_state(state("0.012500856", NOW - timedelta(minutes=6), "MWh"))
+        with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
+            result = pv.choose_restore(snapshot, pv.RecorderRestore(recorded, True),
+                                       True, NOW, NOW, False, entity_id="sensor.pv_test")
+        output = "\n".join(logs.output)
+        self.assertEqual(Decimal("12.500856"), result.value)
+        self.assertIn("sensor.pv_test", output)
+        self.assertIn("12.471733", output)
+        self.assertIn("12.500856", output)
+        self.assertIn("values in kWh", output)
+        self.assertIn("newest timestamp", output)
+        self.assertTrue(all(r.levelno == logging.DEBUG for r in logs.records))
+
+    def test_debug_tie_explains_native_precision(self):
+        native = SimpleNamespace(native_value=Decimal("6333.170261123"), native_unit_of_measurement="kWh")
+        snapshot = pv.snapshot_sample(native, state("6.333170261", NOW, "MWh"))
+        recorded = pv.sample_from_state(state("6.333170261", NOW, "MWh"))
+        with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
+            result = self.choose(snapshot, recorded)
+        self.assertEqual(native.native_value, result.value)
+        self.assertIn("native snapshot precision at equal timestamp", "\n".join(logs.output))
+
+    def test_debug_distinguishes_new_counter_new_day_and_invalid_existing_data(self):
+        with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
+            self.choose(None, None, had_snapshot=False)
+            self.choose(None, pv.sample_from_state(state(12, NOW - timedelta(days=1))), daily=True)
+            with self.assertRaises(ValueError):
+                self.choose(pv.snapshot_sample(None, state(12, NOW + timedelta(seconds=1))), None)
+        output = "\n".join(logs.output)
+        for reason in ("new_sensor", "new_day", "previous local day", "timestamp after startup cutoff", "refusing zero"):
+            self.assertIn(reason, output)
+
 
 class RecorderQueryTests(unittest.TestCase):
     def setUp(self):
@@ -157,6 +191,34 @@ class RecorderQueryTests(unittest.TestCase):
         self.last = [state("unavailable", NOW - timedelta(seconds=1))]
         self.assertTrue(self.read().has_history)
 
+    def test_queue_wait_and_query_time_are_measured_independently(self):
+        self.last = [state(12, NOW - timedelta(seconds=1))]
+        with patch.object(pv, "monotonic", side_effect=[15, 15.25]):
+            result = pv.read_recorder_restore(self.hass, self.entity_id, NOW, None, 10)
+        self.assertEqual(5, result.queue_wait)
+        self.assertEqual(.25, result.query_time)
+        self.assertEqual(Decimal(12), result.sample.value)
+        self.assertEqual([], self.period_calls)
+
+    def test_query_failure_logs_timings_without_masking_the_error(self):
+        with patch.object(pv, "monotonic", side_effect=[12, 12.5]), \
+             patch.object(pv, "_read_recorder_restore", side_effect=OSError("database not ready")), \
+             self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
+            with self.assertRaisesRegex(OSError, "database not ready"):
+                pv.read_recorder_restore(self.hass, self.entity_id, NOW, None, 10)
+        output = "\n".join(logs.output)
+        self.assertIn(self.entity_id, output)
+        self.assertIn("queue_wait=2 s", output)
+        self.assertIn("query_time=0.500 s", output)
+
+    def test_fallback_query_debug_identifies_invalid_latest_state(self):
+        self.last = [state("unavailable", NOW - timedelta(seconds=1))]
+        self.period = [state(12, NOW - timedelta(minutes=1))]
+        with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
+            result = self.read()
+        self.assertEqual(Decimal(12), result.sample.value)
+        self.assertIn("searching bounded pre-start history", "\n".join(logs.output))
+
 
 class Cancel:
     def __init__(self):
@@ -203,6 +265,7 @@ class FakeRestoreSensor:
 class EntityRestoreTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.now = NOW
+        self.clock = 100.0
         self.native = None
         self.saved = state("12.471733", NOW - timedelta(minutes=7))
         self.recorded = pv.RecorderRestore(
@@ -223,6 +286,7 @@ class EntityRestoreTests(unittest.IsolatedAsyncioTestCase):
         self.namespace = {
             "asyncio": asyncio, "Decimal": Decimal, "InvalidOperation": InvalidOperation,
             "datetime": datetime, "timedelta": timedelta, "_LOGGER": logging.getLogger(__name__),
+            "monotonic": lambda: self.clock,
             "SigenergyEntity": FakeEntity, "RestoreSensor": FakeRestoreSensor,
             "callback": lambda fn: fn, "safe_decimal": lambda v: Decimal(str(v)) if v is not None else Decimal(0),
             "STATE_UNKNOWN": "unknown", "STATE_UNAVAILABLE": "unavailable",
@@ -290,6 +354,47 @@ class EntityRestoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, len(self.listeners))
         self.assertFalse(entity._pv_restore_pending)
         self.assertEqual(self.now, entity._last_integration_time)
+
+    async def test_info_logs_restore_source_value_unit_and_timings_once(self):
+        self.recorded = pv.RecorderRestore(self.recorded.sample, True, .25, .125)
+        entity = self.entity()
+        with self.assertLogs(self.namespace["_LOGGER"], level="INFO") as logs:
+            await entity.async_added_to_hass()
+            self.now += timedelta(seconds=5)
+            entity._integrate_on_state_change(state(2, NOW, "kW"), state(2, self.now, "kW"))
+        self.assertEqual(1, len(logs.records), "normal power changes must not add restore INFO logs")
+        output = logs.output[0]
+        for expected in ("from recorder", "12.500856 kWh", "sample_updated=", "attempts=1",
+                         "total_elapsed=0.000 s", "recorder_queue_wait=0.250 s", "recorder_query_time=0.125 s"):
+            self.assertIn(expected, output)
+
+    async def test_timeout_log_and_recovery_include_retry_elapsed_and_keep_one_query(self):
+        self.pending_future = asyncio.get_running_loop().create_future()
+        entity = self.entity()
+        with self.assertLogs(self.namespace["_LOGGER"], level="WARNING") as logs:
+            await entity.async_added_to_hass()
+        output = logs.output[0]
+        for expected in ("TimeoutError", "retrying in 60 seconds", "attempt=1", "recorder_job_pending=True"):
+            self.assertIn(expected, output)
+        self.assertIsNone(entity.native_value)
+        self.clock += 70
+        self.pending_future.set_result(pv.RecorderRestore(self.recorded.sample, True, 8, 4))
+        with self.assertLogs(self.namespace["_LOGGER"], level="INFO") as logs:
+            self.timers[0].callback(self.now)
+            await asyncio.gather(*self.tasks)
+        output = logs.output[0]
+        for expected in ("attempts=2", "total_elapsed=70.000 s", "recorder_queue_wait=8.000 s", "recorder_query_time=4.000 s"):
+            self.assertIn(expected, output)
+        self.assertEqual(1, len(self.executor_calls))
+        self.assertEqual(Decimal("12.500856"), entity.native_value)
+
+    async def test_manual_initialization_has_its_own_info_source(self):
+        entity = self.entity()
+        self.coordinator.hub.config_entry.data["values_to_init"] = {entity.entity_id: "0"}
+        with self.assertLogs(self.namespace["_LOGGER"], level="INFO") as logs:
+            await entity.async_added_to_hass()
+        self.assertIn("from manual_config: 0 kWh", logs.output[0])
+        self.assertEqual([], self.executor_calls)
 
     async def test_explicit_manual_reset_takes_priority_over_recorder(self):
         entity = self.entity()
