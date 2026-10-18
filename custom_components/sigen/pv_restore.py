@@ -188,7 +188,7 @@ def choose_restore(snapshot: EnergySample | None, recorder: RecorderRestore,
         return EnergySample(Decimal(0), now, "new_day")
     reason = "only valid candidate"
     if len(candidates) > 1:
-        reason = ("native snapshot precision at equal timestamp"
+        reason = ("snapshot preferred at equal timestamp"
                   if candidates[0].updated == candidates[1].updated else "newest timestamp")
     _LOGGER.debug("PV restore decision for %s: %s, %s kWh, timestamp=%s; %s",
                   label, sample.source, sample.value, sample.updated.isoformat(), reason)

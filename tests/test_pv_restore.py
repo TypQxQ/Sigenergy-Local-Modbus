@@ -117,14 +117,27 @@ class RestoreSelectionTests(unittest.TestCase):
         self.assertIn("newest timestamp", output)
         self.assertTrue(all(r.levelno == logging.DEBUG for r in logs.records))
 
-    def test_debug_tie_explains_native_precision(self):
+    def test_debug_tie_explains_snapshot_preference_and_keeps_native_precision(self):
         native = SimpleNamespace(native_value=Decimal("6333.170261123"), native_unit_of_measurement="kWh")
         snapshot = pv.snapshot_sample(native, state("6.333170261", NOW, "MWh"))
         recorded = pv.sample_from_state(state("6.333170261", NOW, "MWh"))
         with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
             result = self.choose(snapshot, recorded)
         self.assertEqual(native.native_value, result.value)
-        self.assertIn("native snapshot precision at equal timestamp", "\n".join(logs.output))
+        self.assertIn("snapshot preferred at equal timestamp", "\n".join(logs.output))
+
+    def test_debug_tie_does_not_claim_native_precision_for_stored_state_fallback(self):
+        for native in (None, SimpleNamespace(native_value="unknown", native_unit_of_measurement="kWh")):
+            with self.subTest(native=native):
+                snapshot = pv.snapshot_sample(native, state("6.333170261", NOW, "MWh"))
+                recorded = pv.sample_from_state(state("6.333170261", NOW, "MWh"))
+                with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
+                    result = self.choose(snapshot, recorded)
+                self.assertIs(snapshot, result)
+                self.assertEqual(Decimal("6333.170261"), result.value)
+                output = "\n".join(logs.output)
+                self.assertIn("snapshot preferred at equal timestamp", output)
+                self.assertNotIn("native snapshot precision", output)
 
     def test_debug_distinguishes_new_counter_new_day_and_invalid_existing_data(self):
         with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
