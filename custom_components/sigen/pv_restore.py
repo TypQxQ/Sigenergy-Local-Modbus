@@ -153,7 +153,7 @@ def _read_recorder_restore(hass, entity_id: str, cutoff: datetime,
 def choose_restore(snapshot: EnergySample | None, recorder: RecorderRestore,
                    had_snapshot: bool, cutoff: datetime, now: datetime,
                    daily: bool, *, entity_id: str | None = None) -> EnergySample:
-    """Use the newest valid sample, with native data winning an exact tie."""
+    """Use the newest valid sample, with the snapshot winning an exact tie."""
     label = entity_id or "<unknown>"
     _LOGGER.debug(
         "PV restore candidates for %s: snapshot=%s, recorder=%s, cutoff=%s, "
