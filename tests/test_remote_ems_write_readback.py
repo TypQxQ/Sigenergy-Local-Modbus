@@ -83,6 +83,9 @@ class _Hub:
         task.add_done_callback(self.tasks.discard)
         return task
 
+    def get_poll_diagnostics(self, device):
+        return {}
+
     async def async_write_parameter(self, *, device_type, device_identifier, register_name, value):
         self.writes.append((device_type, device_identifier, register_name, value))
         if not self.ignore_writes:

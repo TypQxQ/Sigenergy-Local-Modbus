@@ -117,14 +117,27 @@ class RestoreSelectionTests(unittest.TestCase):
         self.assertIn("newest timestamp", output)
         self.assertTrue(all(r.levelno == logging.DEBUG for r in logs.records))
 
-    def test_debug_tie_explains_native_precision(self):
+    def test_debug_tie_explains_snapshot_preference_and_keeps_native_precision(self):
         native = SimpleNamespace(native_value=Decimal("6333.170261123"), native_unit_of_measurement="kWh")
         snapshot = pv.snapshot_sample(native, state("6.333170261", NOW, "MWh"))
         recorded = pv.sample_from_state(state("6.333170261", NOW, "MWh"))
         with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
             result = self.choose(snapshot, recorded)
         self.assertEqual(native.native_value, result.value)
-        self.assertIn("native snapshot precision at equal timestamp", "\n".join(logs.output))
+        self.assertIn("snapshot preferred at equal timestamp", "\n".join(logs.output))
+
+    def test_debug_tie_does_not_claim_native_precision_for_stored_state_fallback(self):
+        for native in (None, SimpleNamespace(native_value="unknown", native_unit_of_measurement="kWh")):
+            with self.subTest(native=native):
+                snapshot = pv.snapshot_sample(native, state("6.333170261", NOW, "MWh"))
+                recorded = pv.sample_from_state(state("6.333170261", NOW, "MWh"))
+                with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
+                    result = self.choose(snapshot, recorded)
+                self.assertIs(snapshot, result)
+                self.assertEqual(Decimal("6333.170261"), result.value)
+                output = "\n".join(logs.output)
+                self.assertIn("snapshot preferred at equal timestamp", output)
+                self.assertNotIn("native snapshot precision", output)
 
     def test_debug_distinguishes_new_counter_new_day_and_invalid_existing_data(self):
         with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
@@ -219,6 +232,50 @@ class RecorderQueryTests(unittest.TestCase):
         self.assertEqual(Decimal(12), result.sample.value)
         self.assertIn("searching bounded pre-start history", "\n".join(logs.output))
 
+    def test_fallback_reasons_and_timestamps_explain_the_actual_rejection(self):
+        before = NOW - timedelta(seconds=1)
+        cases = [
+            (state("unknown", before), ["unknown_state"]),
+            (state("unavailable", before), ["unavailable_state"]),
+            (state("NaN", before), ["invalid_value"]),
+            (state(-1, before), ["invalid_value"]),
+            (state(12, before, "unrecognized-private-unit"), ["invalid_unit"]),
+            (state(12, NOW), ["at_or_after_cutoff"]),
+            (state("unknown", NOW + timedelta(seconds=1)),
+             ["at_or_after_cutoff", "unknown_state"]),
+        ]
+        for latest, reasons in cases:
+            with self.subTest(reasons=reasons):
+                self.last = [latest]
+                self.period = [state(11, NOW - timedelta(minutes=1))]
+                with self.assertLogs(pv._LOGGER, level="DEBUG") as logs:
+                    result = self.read()
+                self.assertEqual(Decimal(11), result.sample.value)
+                rejection = result.latest_state_rejection
+                self.assertEqual(reasons, rejection["reasons"])
+                self.assertEqual(latest.last_updated.isoformat(), rejection["latest_updated"])
+                self.assertEqual(NOW.isoformat(), rejection["cutoff"])
+                self.assertNotIn("unrecognized-private-unit", str(rejection))
+                self.assertNotIn("unrecognized-private-unit", str(logs.output))
+
+    def test_fallback_details_and_failed_query_timings_survive_the_exception(self):
+        self.last = [state("unavailable", NOW - timedelta(seconds=1))]
+        job = pv.RecorderJobProgress(10)
+        history = sys.modules["homeassistant.components.recorder.history"]
+        failure = OSError("private database credentials")
+        with patch.object(pv, "monotonic", side_effect=[12, 12.5]), \
+             patch.object(history, "state_changes_during_period", side_effect=failure):
+            with self.assertRaises(OSError) as caught:
+                pv.read_recorder_restore(self.hass, self.entity_id, NOW, None, 10, job)
+        self.assertIs(failure, caught.exception)
+        row = job.diagnostics(100)
+        self.assertEqual("failed", row["recorder_job_phase"])
+        self.assertEqual(2, row["recorder_queue_wait"])
+        self.assertEqual(.5, row["recorder_query_time"])
+        self.assertEqual("OSError", row["recorder_job_error_type"])
+        self.assertEqual(["unavailable_state"], row["recorder_latest_state_rejection"]["reasons"])
+        self.assertNotIn("private database", str(row))
+
 
 class Cancel:
     def __init__(self):
@@ -237,14 +294,18 @@ class FakeEntity:
         self.registry_entry = SimpleNamespace(created_at=self.fixture.registry_created)
         self.entity_description = description
         self.name = "PV Energy"
+        self._remove_callbacks = []
 
     async def async_added_to_hass(self):
         pass
 
     async def async_will_remove_from_hass(self):
-        pass
+        for remove in reversed(self._remove_callbacks):
+            remove()
+        self._remove_callbacks.clear()
 
     def async_on_remove(self, callback):
+        self._remove_callbacks.append(callback)
         self.fixture.on_remove.append(callback)
 
     def async_write_ha_state(self):
@@ -282,7 +343,10 @@ class EntityRestoreTests(unittest.IsolatedAsyncioTestCase):
             config_entries=SimpleNamespace(async_update_entry=lambda *args, **kwargs:
                                            self.config_updates.append(kwargs)))
         entry = SimpleNamespace(data={}, async_create_task=self.create_task)
-        self.coordinator = SimpleNamespace(hass=self.hass, hub=SimpleNamespace(config_entry=entry), fixture=self)
+        self.coordinator = SimpleNamespace(
+            hass=self.hass, hub=SimpleNamespace(config_entry=entry), fixture=self,
+            pv_restore_states={},
+        )
         self.namespace = {
             "asyncio": asyncio, "Decimal": Decimal, "InvalidOperation": InvalidOperation,
             "datetime": datetime, "timedelta": timedelta, "_LOGGER": logging.getLogger(__name__),
@@ -297,6 +361,7 @@ class EntityRestoreTests(unittest.IsolatedAsyncioTestCase):
             "_PV_RESTORE_TIMEOUT": 0, "_PV_RESTORE_RETRY": 60,
             "choose_restore": pv.choose_restore, "snapshot_sample": pv.snapshot_sample,
             "energy_in_kwh": pv.energy_in_kwh, "read_recorder_restore": object(),
+            "RecorderJobProgress": pv.RecorderJobProgress,
             "get_instance": lambda hass: SimpleNamespace(async_add_executor_job=self.executor),
             "dt_util": SimpleNamespace(now=lambda: self.now, utcnow=lambda: self.now.astimezone(UTC)),
             "IntegrationTrigger": SimpleNamespace(STATE_EVENT="state", TIME_ELAPSED="time"),
@@ -321,6 +386,11 @@ class EntityRestoreTests(unittest.IsolatedAsyncioTestCase):
         self.executor_calls.append(args)
         if self.pending_future is not None:
             return self.pending_future
+        job = args[-1]
+        started = args[-2] + (self.recorded.queue_wait or 0)
+        job.started(started)
+        job.finished(started + (self.recorded.query_time or 0),
+                     type(self.worker_error).__name__ if self.worker_error else None)
         future = asyncio.get_running_loop().create_future()
         if self.worker_error:
             future.set_exception(self.worker_error)
@@ -395,6 +465,10 @@ class EntityRestoreTests(unittest.IsolatedAsyncioTestCase):
             await entity.async_added_to_hass()
         self.assertIn("from manual_config: 0 kWh", logs.output[0])
         self.assertEqual([], self.executor_calls)
+        row = self.coordinator.pv_restore_states[entity.entity_id]
+        self.assertEqual("manual_config", row["source"])
+        self.assertEqual("0", row["native_value_kwh"])
+        self.assertEqual("restored", row["status"])
 
     async def test_explicit_manual_reset_takes_priority_over_recorder(self):
         entity = self.entity()
@@ -459,6 +533,186 @@ class EntityRestoreTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.gather(*self.tasks)
         self.assertEqual(1, len(self.executor_calls))
         self.assertEqual(Decimal("12.500856"), entity.native_value)
+
+    async def test_completion_restores_without_waiting_for_retry_timer(self):
+        self.pending_future = asyncio.get_running_loop().create_future()
+        entity = self.entity()
+        await entity.async_added_to_hass()
+        timer = self.timers[0]
+        self.clock += 12
+        self.pending_future.set_result(pv.RecorderRestore(self.recorded.sample, True, 8, 4))
+        await asyncio.sleep(0)
+        await asyncio.gather(*self.tasks)
+        self.assertTrue(timer.cancel.cancelled)
+        self.assertEqual(1, len(self.executor_calls))
+        self.assertEqual([Decimal("12.500856")], self.writes)
+        self.assertEqual(1, len(self.listeners))
+        row = self.coordinator.pv_restore_states[entity.entity_id]
+        self.assertEqual("restored", row["status"])
+        self.assertEqual("recorder", row["source"])
+        self.assertEqual("12.500856", row["native_value_kwh"])
+        self.assertEqual(12, row["total_elapsed"])
+        self.assertEqual(8, row["recorder_queue_wait"])
+        self.assertEqual(4, row["recorder_query_time"])
+        self.assertEqual("TimeoutError", row["last_error"]["type"])
+        self.assertFalse(row["recorder_job_pending"])
+        # An already-queued stale timer must not create a second restore.
+        timer.callback(self.now)
+        self.assertEqual(1, len(self.tasks))
+
+    async def test_completion_at_retry_timeout_is_not_lost_or_duplicated(self):
+        self.pending_future = asyncio.get_running_loop().create_future()
+        entity = self.entity()
+        await entity.async_added_to_hass()
+        real_wait = asyncio.wait
+        raced = False
+
+        async def racing_wait(futures, timeout):
+            nonlocal raced
+            if not raced:
+                raced = True
+                self.pending_future.set_result(self.recorded)
+                return set(), futures  # completion just missed the deadline
+            return await real_wait(futures, timeout=timeout)
+
+        self.namespace["asyncio"] = SimpleNamespace(wait=racing_wait)
+        self.timers[0].callback(self.now)
+        await asyncio.gather(*self.tasks)
+        await asyncio.sleep(0)
+        await asyncio.gather(*self.tasks)
+        self.assertEqual(1, len(self.executor_calls))
+        self.assertEqual([Decimal("12.500856")], self.writes)
+        self.assertEqual(1, len(self.listeners))
+
+    async def test_immediate_retry_failure_with_ha_task_factory_can_recover(self):
+        def create_ha_task(hass, coro, *, eager_start=True, **kwargs):
+            task = asyncio.Task(coro, loop=asyncio.get_running_loop(), eager_start=eager_start)
+            self.tasks.append(task)
+            return task
+
+        def unavailable_recorder(hass):
+            raise OSError("recorder not ready")
+
+        original_recorder = self.namespace["get_instance"]
+        self.namespace["get_instance"] = unavailable_recorder
+        self.coordinator.hub.config_entry.async_create_task = create_ha_task
+        entity = self.entity()
+        await entity.async_added_to_hass()
+        self.timers[-1].callback(self.now)
+        await asyncio.gather(*self.tasks)
+        self.namespace["get_instance"] = original_recorder
+        self.timers[-1].callback(self.now)
+        await asyncio.gather(*self.tasks)
+        self.assertEqual(Decimal("12.500856"), entity.native_value)
+        self.assertEqual(1, len(self.executor_calls))
+        self.assertEqual(1, len(self.listeners))
+
+    async def test_late_query_failure_keeps_backoff_and_never_resets_energy(self):
+        self.pending_future = asyncio.get_running_loop().create_future()
+        entity = self.entity()
+        await entity.async_added_to_hass()
+        self.pending_future.set_exception(OSError("private database connection string"))
+        await asyncio.sleep(0)
+        await asyncio.gather(*self.tasks)
+        self.assertIsNone(entity.native_value)
+        self.assertEqual(1, len(self.executor_calls))
+        self.assertEqual([], self.listeners)
+        row = self.coordinator.pv_restore_states[entity.entity_id]
+        self.assertEqual("retry_scheduled", row["status"])
+        self.assertEqual("OSError", row["last_error"]["type"])
+        self.assertEqual("recorder", row["last_error"]["stage"])
+        self.assertNotIn("private database", str(row))
+        self.assertEqual(60, self.timers[-1].delay)
+        self.pending_future = None
+        self.timers[-1].callback(self.now)
+        await asyncio.gather(*self.tasks)
+        self.assertEqual(2, len(self.executor_calls))
+        self.assertEqual(Decimal("12.500856"), entity.native_value)
+
+    async def test_failed_job_timings_are_retained_after_successful_retry(self):
+        self.worker_error = OSError("private database error")
+        self.recorded = pv.RecorderRestore(None, True, 2, .5)
+        entity = self.entity()
+        await entity.async_added_to_hass()
+        row = self.coordinator.pv_restore_states[entity.entity_id]
+        last_error = row["last_error"]
+        self.assertEqual(2, last_error["recorder"]["recorder_queue_wait"])
+        self.assertEqual(.5, last_error["recorder"]["recorder_query_time"])
+        self.assertEqual("failed", last_error["recorder"]["recorder_job_phase"])
+        self.worker_error = None
+        self.recorded = pv.RecorderRestore(
+            pv.sample_from_state(state("12.500856", NOW - timedelta(minutes=1))), True, .25, .125,
+            {"reasons": ["unavailable_state"], "latest_updated": NOW.isoformat(),
+             "cutoff": NOW.isoformat()},
+        )
+        self.timers[-1].callback(self.now)
+        await asyncio.gather(*self.tasks)
+        self.assertEqual("restored", row["status"])
+        self.assertEqual(Decimal("12.500856"), entity.native_value)
+        self.assertIs(last_error, row["last_error"])
+        self.assertEqual(2, row["last_error"]["recorder"]["recorder_queue_wait"])
+        self.assertEqual(["unavailable_state"], row["recorder_latest_state_rejection"]["reasons"])
+        current_job = row["_recorder_job"].diagnostics(self.clock)
+        self.assertEqual("complete", current_job["recorder_job_phase"])
+        self.assertEqual(.25, current_job["recorder_queue_wait"])
+        self.assertEqual(.125, current_job["recorder_query_time"])
+        self.assertNotIn("private database", str(row))
+
+    async def test_cancelled_recorder_future_retries_but_entity_removal_does_not(self):
+        self.pending_future = asyncio.get_running_loop().create_future()
+        entity = self.entity()
+        await entity.async_added_to_hass()
+        self.pending_future.cancel()
+        await asyncio.sleep(0)
+        await asyncio.gather(*self.tasks)
+        self.assertIsNone(entity.native_value)
+        self.assertEqual("retry_scheduled", self.coordinator.pv_restore_states[entity.entity_id]["status"])
+        phase = self.coordinator.pv_restore_states[entity.entity_id]["_recorder_job"].diagnostics(self.clock)
+        self.assertEqual("cancelled", phase["recorder_job_phase"])
+        self.assertTrue(phase["recorder_future_cancelled"])
+        self.assertEqual(60, self.timers[-1].delay)
+        self.pending_future = None
+        self.timers[-1].callback(self.now)
+        await asyncio.gather(*self.tasks)
+        self.assertEqual(Decimal("12.500856"), entity.native_value)
+
+    async def test_removal_after_completion_queued_prevents_restore_and_clears_diagnostics(self):
+        self.pending_future = asyncio.get_running_loop().create_future()
+        entity = self.entity()
+        await entity.async_added_to_hass()
+        self.pending_future.set_result(self.recorded)
+        await entity.async_will_remove_from_hass()
+        await asyncio.sleep(0)
+        self.assertEqual([], self.tasks)
+        self.assertEqual([], self.writes)
+        self.assertEqual({}, self.coordinator.pv_restore_states)
+
+    async def test_old_entity_cleanup_cannot_remove_reloaded_entity_diagnostics(self):
+        old = self.entity()
+        await old.async_added_to_hass()
+        fresh = self.entity()
+        await fresh.async_added_to_hass()
+        row = self.coordinator.pv_restore_states[fresh.entity_id]
+        await old.async_will_remove_from_hass()
+        self.assertIs(row, self.coordinator.pv_restore_states[fresh.entity_id])
+        await fresh.async_will_remove_from_hass()
+        self.assertEqual({}, self.coordinator.pv_restore_states)
+
+    async def test_late_completion_crossing_midnight_resets_only_daily_counter(self):
+        self.now = datetime(2026, 10, 17, 23, 59, tzinfo=UTC)
+        self.saved = state(12, self.now - timedelta(minutes=1))
+        self.recorded = pv.RecorderRestore(pv.sample_from_state(self.saved), True)
+        self.pending_future = asyncio.get_running_loop().create_future()
+        entity = self.entity(daily=True)
+        await entity.async_added_to_hass()
+        self.now += timedelta(minutes=2)
+        self.pending_future.set_result(self.recorded)
+        await asyncio.sleep(0)
+        await asyncio.gather(*self.tasks)
+        self.assertEqual(Decimal(0), entity.native_value)
+        self.assertEqual("new_day", self.coordinator.pv_restore_states[entity.entity_id]["source"])
+        self.assertEqual(1, len(self.points))
+        self.assertEqual(1, len(self.listeners))
 
     async def test_removal_cancels_pending_read_and_prevents_late_retry(self):
         self.pending_future = asyncio.get_running_loop().create_future()

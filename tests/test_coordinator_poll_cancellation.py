@@ -80,11 +80,13 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
         async_read_inverter_data=read_device,
         async_read_dc_charger_data=read_dc,
         async_read_ac_charger_data=read_device,
+        get_poll_diagnostics=lambda device: {},
     )
     coordinator = SimpleNamespace(
         hub=hub, data=None, largest_update_interval=0.0, latest_fetch_time=0.0,
         _update_sequence=0, _last_successful_update_sequence=0,
         update_timeout_count=0, update_failure_count=0,
+        partial_update_count=0, _degraded_devices=set(),
     )
     coordinator.poll = MethodType(namespace["_async_update_data"], coordinator)
     return coordinator, child_tasks, all_started, release, events

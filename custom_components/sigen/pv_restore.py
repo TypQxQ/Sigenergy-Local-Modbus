@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 from datetime import datetime, timedelta
 from decimal import Decimal, DecimalException, InvalidOperation
 import logging
 from time import monotonic
+from threading import Lock
 from typing import Any
 
 
@@ -53,6 +55,83 @@ class RecorderRestore:
     has_history: bool
     queue_wait: float | None = None
     query_time: float | None = None
+    latest_state_rejection: dict[str, Any] | None = None
+
+
+class RecorderJobProgress:
+    """Worker-owned measurements, safely sampled by the HA event loop.
+
+    No entity/HA references are retained. A late worker can finish after unload
+    without updating another entity's status or calling back into a stopped HA.
+    """
+
+    def __init__(self, queued_at: float) -> None:
+        self._lock = Lock()
+        self._queued_at = queued_at
+        self._started_at: float | None = None
+        self._finished_at: float | None = None
+        self._cancelled_at: float | None = None
+        self._error_type: str | None = None
+        self._rejection: dict[str, Any] | None = None
+
+    def started(self, at: float) -> None:
+        with self._lock:
+            self._started_at = at
+
+    def finished(self, at: float, error_type: str | None = None) -> None:
+        with self._lock:
+            self._finished_at = at
+            self._error_type = error_type
+
+    def rejected_latest(self, rejection: dict[str, Any]) -> None:
+        with self._lock:
+            self._rejection = deepcopy(rejection)
+
+    def future_cancelled(self, at: float) -> None:
+        with self._lock:
+            self._cancelled_at = at
+
+    def diagnostics(self, now: float) -> dict[str, Any]:
+        with self._lock:
+            started, finished = self._started_at, self._finished_at
+            end = (finished if finished is not None else
+                   self._cancelled_at if started is None and self._cancelled_at is not None else now)
+            queue_end = started if started is not None else end
+            query_elapsed = max(0.0, end - started) if started is not None else None
+            phase = ("failed" if self._error_type else "complete") if finished is not None else (
+                "querying" if started is not None else
+                "cancelled" if self._cancelled_at is not None else "queued")
+            return {
+                "recorder_job_phase": phase,
+                "recorder_queue_wait": max(0.0, started - self._queued_at) if started is not None else None,
+                "recorder_queue_elapsed": max(0.0, queue_end - self._queued_at),
+                "recorder_query_time": query_elapsed if finished is not None else None,
+                "recorder_query_elapsed": query_elapsed,
+                "recorder_job_error_type": self._error_type,
+                "recorder_future_cancelled": self._cancelled_at is not None,
+                "recorder_latest_state_rejection": deepcopy(self._rejection),
+            }
+
+
+def _latest_state_rejection(state: Any, cutoff: datetime) -> dict[str, Any]:
+    """Explain every rejecting condition without recording arbitrary state text."""
+    reasons = []
+    if state.last_updated >= cutoff:
+        reasons.append("at_or_after_cutoff")
+    number = _number(state.state)
+    if state.state in ("unknown", "unavailable"):
+        reasons.append(f"{state.state}_state")
+    elif number is None:
+        reasons.append("invalid_value")
+    unit = state.attributes.get("unit_of_measurement")
+    if not isinstance(unit, str) or unit not in ENERGY_TO_KWH:
+        reasons.append("invalid_unit")
+    elif number is not None and energy_in_kwh(state.state, unit) is None:
+        reasons.append("invalid_value")
+    return {
+        "reasons": reasons, "latest_updated": state.last_updated.isoformat(),
+        "cutoff": cutoff.isoformat(),
+    }
 
 
 def sample_from_state(state: Any) -> EnergySample | None:
@@ -90,29 +169,40 @@ def snapshot_sample(native_data: Any, state: Any) -> EnergySample | None:
 
 def read_recorder_restore(hass, entity_id: str, cutoff: datetime,
                           snapshot: EnergySample | None,
-                          queued_at: float | None = None) -> RecorderRestore:
+                          queued_at: float | None = None,
+                          progress: RecorderJobProgress | None = None) -> RecorderRestore:
     """Measure executor queue time separately from the history query itself."""
     started = monotonic()
     queue_wait = max(0.0, started - queued_at) if queued_at is not None else None
+    if progress is not None:
+        progress.started(started)
     try:
-        result = _read_recorder_restore(hass, entity_id, cutoff, snapshot)
-    except Exception:
+        result = _read_recorder_restore(hass, entity_id, cutoff, snapshot, progress)
+    except Exception as error:
+        finished = monotonic()
+        if progress is not None:
+            progress.finished(finished, type(error).__name__)
         _LOGGER.debug(
             "PV restore Recorder query failed for %s: queue_wait=%s s, query_time=%.3f s",
-            entity_id, queue_wait, monotonic() - started, exc_info=True,
+            entity_id, queue_wait, finished - started, exc_info=True,
         )
         raise
-    query_time = monotonic() - started
+    finished = monotonic()
+    query_time = finished - started
+    if progress is not None:
+        progress.finished(finished)
     _LOGGER.debug(
         "PV restore Recorder query completed for %s: queue_wait=%s s, "
         "query_time=%.3f s, has_history=%s, sample=%s",
         entity_id, queue_wait, query_time, result.has_history, result.sample,
     )
-    return RecorderRestore(result.sample, result.has_history, queue_wait, query_time)
+    return RecorderRestore(result.sample, result.has_history, queue_wait, query_time,
+                           result.latest_state_rejection)
 
 
 def _read_recorder_restore(hass, entity_id: str, cutoff: datetime,
-                           snapshot: EnergySample | None) -> RecorderRestore:
+                           snapshot: EnergySample | None,
+                           progress: RecorderJobProgress | None = None) -> RecorderRestore:
     """Run in Recorder's executor; normally one indexed last-state query.
 
     Only a trailing unavailable/invalid record requires a bounded history read.
@@ -131,10 +221,13 @@ def _read_recorder_restore(hass, entity_id: str, cutoff: datetime,
         _LOGGER.debug("PV restore Recorder has no history for %s", entity_id)
         return RecorderRestore(None, False)
 
+    rejection = _latest_state_rejection(latest[0], cutoff)
+    if progress is not None:
+        progress.rejected_latest(rejection)
     _LOGGER.debug(
         "PV restore Recorder latest state unusable for %s "
-        "(after cutoff or invalid value/unit); searching bounded pre-start history",
-        entity_id,
+        "(reasons=%s, latest_updated=%s, cutoff=%s); searching bounded pre-start history",
+        entity_id, rejection["reasons"], rejection["latest_updated"], rejection["cutoff"],
     )
     # Snapshots are normally minutes old. Without one, cover two recent days
     # for daily counters without scanning a lifetime of high-frequency states.
@@ -147,13 +240,13 @@ def _read_recorder_restore(hass, entity_id: str, cutoff: datetime,
                   if state.last_updated < cutoff
                   and (candidate := sample_from_state(state)) is not None]
     return RecorderRestore(max(candidates, key=lambda item: item.updated, default=None),
-                           bool(prior or states))
+                           bool(prior or states), latest_state_rejection=rejection)
 
 
 def choose_restore(snapshot: EnergySample | None, recorder: RecorderRestore,
                    had_snapshot: bool, cutoff: datetime, now: datetime,
                    daily: bool, *, entity_id: str | None = None) -> EnergySample:
-    """Use the newest valid sample, with native data winning an exact tie."""
+    """Use the newest valid sample, with the snapshot winning an exact tie."""
     label = entity_id or "<unknown>"
     _LOGGER.debug(
         "PV restore candidates for %s: snapshot=%s, recorder=%s, cutoff=%s, "
@@ -188,7 +281,7 @@ def choose_restore(snapshot: EnergySample | None, recorder: RecorderRestore,
         return EnergySample(Decimal(0), now, "new_day")
     reason = "only valid candidate"
     if len(candidates) > 1:
-        reason = ("native snapshot precision at equal timestamp"
+        reason = ("snapshot preferred at equal timestamp"
                   if candidates[0].updated == candidates[1].updated else "newest timestamp")
     _LOGGER.debug("PV restore decision for %s: %s, %s kWh, timestamp=%s; %s",
                   label, sample.source, sample.value, sample.updated.isoformat(), reason)

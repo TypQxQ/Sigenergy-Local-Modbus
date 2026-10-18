@@ -184,6 +184,21 @@ class TestSigenergyModbusHub(unittest.IsolatedAsyncioTestCase):
         self._build_hub()
         self.assertEqual(1, len(self.mock_connections))
 
+    async def test_poll_diagnostics_are_dispatched_to_each_device_group(self) -> None:
+        hub, _unit = self._build_hub()
+        groups = {
+            "plant": hub._plant._group,
+            "inverter:Sigen Inverter": hub._inverters["Sigen Inverter"]._inverter_group,
+            "ac_charger:Sigen AC Charger": hub._ac_chargers["Sigen AC Charger"]._group,
+        }
+        for index, (device, group) in enumerate(groups.items(), 1):
+            group._poll_quality.update(status="partial", partial_update_count=index)
+        for index, device in enumerate(groups, 1):
+            quality = hub.get_poll_diagnostics(device)
+            self.assertEqual(index, quality["partial_update_count"])
+            self.assertEqual("partial", quality["status"])
+        self.assertEqual({}, hub.get_poll_diagnostics("dc_charger:Sigen Inverter"))
+
     async def test_reads_across_all_device_types(self) -> None:
         hub, _ = self._build_hub()
 

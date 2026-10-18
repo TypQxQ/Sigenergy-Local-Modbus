@@ -462,6 +462,23 @@ class SigenergyModbusHub:
                 self._discovery_backoff[endpoint] = groups[index].discovery_retry_at
             return
 
+    def get_poll_diagnostics(self, device: str) -> dict:
+        """Return the most recent completed read's quality for one group."""
+        role, _, name = device.partition(":")
+        group = None
+        if role == "plant":
+            group = self._plant._group
+        elif role in {"inverter", "dc_charger"}:
+            inverter = self._inverters.get(name)
+            if inverter is not None:
+                group = (inverter._inverter_group if role == "inverter"
+                         else inverter._dc_charger_group)
+        elif role == "ac_charger":
+            charger = self._ac_chargers.get(name)
+            if charger is not None:
+                group = charger._group
+        return group.poll_diagnostics() if group is not None else {}
+
     def discovery_diagnostics(self):
         return {
             "bootstrap_time": self.bootstrap_time,

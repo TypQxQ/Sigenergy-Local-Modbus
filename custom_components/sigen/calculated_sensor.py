@@ -43,7 +43,8 @@ from .common import (
 )
 from .sigen_entity import SigenergyEntity # Import the new base class
 from .pv_restore import (
-    ENERGY_TO_KWH, choose_restore, energy_in_kwh, read_recorder_restore, snapshot_sample,
+    ENERGY_TO_KWH, RecorderJobProgress, choose_restore, energy_in_kwh,
+    read_recorder_restore, snapshot_sample,
 )
 
 if TYPE_CHECKING:
@@ -1370,6 +1371,8 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         self._pv_restore_started = None
         self._pv_restore_read_started = None
         self._pv_restore_attempts = 0
+        self._pv_restore_watched_read = None
+        self._pv_restore_status: dict[str, Any] = {}
 
         # Device info is now handled by SigenergyEntity's __init__
 
@@ -1444,19 +1447,41 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
     async def _async_restore_pv_energy(self) -> bool:
         """Verify startup energy before publishing or scheduling integration."""
+        if self._pv_restore_removed or not self._pv_restore_pending:
+            return False
         attempt_started = monotonic()
         if self._pv_restore_started is None:
             self._pv_restore_started = attempt_started
         self._pv_restore_attempts += 1
+        stage = "recorder"
+        self._pv_restore_status.update(
+            status="reading", attempts=self._pv_restore_attempts,
+            _started_at=self._pv_restore_started,
+        )
         try:
             if self._pv_restore_read is None:
+                self._pv_restore_status.pop("_recorder_job", None)
+                self._pv_restore_status.update(
+                    recorder_queue_wait=None, recorder_query_time=None,
+                    recorder_latest_state_rejection=None,
+                )
                 recorder = get_instance(self.hass)
                 self._pv_restore_read_started = monotonic()
-                self._pv_restore_read = recorder.async_add_executor_job(
-                    read_recorder_restore, self.hass, self.entity_id,
-                    self._pv_restore_cutoff, self._pv_restore_snapshot,
-                    self._pv_restore_read_started,
-                )
+                job = RecorderJobProgress(self._pv_restore_read_started)
+                self._pv_restore_status["_recorder_job"] = job
+                try:
+                    self._pv_restore_read = recorder.async_add_executor_job(
+                        read_recorder_restore, self.hass, self.entity_id,
+                        self._pv_restore_cutoff, self._pv_restore_snapshot,
+                        self._pv_restore_read_started, job,
+                    )
+                except Exception as error:
+                    job.finished(monotonic(), type(error).__name__)
+                    raise
+            self._pv_restore_status.update(
+                recorder_job_pending=not self._pv_restore_read.done(),
+                _job_started_at=self._pv_restore_read_started,
+            )
             # Keep a slow executor job for the next attempt instead of stacking
             # new database queries after each timeout.
             done, _pending = await asyncio.wait(
@@ -1465,7 +1490,19 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             if not done:
                 raise TimeoutError("PV restore history query is still running")
             finished, self._pv_restore_read = self._pv_restore_read, None
+            finished.remove_done_callback(self._pv_restore_read_finished)
+            self._pv_restore_watched_read = None
+            if finished.cancelled():
+                if (job := self._pv_restore_status.get("_recorder_job")) is not None:
+                    job.future_cancelled(monotonic())
+                raise RuntimeError("PV restore history job was cancelled")
             recorded = finished.result()
+            stage = "selection"
+            self._pv_restore_status.update(
+                recorder_queue_wait=recorded.queue_wait,
+                recorder_query_time=recorded.query_time,
+                recorder_latest_state_rejection=recorded.latest_state_rejection,
+            )
             result = choose_restore(
                 self._pv_restore_snapshot, recorded,
                 self._pv_restore_had_snapshot, self._pv_restore_cutoff,
@@ -1476,6 +1513,16 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 return False
             self._state = self._last_valid_state = result.value
             self._pv_restore_pending = False
+            if self._pv_restore_retry_cancel is not None:
+                self._pv_restore_retry_cancel()
+                self._pv_restore_retry_cancel = None
+            self._pv_restore_status.update(
+                status="restored", source=result.source, native_value_kwh=str(result.value),
+                sample_updated=result.updated.isoformat(), recorder_job_pending=False,
+                attempt_wait=monotonic() - attempt_started,
+                total_elapsed=monotonic() - self._pv_restore_started,
+                _started_at=None, _job_started_at=None,
+            )
             queue_wait = f"{recorded.queue_wait:.3f}" if recorded.queue_wait is not None else "unknown"
             query_time = f"{recorded.query_time:.3f}" if recorded.query_time is not None else "unknown"
             _LOGGER.info(
@@ -1489,18 +1536,61 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             return True
         except Exception as error:  # A Recorder outage must not reset energy.
             pending = self._pv_restore_read is not None and not self._pv_restore_read.done()
+            job = self._pv_restore_status.get("_recorder_job")
+            measurements = job.diagnostics(monotonic()) if job is not None else {}
+            last_error: dict[str, Any] = {"type": type(error).__name__, "stage": stage}
+            if measurements:
+                last_error["recorder"] = measurements
+            self._pv_restore_status.update(
+                status="waiting_for_recorder" if pending else "retry_scheduled",
+                last_error=last_error,
+                last_error_at=dt_util.utcnow().isoformat(),
+                recorder_job_pending=pending,
+                _job_started_at=self._pv_restore_read_started if pending else None,
+                attempt_wait=monotonic() - attempt_started,
+            )
             job_age = (monotonic() - self._pv_restore_read_started
                        if self._pv_restore_read_started is not None else None)
             _LOGGER.warning(
-                "PV energy restore for %s failed (%s: %s); retrying in %s seconds "
+                "PV energy restore for %s failed (%s: %s); retrying in %s seconds%s "
                 "(attempt=%s, attempt_wait=%.3f s, total_elapsed=%.3f s, "
-                "recorder_job_pending=%s, recorder_job_age=%s s)",
+                "recorder_job_pending=%s, recorder_job_age=%s s, recorder_job_phase=%s, "
+                "recorder_queue_wait=%s s, recorder_query_elapsed=%s s)",
                 self.entity_id, type(error).__name__, error, _PV_RESTORE_RETRY,
+                " or when the pending Recorder job completes" if pending else "",
                 self._pv_restore_attempts, monotonic() - attempt_started,
                 monotonic() - self._pv_restore_started, pending, job_age,
+                measurements.get("recorder_job_phase"),
+                measurements.get("recorder_queue_wait"),
+                measurements.get("recorder_query_elapsed"),
             )
             self._schedule_pv_restore_retry()
+            # Register only after the initial wait, so an immediately completed
+            # job cannot race entity setup. Timer and completion share one task.
+            if (self._pv_restore_read is not None
+                    and self._pv_restore_watched_read is not self._pv_restore_read):
+                self._pv_restore_watched_read = self._pv_restore_read
+                self._pv_restore_read.add_done_callback(self._pv_restore_read_finished)
             return False
+
+    @callback
+    def _pv_restore_read_finished(self, finished) -> None:
+        if finished is self._pv_restore_read and not self._pv_restore_removed:
+            self._start_pv_restore_retry()
+
+    @callback
+    def _start_pv_restore_retry(self) -> None:
+        if (self._pv_restore_removed or not self._pv_restore_pending
+                or self._pv_restore_task is not None):
+            return
+        if self._pv_restore_retry_cancel is not None:
+            self._pv_restore_retry_cancel()
+            self._pv_restore_retry_cancel = None
+        self._pv_restore_task = self.hub.config_entry.async_create_task(
+            self.hass, self._async_retry_pv_restore(), name="Restore Sigenergy PV energy",
+            # Assign the task before it can finish or schedule another retry.
+            eager_start=False,
+        )
 
     def _schedule_pv_restore_retry(self) -> None:
         if self._pv_restore_removed or self._pv_restore_retry_cancel is not None:
@@ -1509,11 +1599,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         @callback
         def retry(_now):
             self._pv_restore_retry_cancel = None
-            if not self._pv_restore_removed:
-                self._pv_restore_task = self.hub.config_entry.async_create_task(
-                    self.hass, self._async_retry_pv_restore(),
-                    name="Restore Sigenergy PV energy",
-                )
+            self._start_pv_restore_retry()
 
         self._pv_restore_retry_cancel = async_call_later(self.hass, _PV_RESTORE_RETRY, retry)
 
@@ -1524,6 +1610,17 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 self.async_write_ha_state()
         finally:
             self._pv_restore_task = None
+            # Completion can coincide with this attempt's timeout while its
+            # callback still sees an active task. Consume it on the next task.
+            if (self._pv_restore_read is not None and self._pv_restore_read.done()
+                    and not self._pv_restore_read.cancelled()):
+                self._start_pv_restore_retry()
+
+    @callback
+    def _remove_pv_restore_diagnostics(self) -> None:
+        states = self.coordinator.pv_restore_states
+        if states.get(self.entity_id) is self._pv_restore_status:
+            states.pop(self.entity_id, None)
 
     @callback
     def _cancel_pv_restore(self) -> None:
@@ -1534,6 +1631,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         if self._pv_restore_task is not None:
             self._pv_restore_task.cancel()
         if self._pv_restore_read is not None:
+            self._pv_restore_read.remove_done_callback(self._pv_restore_read_finished)
             if self._pv_restore_read.done() and not self._pv_restore_read.cancelled():
                 self._pv_restore_read.exception()
             else:
@@ -1619,6 +1717,17 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         """Handle entity which will be added."""
         await super().async_added_to_hass()
         self.log_this_entity = self.entity_id in LOG_THIS_ENTITY
+        if self.entity_description.key in _PV_INTEGRATOR_KEYS:
+            self._pv_restore_status = {
+                "status": "pending", "source": None, "native_value_kwh": None,
+                "sample_updated": None, "attempts": 0, "last_error": None,
+                "last_error_at": None, "recorder_job_pending": False,
+                "recorder_queue_wait": None, "recorder_query_time": None,
+                "recorder_job_phase": None, "recorder_latest_state_rejection": None,
+                "attempt_wait": 0.0, "total_elapsed": 0.0,
+            }
+            self.coordinator.pv_restore_states[self.entity_id] = self._pv_restore_status
+            self.async_on_remove(self._remove_pv_restore_diagnostics)
         restore_value = None
         restored_from_config = False  # Flag to track if value came from config
 
@@ -1752,6 +1861,10 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
 
         if (restored_from_config and self._state is not None
                 and self.entity_description.key in _PV_INTEGRATOR_KEYS):
+            self._pv_restore_status.update(
+                status="restored", source="manual_config", native_value_kwh=str(self._state),
+                initialized_at=dt_util.utcnow().isoformat(),
+            )
             _LOGGER.info(
                 "Restored PV energy for %s from manual_config: %s kWh (initialized_at=%s)",
                 self.entity_id, self._state, dt_util.utcnow().isoformat(),
