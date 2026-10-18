@@ -187,6 +187,7 @@ async def async_get_config_entry_diagnostics(
 
     diagnostics_data = {
         "discovery": hub.discovery_diagnostics(),
+        "pv_restore": coordinator.pv_restore_diagnostics(),
         "entry": async_redact_data(entry.as_dict(), TO_REDACT),
         "coordinator": {
             "last_update_success": coordinator.last_update_success,
@@ -198,6 +199,7 @@ async def async_get_config_entry_diagnostics(
             "startup_fetch_time": coordinator.startup_fetch_time,
             "update_timeout_count": coordinator.update_timeout_count,
             "update_failure_count": coordinator.update_failure_count,
+            "partial_update_count": coordinator.partial_update_count,
             "latest_update_timing": coordinator.latest_update_timing,
         },
         "data": async_redact_data(coordinator.data, TO_REDACT),
@@ -287,6 +289,7 @@ async def async_get_device_diagnostics(
     # Base diagnostic data for the device
     device_diagnostics = {
         "discovery": hub.discovery_diagnostics(),
+        "pv_restore": coordinator.pv_restore_diagnostics(),
         "device_info": async_redact_data({
             "name": device.name,
             "model": device.model,
@@ -307,6 +310,7 @@ async def async_get_device_diagnostics(
             "startup_fetch_time": coordinator.startup_fetch_time,
             "update_timeout_count": coordinator.update_timeout_count,
             "update_failure_count": coordinator.update_failure_count,
+            "partial_update_count": coordinator.partial_update_count,
             "latest_update_timing": coordinator.latest_update_timing,
             "sensors_initialized": coordinator.data.get("_sensors_initialized", False) if coordinator.data else False,
         },

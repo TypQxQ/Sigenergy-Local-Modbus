@@ -42,7 +42,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.startup_fetch_time: float | None = None
         self.update_timeout_count = 0
         self.update_failure_count = 0
+        self.partial_update_count = 0
         self.latest_update_timing: dict[str, Any] = {}
+        self._degraded_devices: set[str] = set()
+        self.pv_restore_states: dict[str, dict[str, Any]] = {}
 
         if scan_interval <= 1:
             scan_interval = DEFAULT_SCAN_INTERVAL
@@ -54,6 +57,19 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             name=name,
             update_interval=timedelta(seconds=scan_interval),
         )
+
+    def pv_restore_diagnostics(self) -> dict[str, Any]:
+        """Copy restore status, computing pending ages without database work."""
+        now = time.monotonic()
+        result = {}
+        for entity_id, state in self.pv_restore_states.items():
+            row = {key: value for key, value in state.items() if not key.startswith("_")}
+            if (started := state.get("_started_at")) is not None:
+                row["total_elapsed"] = max(0.0, now - started)
+            job_started = state.get("_job_started_at")
+            row["recorder_job_age"] = max(0.0, now - job_started) if job_started is not None else None
+            result[entity_id] = row
+        return result
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Update data via Modbus library."""
@@ -69,15 +85,19 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         async def timed_read(device: str, read, *args) -> Dict[str, Any]:
             started = time.perf_counter()
             device_status = "cancelled"
+            quality: dict[str, Any] = {}
             try:
                 result = await read(*args)
-                device_status = "success"
+                quality = self.hub.get_poll_diagnostics(device)
+                device_status = quality.get("status", "success")
                 return result
-            except Exception:
+            except Exception as error:
                 device_status = "error"
+                quality = {"error_type": type(error).__name__}
                 raise
             finally:
                 device_timings[device] = {
+                    **quality,
                     "duration": time.perf_counter() - started,
                     "status": device_status,
                 }
@@ -108,15 +128,13 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 for name, task in inverter_tasks.items():
                     try:
                         inverter_data[name] = await task
-                    except Exception as e:
-                        _LOGGER.error("Error fetching inverter %s data: %s", name, e)
+                    except Exception:
                         inverter_data[name] = {}
                 dc_charger_data: dict[str, Any] = {}
                 for name, task in dc_tasks.items():
                     try:
                         dc_charger_data[name] = await task
-                    except Exception as e:
-                        _LOGGER.error("Error fetching DC charger %s data: %s", name, e)
+                    except Exception:
                         dc_charger_data[name] = {}
 
                 # Fetch AC charger data concurrently
@@ -131,8 +149,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 for name, task in ac_tasks.items():
                     try:
                         ac_charger_data[name] = await task
-                    except Exception as e:
-                        _LOGGER.error("Error fetching AC charger %s data: %s", name, e)
+                    except Exception:
                         ac_charger_data[name] = {}
 
                 # Merge fetched data into existing coordinator data
@@ -148,7 +165,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("RBS-coordinator-106-coordinator-post Merged fetched, len: %s data: %s", len(self.data), self.data)
                 
                 # Return the updated, complete data structure
-                status = "success"
+                status = ("partial" if any(item["status"] in {"partial", "error"}
+                          for item in device_timings.values()) else "success")
+                if status == "partial":
+                    self.partial_update_count += 1
                 self._last_successful_update_sequence = update_sequence
                 return self.data
         except asyncio.TimeoutError as exception:
@@ -179,7 +199,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # they overlap and must not be summed as wire transaction time.
                 self.latest_fetch_time = fetch_time
                 self.largest_update_interval = max(self.largest_update_interval, fetch_time)
-                if phase == "startup" and status == "success":
+                if phase == "startup" and status in {"success", "partial"}:
                     self.startup_fetch_time = fetch_time
                 self.latest_update_timing = {
                     "phase": phase,
@@ -190,6 +210,20 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "total_time": time.perf_counter() - start_time,
                     "devices": device_timings,
                 }
+                for device, timing in device_timings.items():
+                    device_status = timing["status"]
+                    if device_status in {"partial", "error"}:
+                        if device not in self._degraded_devices:
+                            _LOGGER.warning(
+                                "Sigenergy read degraded for %s: status=%s, failed_fields=%s, "
+                                "failed_blocks=%s, error_type=%s",
+                                device, device_status, timing.get("failed_fields", []),
+                                timing.get("failed_blocks", []), timing.get("error_type"),
+                            )
+                        self._degraded_devices.add(device)
+                    elif device_status == "success" and device in self._degraded_devices:
+                        self._degraded_devices.remove(device)
+                        _LOGGER.info("Sigenergy read recovered for %s", device)
                 _LOGGER.debug("Sigenergy update timing: %s", self.latest_update_timing)
 
     async def _async_confirm_remote_ems_write(

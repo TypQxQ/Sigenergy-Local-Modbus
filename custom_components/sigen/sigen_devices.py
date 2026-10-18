@@ -37,6 +37,7 @@ import time
 from collections import deque
 from collections.abc import Coroutine
 from copy import deepcopy
+from datetime import datetime, timezone
 import hashlib
 import json
 from typing import Any, Mapping
@@ -152,6 +153,11 @@ class _ComponentGroup:
         self.poll_resumes = 0
         self.poll_expired_rounds = 0
         self.poll_last_round_span = 0.0
+        self._poll_quality = {
+            "status": "not_polled", "partial_update_count": 0,
+            "failed_fields": [], "failed_blocks": [],
+            "last_failure": None, "last_recovery": None,
+        }
         self._on_write = self.reset_poll_progress
 
     def fingerprint(self) -> str:
@@ -367,6 +373,35 @@ class _ComponentGroup:
             self._support_changed()
         return True
 
+    def poll_diagnostics(self) -> dict:
+        """Report supported-read failures separately from capability discovery."""
+        return deepcopy(self._poll_quality)
+
+    @staticmethod
+    def _save_poll_failure(failures, name, component, start, count, fields, error, stage="read"):
+        # Error text/raw words can contain serials or credentials. Keep only
+        # schema coordinates and the error class in downloadable diagnostics.
+        failures[(name, start, count, stage)] = {
+            "component": name, "register_space": component.register_space,
+            "address": start, "count": count, "stage": stage,
+            "fields": sorted(fields), "error_type": type(error).__name__,
+        }
+
+    def _complete_poll_quality(self, failures) -> None:
+        blocks = [failures[key] for key in sorted(failures)]
+        was_partial = self._poll_quality["status"] == "partial"
+        self._poll_quality.update(
+            status="partial" if blocks else "success",
+            failed_blocks=blocks,
+            failed_fields=sorted({field for block in blocks for field in block["fields"]}),
+        )
+        now = datetime.now(timezone.utc).isoformat()
+        if blocks:
+            self._poll_quality["partial_update_count"] += 1
+            self._poll_quality["last_failure"] = {"at": now, "failed_blocks": deepcopy(blocks)}
+        elif was_partial:
+            self._poll_quality["last_recovery"] = now
+
     def discovery_diagnostics(self) -> dict:
         states = [self.is_supported(field) for component in self._readable.values()
                   for field in component.declared_fields]
@@ -386,7 +421,8 @@ class _ComponentGroup:
                                     if self._read_round else 0,
                     "round_age": time.monotonic() - self._read_round["started"]
                                  if self._read_round else None},
-                "in_flight": len(self._pending_requests)}
+                "in_flight": len(self._pending_requests),
+                "poll_quality": self.poll_diagnostics()}
 
     async def _async_request(self, operation: Coroutine[Any, Any, Any]) -> Any:
         """Let a broker request finish even if its caller is cancelled."""
@@ -479,11 +515,12 @@ class _ComponentGroup:
                     self.reset_poll_progress()
             if self._read_round is None:
                 oldest = min([time.monotonic(), *self._prefetched_at.values()])
-                self._read_round = {"started": oldest, "words": {}, "attempted": {},
+                self._read_round = {"started": oldest, "words": {}, "attempted": {}, "failures": {},
                                     "identity": deepcopy(self._identity_snapshot())}
             else:
                 self.poll_resumes += 1
             progress = self._read_round
+        failures = progress.setdefault("failures", {}) if progress is not None else {}
         values: dict[str, Any] = {}
         for name, component in self._readable.items():
             if not self.incremental:
@@ -491,7 +528,7 @@ class _ComponentGroup:
             prefetched = self._prefetched.pop(name, {})
             self._prefetched_at.pop(name, None)
             await self._async_read_component(
-                name, component, values, prefetched, progress=progress
+                name, component, values, prefetched, progress=progress, failures=failures
             )
             if progress is not None and progress is not self._read_round:
                 raise ModbusError("Read round invalidated by a write or identity change")
@@ -502,6 +539,7 @@ class _ComponentGroup:
                 self.poll_expired_rounds += 1
                 raise ModbusError("Read recovery expired; starting a fresh round")
         self._read_round = None
+        self._complete_poll_quality(failures)
         return values
 
     async def async_write(self, register_name: str, value: Any) -> None:
@@ -576,6 +614,7 @@ class _ComponentGroup:
     async def _async_read_blocks(
         self, name: str, component: Component, fields: Mapping[str, RegisterField],
         *, probing: bool = False, progress: dict | None = None,
+        failures: dict | None = None,
     ) -> tuple[dict[str, list[int]], dict[str, ModbusError]]:
         """Read contiguous blocks; return words and failed-block errors per field.
 
@@ -602,6 +641,11 @@ class _ComponentGroup:
                 try:
                     block = await read(start, count)
                 except ModbusError as ex:
+                    if (failures is not None and not isinstance(ex, ModbusConnectionError)
+                            and (progress is None or progress is self._read_round)):
+                        self._save_poll_failure(
+                            failures, name, component, start, count, affected, ex,
+                        )
                     if progress is self._read_round and progress is not None:
                         if not isinstance(ex, ModbusConnectionError):
                             progress["attempted"].setdefault(name, set()).update(affected)
@@ -715,6 +759,7 @@ class _ComponentGroup:
         self, name: str, component: Component, values: dict[str, Any],
         prefetched: dict[str, list[int]] | None = None,
         *, progress: dict | None = None,
+        failures: dict | None = None,
     ) -> None:
         """Scatter `component`'s decoded values into `values`.
 
@@ -744,7 +789,9 @@ class _ComponentGroup:
         attempted = (progress["attempted"].setdefault(name, set()) if progress is not None else set())
         attempted.update(words)
         unread = {key: field for key, field in known_fields.items() if key not in attempted}
-        fresh, _errors = await self._async_read_blocks(name, component, unread, progress=progress)
+        fresh, _errors = await self._async_read_blocks(
+            name, component, unread, progress=progress, failures=failures,
+        )
         words.update(fresh)
         for field_name in component.declared_fields:
             if field_name in words and field_name in known_fields:
@@ -755,6 +802,11 @@ class _ComponentGroup:
                     values[field_name] = field.decode(words[field_name])
                 except Exception as ex:
                     values[field_name] = None
+                    if failures is not None:
+                        self._save_poll_failure(
+                            failures, name, component, field.address, field.count,
+                            [field_name], ex, stage="decode",
+                        )
                     # Decoder messages can contain serials or raw payloads.
                     _LOGGER.debug(
                         "Decoding %s.%s at address %s failed (%s)",
