@@ -43,7 +43,8 @@ from .common import (
 )
 from .sigen_entity import SigenergyEntity # Import the new base class
 from .pv_restore import (
-    ENERGY_TO_KWH, choose_restore, energy_in_kwh, read_recorder_restore, snapshot_sample,
+    ENERGY_TO_KWH, RecorderJobProgress, choose_restore, energy_in_kwh,
+    read_recorder_restore, snapshot_sample,
 )
 
 if TYPE_CHECKING:
@@ -1459,13 +1460,24 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         )
         try:
             if self._pv_restore_read is None:
+                self._pv_restore_status.pop("_recorder_job", None)
+                self._pv_restore_status.update(
+                    recorder_queue_wait=None, recorder_query_time=None,
+                    recorder_latest_state_rejection=None,
+                )
                 recorder = get_instance(self.hass)
                 self._pv_restore_read_started = monotonic()
-                self._pv_restore_read = recorder.async_add_executor_job(
-                    read_recorder_restore, self.hass, self.entity_id,
-                    self._pv_restore_cutoff, self._pv_restore_snapshot,
-                    self._pv_restore_read_started,
-                )
+                job = RecorderJobProgress(self._pv_restore_read_started)
+                self._pv_restore_status["_recorder_job"] = job
+                try:
+                    self._pv_restore_read = recorder.async_add_executor_job(
+                        read_recorder_restore, self.hass, self.entity_id,
+                        self._pv_restore_cutoff, self._pv_restore_snapshot,
+                        self._pv_restore_read_started, job,
+                    )
+                except Exception as error:
+                    job.finished(monotonic(), type(error).__name__)
+                    raise
             self._pv_restore_status.update(
                 recorder_job_pending=not self._pv_restore_read.done(),
                 _job_started_at=self._pv_restore_read_started,
@@ -1481,12 +1493,15 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             finished.remove_done_callback(self._pv_restore_read_finished)
             self._pv_restore_watched_read = None
             if finished.cancelled():
+                if (job := self._pv_restore_status.get("_recorder_job")) is not None:
+                    job.future_cancelled(monotonic())
                 raise RuntimeError("PV restore history job was cancelled")
             recorded = finished.result()
             stage = "selection"
             self._pv_restore_status.update(
                 recorder_queue_wait=recorded.queue_wait,
                 recorder_query_time=recorded.query_time,
+                recorder_latest_state_rejection=recorded.latest_state_rejection,
             )
             result = choose_restore(
                 self._pv_restore_snapshot, recorded,
@@ -1521,9 +1536,14 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             return True
         except Exception as error:  # A Recorder outage must not reset energy.
             pending = self._pv_restore_read is not None and not self._pv_restore_read.done()
+            job = self._pv_restore_status.get("_recorder_job")
+            measurements = job.diagnostics(monotonic()) if job is not None else {}
+            last_error: dict[str, Any] = {"type": type(error).__name__, "stage": stage}
+            if measurements:
+                last_error["recorder"] = measurements
             self._pv_restore_status.update(
                 status="waiting_for_recorder" if pending else "retry_scheduled",
-                last_error={"type": type(error).__name__, "stage": stage},
+                last_error=last_error,
                 last_error_at=dt_util.utcnow().isoformat(),
                 recorder_job_pending=pending,
                 _job_started_at=self._pv_restore_read_started if pending else None,
@@ -1534,11 +1554,15 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
             _LOGGER.warning(
                 "PV energy restore for %s failed (%s: %s); retrying in %s seconds%s "
                 "(attempt=%s, attempt_wait=%.3f s, total_elapsed=%.3f s, "
-                "recorder_job_pending=%s, recorder_job_age=%s s)",
+                "recorder_job_pending=%s, recorder_job_age=%s s, recorder_job_phase=%s, "
+                "recorder_queue_wait=%s s, recorder_query_elapsed=%s s)",
                 self.entity_id, type(error).__name__, error, _PV_RESTORE_RETRY,
                 " or when the pending Recorder job completes" if pending else "",
                 self._pv_restore_attempts, monotonic() - attempt_started,
                 monotonic() - self._pv_restore_started, pending, job_age,
+                measurements.get("recorder_job_phase"),
+                measurements.get("recorder_queue_wait"),
+                measurements.get("recorder_query_elapsed"),
             )
             self._schedule_pv_restore_retry()
             # Register only after the initial wait, so an immediately completed
@@ -1699,6 +1723,7 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
                 "sample_updated": None, "attempts": 0, "last_error": None,
                 "last_error_at": None, "recorder_job_pending": False,
                 "recorder_queue_wait": None, "recorder_query_time": None,
+                "recorder_job_phase": None, "recorder_latest_state_rejection": None,
                 "attempt_wait": 0.0, "total_elapsed": 0.0,
             }
             self.coordinator.pv_restore_states[self.entity_id] = self._pv_restore_status

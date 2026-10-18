@@ -179,6 +179,31 @@ class TestCoordinatorPollQuality(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, coordinator.partial_update_count)
         self.assertNotIn("private error", json.dumps(coordinator.latest_update_timing))
 
+    async def test_explicit_error_causes_are_retained_without_private_messages(self):
+        for cyclic in (False, True):
+            with self.subTest(cyclic=cyclic):
+                coordinator, hub, namespace = _make_coordinator()
+                hub.inverter_connections = {"bad": {}}
+                root = ConnectionError("private endpoint")
+                middle = OSError("private payload")
+                middle.__cause__ = root
+                outer = RuntimeError("private register value")
+                outer.__cause__ = middle
+                if cyclic:
+                    root.__cause__ = outer
+
+                async def failed(name):
+                    raise outer
+
+                hub.async_read_inverter_data = failed
+                await coordinator.async_refresh()
+                timing = coordinator.latest_update_timing["devices"]["inverter:bad"]
+                self.assertEqual("RuntimeError", timing["error_type"])
+                self.assertEqual("ConnectionError", timing["cause_type"])
+                self.assertEqual("partial", coordinator.latest_update_timing["status"])
+                self.assertNotIn("private", json.dumps(timing))
+                self.assertNotIn("private", str(namespace["_LOGGER"].warning.call_args))
+
     async def test_pv_restore_diagnostics_show_live_ages_and_serialize_exact_values(self):
         coordinator, _hub, namespace = _make_coordinator()
         namespace["time"] = SimpleNamespace(monotonic=lambda: 120)

@@ -68,6 +68,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 row["total_elapsed"] = max(0.0, now - started)
             job_started = state.get("_job_started_at")
             row["recorder_job_age"] = max(0.0, now - job_started) if job_started is not None else None
+            if (job := state.get("_recorder_job")) is not None:
+                row.update(job.diagnostics(now))
             result[entity_id] = row
         return result
 
@@ -94,6 +96,14 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             except Exception as error:
                 device_status = "error"
                 quality = {"error_type": type(error).__name__}
+                # Keep explicit cause types, never exception messages/payloads.
+                # Bound traversal even for a malformed cyclic exception chain.
+                seen = {id(error)}
+                cause = error.__cause__
+                while cause is not None and id(cause) not in seen:
+                    seen.add(id(cause))
+                    quality["cause_type"] = type(cause).__name__
+                    cause = cause.__cause__
                 raise
             finally:
                 device_timings[device] = {
@@ -216,9 +226,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                         if device not in self._degraded_devices:
                             _LOGGER.warning(
                                 "Sigenergy read degraded for %s: status=%s, failed_fields=%s, "
-                                "failed_blocks=%s, error_type=%s",
+                                "failed_blocks=%s, error_type=%s, cause_type=%s",
                                 device, device_status, timing.get("failed_fields", []),
                                 timing.get("failed_blocks", []), timing.get("error_type"),
+                                timing.get("cause_type"),
                             )
                         self._degraded_devices.add(device)
                     elif device_status == "success" and device in self._degraded_devices:

@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import Mock
 
 from test_remote_ems_write_readback import _make_coordinator
+from test_pv_restore import pv, NOW
 
 
 class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
@@ -48,6 +49,18 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
             "last_error": {"type": "TimeoutError", "stage": "recorder"},
             "total_elapsed": 12, "_started_at": None, "_job_started_at": None,
         }
+        rejection = {"reasons": ["unavailable_state"], "latest_updated": NOW.isoformat(),
+                     "cutoff": NOW.isoformat()}
+        job = pv.RecorderJobProgress(100)
+        job.started(108)
+        job.rejected_latest(rejection)
+        job.finished(112)
+        failed_job = pv.RecorderJobProgress(10)
+        failed_job.started(12)
+        failed_job.finished(15, "OSError")
+        row = coordinator.pv_restore_states["sensor.pv"]
+        row["_recorder_job"] = job
+        row["last_error"]["recorder"] = failed_job.diagnostics(15)
         discovery = {"devices": {"inverter:1": {"poll_quality": {"status": "partial"}}}}
         hub = SimpleNamespace(
             discovery_diagnostics=Mock(return_value=discovery),
@@ -68,6 +81,11 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
             self.assertEqual("partial", result["discovery"]["devices"]["inverter:1"]["poll_quality"]["status"])
             self.assertEqual("6333.170261123", result["pv_restore"]["sensor.pv"]["native_value_kwh"])
             self.assertEqual("TimeoutError", result["pv_restore"]["sensor.pv"]["last_error"]["type"])
+            self.assertEqual("complete", result["pv_restore"]["sensor.pv"]["recorder_job_phase"])
+            self.assertEqual(8, result["pv_restore"]["sensor.pv"]["recorder_queue_wait"])
+            self.assertEqual(4, result["pv_restore"]["sensor.pv"]["recorder_query_time"])
+            self.assertEqual(rejection, result["pv_restore"]["sensor.pv"]["recorder_latest_state_rejection"])
+            self.assertEqual(3, result["pv_restore"]["sensor.pv"]["last_error"]["recorder"]["recorder_query_time"])
             self.assertFalse(any(key.startswith("_") for key in result["pv_restore"]["sensor.pv"]))
             json.dumps(result)
         self.assertEqual(2, hub.discovery_diagnostics.call_count)
