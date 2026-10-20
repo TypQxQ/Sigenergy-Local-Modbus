@@ -202,5 +202,86 @@
       "cannot_be_lower_than_high": "Cannot be lower than the high interval.",
       "cannot_be_lower_than_medium": "Cannot be lower than the medium interval."
     }
+  },
+  "entity": {
+    "sensor": {
+      "plant_grid_sensor_status": {
+        "state": {
+          "offline": "Offline",
+          "online": "Online"
+        }
+      },
+      "plant_on_off_grid_status": {
+        "state": {
+          "on_grid": "On Grid",
+          "off_grid_auto": "Off Grid (Auto)",
+          "off_grid_manual": "Off Grid (Manual)"
+        }
+      },
+      "plant_running_state": {
+        "state": {
+          "standby": "Standby",
+          "running": "Running",
+          "fault": "Fault",
+          "shutdown": "Shutdown",
+          "environmental_abnormality": "Environmental Abnormality"
+        }
+      },
+      "plant_ems_work_mode": {
+        "state": {
+          "max_self_consumption": "Maximum Self Consumption",
+          "ai_mode": "AI Mode",
+          "tou": "Time of Use",
+          "full_feed_in_to_grid": "Full Feed-In to Grid",
+          "vpp_scheduling": "VPP Scheduling",
+          "remote_ems": "Remote EMS",
+          "custom": "Custom"
+        }
+      },
+      "inverter_running_state": {
+        "state": {
+          "standby": "Standby",
+          "running": "Running",
+          "fault": "Fault",
+          "shutdown": "Shutdown",
+          "environmental_abnormality": "Environmental Abnormality"
+        }
+      },
+      "inverter_output_type": {
+        "state": {
+          "l_n": "L/N",
+          "l1_l2_l3": "L1/L2/L3",
+          "l1_l2_l3_n": "L1/L2/L3/N",
+          "l1_l2_n": "L1/L2/N"
+        }
+      },
+      "ac_charger_system_state": {
+        "state": {
+          "initializing": "Initializing",
+          "not_connected": "Not Connected",
+          "reserving": "Reserving",
+          "preparing": "Preparing",
+          "ev_ready": "EV Ready",
+          "charging": "Charging",
+          "fault": "Fault",
+          "error": "Error"
+        }
+      },
+      "dc_charger_running_state": {
+        "state": {
+          "idle": "Idle",
+          "occupied": "Occupied",
+          "preparing_comm": "Preparing Comm",
+          "charging": "Charging",
+          "fault": "Fault",
+          "scheduled": "Scheduled",
+          "ended": "Ended",
+          "charger_unavailable": "Unavailable",
+          "discharging": "Discharging",
+          "alarm": "Alarm",
+          "preparing_insulation": "Preparing Insulation"
+        }
+      }
+    }
   }
 }

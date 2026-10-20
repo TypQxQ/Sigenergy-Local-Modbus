@@ -207,6 +207,38 @@ class DCChargerRunningState(IntEnum):
     ALARM = 0x09
     PREPARING_INSULATION = 0x0A
 
+# Enum sensor states: raw register value -> the state Home Assistant stores.
+# Display labels for each state live in strings.json under
+# entity.sensor.<sensor key>.state. A state must never be "unknown" or
+# "unavailable", which Home Assistant reserves for its own entity states.
+ENUM_SENSOR_STATES: dict[str, dict[int, str]] = {
+    "plant_grid_sensor_status": {0: "offline", 1: "online"},
+    "plant_on_off_grid_status": {0: "on_grid", 1: "off_grid_auto", 2: "off_grid_manual"},
+    "plant_running_state": {s.value: s.name.lower() for s in RunningState},
+    "plant_ems_work_mode": {s.value: s.name.lower() for s in EMSWorkMode},
+    "inverter_running_state": {s.value: s.name.lower() for s in RunningState},
+    "inverter_output_type": {s.value: s.name.lower() for s in OutputType},
+    "ac_charger_system_state": {
+        ACChargerSystemState.SYSTEM_INIT: "initializing",
+        ACChargerSystemState.A1_A2: "not_connected",
+        ACChargerSystemState.B1: "reserving",
+        ACChargerSystemState.B2: "preparing",
+        ACChargerSystemState.C1: "ev_ready",
+        ACChargerSystemState.C2: "charging",
+        ACChargerSystemState.F: "fault",
+        ACChargerSystemState.E: "error",
+    },
+    "dc_charger_running_state": {
+        s.value: "charger_unavailable" if s is DCChargerRunningState.UNAVAILABLE else s.name.lower()
+        for s in DCChargerRunningState
+    },
+}
+
+
+def enum_sensor_options(key: str) -> list[str]:
+    """Return the states an enum sensor can report, for its `options`."""
+    return list(ENUM_SENSOR_STATES[key].values())
+
 # Register definitions
 @dataclass
 class ModbusRegisterDefinition:
