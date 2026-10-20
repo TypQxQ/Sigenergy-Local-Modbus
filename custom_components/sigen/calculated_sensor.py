@@ -34,7 +34,7 @@ from homeassistant.components.recorder.history import state_changes_during_perio
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_VALUES_TO_INIT, DEFAULT_MIN_INTEGRATION_TIME
-from .modbusregisterdefinitions import EMSWorkMode
+from .modbusregisterdefinitions import ENUM_SENSOR_STATES, enum_sensor_options
 
 from .common import (
     SigenergySensorEntityDescription,
@@ -2173,21 +2173,15 @@ class SigenergyCalculatedSensors:
             value_fn=lambda value, _, __: SigenergyCalculations.minutes_to_gmt(value),
             entity_registry_enabled_default=False,
         ),
-        # EMS Work Mode sensor with value mapping
         SigenergySensorEntityDescription(
             key="plant_ems_work_mode",
             name="EMS Work Mode",
             icon="mdi:home-battery",
+            device_class=SensorDeviceClass.ENUM,
+            options=enum_sensor_options("plant_ems_work_mode"),
+            translation_key="plant_ems_work_mode",
             # Adapt function signature
-            value_fn=lambda value, _, __: {
-                EMSWorkMode.MAX_SELF_CONSUMPTION: "Maximum Self Consumption",
-                EMSWorkMode.AI_MODE: "AI Mode",
-                EMSWorkMode.TOU: "Time of Use",
-                EMSWorkMode.FULL_FEED_IN_TO_GRID: "Full Feed-In to Grid",
-                EMSWorkMode.VPP_SCHEDULING: "VPP Scheduling",
-                EMSWorkMode.REMOTE_EMS: "Remote EMS",
-                EMSWorkMode.CUSTOM: "Custom",
-            }.get(value, f"Unknown: ({value})"), # Fallback to original value
+            value_fn=lambda value, _, __: ENUM_SENSOR_STATES["plant_ems_work_mode"].get(value),
         ),
         SigenergySensorEntityDescription(
             key="plant_photovoltaic_power",
