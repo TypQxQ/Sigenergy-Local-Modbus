@@ -1726,9 +1726,10 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         if not (states := self._validate_states(old_state, new_state)):
             return
 
-        # Calculate elapsed time
+        # Unchanged power reports advance last_reported without a state change.
+        # Use state-change timestamps so those reports cannot shorten the interval.
         elapsed_seconds = Decimal(
-            (new_state.last_reported - old_state.last_reported).total_seconds()
+            (new_state.last_changed - old_state.last_changed).total_seconds()
             if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT
             else (new_state.last_reported - self._last_integration_time).total_seconds()
         )
