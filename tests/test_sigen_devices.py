@@ -124,7 +124,7 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
         read_addresses = {event.address for event in unit.read_events}
         self.assertNotIn(soh_addr, read_addresses)
 
-    async def test_alarm7_sentinel_keeps_transport_support_and_recovers_next_poll(self) -> None:
+    async def test_alarm7_unknown_bitmap_keeps_transport_support_and_reads_next_poll(self) -> None:
         unit, plant = self._new_plant()
         key = "plant_general_alarm7"
         address = self.defs.PLANT_RUNNING_INFO_REGISTERS[key].address

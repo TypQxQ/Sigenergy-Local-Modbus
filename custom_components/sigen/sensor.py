@@ -48,7 +48,7 @@ from .const import (
     CONF_INVERTER_HAS_DCCHARGER,
 )
 from .sigen_entity import SigenergyEntity
-from .alarm import unsupported_alarm_value
+from .alarm import unknown_alarm_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -233,21 +233,14 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
         self._last_valid_daily_energy_date: date | None = None
 
     @property
-    def available(self) -> bool:
-        """Keep Alarm 7 unavailable while its firmware returns no usable data."""
-        return super().available and not unsupported_alarm_value(
-            self.entity_description.key, self._get_raw_value()
-        )
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Explain the unsupported value while retaining the entity's identity."""
+        """Explain the unknown alarm bitmap while retaining the entity's identity."""
         attributes = super().extra_state_attributes
-        if unsupported_alarm_value(self.entity_description.key, self._get_raw_value()):
+        if unknown_alarm_value(self.entity_description.key, self._get_raw_value()):
             return {
                 **(attributes or {}),
-                "register_status": "unsupported",
-                "unsupported_reason": "all_bits_set",
+                "alarm_status": "unknown",
+                "alarm_reason": "all_bits_set",
                 "raw_value": 0xFFFF,
             }
         return attributes
@@ -334,8 +327,8 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
     def native_value(self) -> Any:
         """Return the state of the sensor."""
         raw_value = self._get_raw_value()
-        if unsupported_alarm_value(self.entity_description.key, raw_value):
-            return None
+        if unknown_alarm_value(self.entity_description.key, raw_value):
+            return "Unknown Alarm"
         data = self.coordinator.data
         if data is None:
             return None

@@ -1,4 +1,4 @@
-"""Exercise the sensor's real value/availability paths for Alarm 7's sentinel."""
+"""Exercise the sensor's real value/availability paths for Alarm 7's unknown bitmap."""
 from __future__ import annotations
 
 import ast
@@ -38,7 +38,7 @@ def sensor_class():
                     and any(isinstance(t, ast.Name) and t.id == "ALARM_CODES" for t in n.targets))
     namespace = {
         "SigenergyEntity": Base, "SensorEntity": type("SensorEntity", (), {}),
-        "unsupported_alarm_value": alarm.unsupported_alarm_value,
+        "unknown_alarm_value": alarm.unknown_alarm_value,
         "SensorDeviceClass": SimpleNamespace(TIMESTAMP="timestamp"),
         "ALARM_CODES": ast.literal_eval(mappings),
         "DEVICE_TYPE_PLANT": "plant", "DEVICE_TYPE_INVERTER": "inverter",
@@ -51,7 +51,7 @@ def sensor_class():
     return namespace["SigenergySensor"]
 
 
-class TestAlarm7UnsupportedValue(unittest.TestCase):
+class TestAlarm7UnknownValue(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.sensor_type = sensor_class()
@@ -65,11 +65,11 @@ class TestAlarm7UnsupportedValue(unittest.TestCase):
         entity.coordinator = SimpleNamespace(data={"plant": {key: value}})
         return entity
 
-    def test_all_bits_set_is_unavailable_and_never_decodes_as_faults(self):
+    def test_all_bits_set_stays_available_and_reports_unknown_alarm(self):
         entity = self.sensor(0xFFFF)
-        self.assertFalse(entity.available)
-        self.assertIsNone(entity.native_value)
-        self.assertEqual({"register_status": "unsupported", "unsupported_reason": "all_bits_set",
+        self.assertTrue(entity.available)
+        self.assertEqual("Unknown Alarm", entity.native_value)
+        self.assertEqual({"alarm_status": "unknown", "alarm_reason": "all_bits_set",
                           "raw_value": 65535}, entity.extra_state_attributes)
         self.assertEqual(65535, entity.coordinator.data["plant"]["plant_general_alarm7"])
 
@@ -82,20 +82,21 @@ class TestAlarm7UnsupportedValue(unittest.TestCase):
                 self.assertEqual(expected, entity.native_value)
                 self.assertIsNone(entity.extra_state_attributes)
 
-    def test_missing_data_is_unknown_instead_of_healthy_or_unsupported(self):
+    def test_missing_data_still_has_no_alarm_reading(self):
         entity = self.sensor(None)
         self.assertIsNone(entity.native_value)
         self.assertIsNone(entity.extra_state_attributes)
 
-    def test_same_entity_recovers_on_next_usable_read_and_can_degrade_again(self):
+    def test_same_entity_switches_between_unknown_and_known_alarms(self):
         entity = self.sensor(0xFFFF)
         for value in (0, 1, 2, 3):
             with self.subTest(value=value):
                 entity.coordinator.data["plant"]["plant_general_alarm7"] = 0xFFFF
-                self.assertFalse(entity.available)
+                self.assertTrue(entity.available)
+                self.assertEqual("Unknown Alarm", entity.native_value)
                 entity.coordinator.data["plant"]["plant_general_alarm7"] = value
                 self.assertTrue(entity.available)
-                self.assertIsNotNone(entity.native_value)
+                self.assertNotEqual("Unknown Alarm", entity.native_value)
                 self.assertIsNone(entity.extra_state_attributes)
 
     def test_other_alarm_registers_keep_all_bits_set(self):
@@ -112,6 +113,7 @@ class TestAlarm7UnsupportedValue(unittest.TestCase):
         self.assertFalse(entity.available)
         entity.base_attributes = {"existing": "preserved"}
         entity.coordinator.data["plant"]["plant_general_alarm7"] = 0xFFFF
+        self.assertFalse(entity.available, "an unknown alarm must not bypass parent unavailability")
         self.assertEqual("preserved", entity.extra_state_attributes["existing"])
         self.assertEqual({"existing": "preserved"}, entity.base_attributes)
         entity.coordinator.data = None
@@ -120,16 +122,16 @@ class TestAlarm7UnsupportedValue(unittest.TestCase):
 
     def test_diagnostics_explain_only_the_current_alarm7_sentinel(self):
         data = {"plant": {"plant_general_alarm7": 0xFFFF, "plant_general_alarm1": 0xFFFF}}
-        result = alarm.unsupported_alarm_diagnostics(data)
+        result = alarm.unknown_alarm_diagnostics(data)
         self.assertEqual({"plant_general_alarm7"}, set(result))
-        self.assertEqual("unsupported", result["plant_general_alarm7"]["status"])
+        self.assertEqual("unknown", result["plant_general_alarm7"]["status"])
         self.assertTrue(result["plant_general_alarm7"]["continues_polling"])
         result["plant_general_alarm7"]["raw_value"] = 0
         self.assertEqual(0xFFFF, data["plant"]["plant_general_alarm7"])
         for value in (None, 0, 1, 2, 3):
             data["plant"]["plant_general_alarm7"] = value
-            self.assertEqual({}, alarm.unsupported_alarm_diagnostics(data))
-        self.assertEqual({}, alarm.unsupported_alarm_diagnostics(None))
+            self.assertEqual({}, alarm.unknown_alarm_diagnostics(data))
+        self.assertEqual({}, alarm.unknown_alarm_diagnostics(None))
 
 
 if __name__ == "__main__":

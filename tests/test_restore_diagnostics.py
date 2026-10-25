@@ -11,7 +11,7 @@ from unittest.mock import Mock
 
 from test_remote_ems_write_readback import _make_coordinator
 from test_pv_restore import pv, NOW
-from test_alarm7_unsupported_value import alarm
+from test_alarm7_unknown_value import alarm
 
 
 class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
@@ -27,7 +27,7 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
             "async_get_connection_info": Mock(return_value=[]),
             "CONF_INVERTER_HAS_DCCHARGER": "has_dc_charger",
             "HA_VERSION": "2026.10.2", "pymodbus_version": "test", "tmodbus_version": "test",
-            "unsupported_alarm_diagnostics": alarm.unsupported_alarm_diagnostics,
+            "unknown_alarm_diagnostics": alarm.unknown_alarm_diagnostics,
         }
         for name in ("AC_CHARGER_PARAMETER_REGISTERS", "AC_CHARGER_RUNNING_INFO_REGISTERS",
                      "DC_CHARGER_PARAMETER_REGISTERS", "DC_CHARGER_RUNNING_INFO_REGISTERS",
@@ -80,8 +80,8 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
         entry_result = await namespace["async_get_config_entry_diagnostics"](hass, entry)
         device_result = await namespace["async_get_device_diagnostics"](hass, entry, device)
         for result, health_key in ((entry_result, "coordinator"), (device_result, "coordinator_status")):
-            self.assertEqual("unsupported", result["unsupported_alarm_values"]["plant_general_alarm7"]["status"])
-            self.assertEqual(0xFFFF, result["unsupported_alarm_values"]["plant_general_alarm7"]["raw_value"])
+            self.assertEqual("unknown", result["unknown_alarm_values"]["plant_general_alarm7"]["status"])
+            self.assertEqual(0xFFFF, result["unknown_alarm_values"]["plant_general_alarm7"]["raw_value"])
             self.assertEqual(7, result[health_key]["partial_update_count"])
             self.assertEqual("partial", result["discovery"]["devices"]["inverter:1"]["poll_quality"]["status"])
             self.assertEqual("6333.170261123", result["pv_restore"]["sensor.pv"]["native_value_kwh"])
@@ -98,7 +98,7 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
         for download, args in ((namespace["async_get_config_entry_diagnostics"], (hass, entry)),
                                (namespace["async_get_device_diagnostics"], (hass, entry, device))):
             result = await download(*args)
-            self.assertEqual({}, result["unsupported_alarm_values"])
+            self.assertEqual({}, result["unknown_alarm_values"])
 
 
 if __name__ == "__main__":
