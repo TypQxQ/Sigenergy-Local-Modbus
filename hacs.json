@@ -1,6 +1,4 @@
 {
   "name": "Sigenergy ESS",
-  "homeassistant": "2026.10.0",
-  "zip_release": true,
-  "filename": "sigen.zip"
+  "homeassistant": "2026.1.0"
 }

@@ -1,7 +1,6 @@
 ## Sigenergy Local Modbus (sigen) – AI Coding Notes
 
 - Integration lives in custom_components/sigen/ and follows ConfigEntry + DataUpdateCoordinator.
-- Version 1.3.0 targets Home Assistant 2026.10+ and Python 3.14.2+. Develop and run regression tests on Python 3.14.
 - Core flow: config_flow.py → __init__.py (setup entry) → modbus.py (SigenergyModbusHub) → coordinator.py → platform entities.
 
 ### Domain model
@@ -11,13 +10,9 @@
 
 ### Modbus + polling
 - Keep all I/O async; avoid adding new blocking calls (especially inside coordinator updates).
-- Connections come from Home Assistant's shared Modbus broker (homeassistant.components.modbus): async_get_unit() in modbus.py, async_get_temporary_unit() in config_flow.py. Do not open sockets or import pymodbus directly; the broker owns connection sharing, locking and reconnects.
-- Register layouts are modbus_connection Components built in sigen_components.py from the tables in modbusregisterdefinitions.py; add or change registers in those tables, not by hand-writing fields.
-- sigen_devices.py probes register support per field and reads supported fields as strictly contiguous blocks (max ~123 registers/read), with each block's failure isolated from the others.
-- Only illegal-address bulk errors trigger immediate individual probing. Defer inconclusive blocks until probe backoff expires, then probe their fields individually even when the initial bulk pass confirmed no supported fields; never spend a silent address's wire timeout twice in the first poll.
-- Keep wire requests in tracked tasks and wait with asyncio.wait(): caller cancellation must not abandon an in-flight transaction. Consume late results explicitly; asyncio.shield() reports late failures separately on Python 3.14. Drain a timed-out config-flow probe before starting the next probe's time budget.
-- Before a component group starts a new poll, wait for its surviving broker requests, including queued requests. Cancelling that wait must preserve the requests and must not enqueue replacements.
-- Isolate decoding failures per field: keep healthy siblings, reject incomplete field payloads, and leave the bad value as None without changing support status. Log field/address and error type, never raw payloads or decoder messages that may contain serials.
+- SigenergyModbusHub in modbus.py caches AsyncModbusTcpClient per (host, port) and guards reads/writes with per-connection asyncio locks.
+- Register reads are optimized by probing supported registers and building contiguous read intervals (max ~123 registers/read).
+- Maintain pymodbus compatibility via the safe wrapper that handles slave/device_id arg changes.
 
 ### Entities + naming
 - Use SigenergyEntity (sigen_entity.py) as the base and create entities through generate_sigen_entity() (common.py) like existing platform files do.
@@ -26,7 +21,6 @@
 
 ### Writes / controls safety
 - All writes must go through SigenergyDataUpdateCoordinator.async_write_parameter() (coordinator.py); do not call Modbus write methods directly from entities.
-- Plant Remote EMS enable/mode writes await async_refresh() and verify a successful poll that started after the write plus matching readback. async_request_refresh() alone may only schedule a later read. Keep confirmation bounded, preserve caller-cancellation shielding, and never replay the command when readback is missing or different.
 - Respect read-only behavior (hub.read_only) and keep “dangerous” controls disabled by default (entity_registry_enabled_default=False).
 
 ### Calculated sensors
@@ -37,6 +31,5 @@
 - diagnostics.py must redact host/credentials/serials/MACs via async_redact_data; never log secrets.
 
 ### CI / repo checks
-- Release tags (`v.<manifest version>`) run release.yaml: test both Modbus versions, validate, build sigen.zip from committed files with scripts/build_release.py, upload to a draft, verify the uploaded bytes, then publish. Never replace published release assets or move existing tags. ZIP contents go directly into custom_components/sigen, without an enclosing directory.
 - This repo is validated by hassfest and HACS Action workflows (.github/workflows/).
 - Type checking uses pyright “basic” (pyrightconfig.json); Reference/ is intentionally excluded.

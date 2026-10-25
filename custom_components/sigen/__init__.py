@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -10,8 +9,6 @@ from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-i
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers.typing import ConfigType
-from homeassistant.loader import async_get_integration
 
 from .const import (
     CONF_SCAN_INTERVAL,
@@ -19,23 +16,13 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
-from .coordinator import STARTUP_TIMEOUT, SigenergyDataUpdateCoordinator
+from .coordinator import SigenergyDataUpdateCoordinator
 from .modbus import SigenergyModbusHub
 from .const import CONF_PLANT_CONNECTION
 from .common import generate_device_id
 from .device_registry_compat import register_parent_devices
 
 _LOGGER = logging.getLogger(__name__)
-
-
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Sigenergy ESS integration."""
-    try:
-        integration = await async_get_integration(hass, DOMAIN)
-        await integration.async_get_platform("diagnostics")
-    except Exception as ex:  # noqa: BLE001 - preloading is best-effort
-        _LOGGER.debug("Could not preload the diagnostics platform: %s", ex)
-    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -64,22 +51,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         _LOGGER.debug("async_setup_entry: Connecting to Modbus hub and performing first refresh...")
-        async with asyncio.timeout(STARTUP_TIMEOUT):
-            await hub.async_initialize()
-            await coordinator.async_config_entry_first_refresh()
+        await coordinator.async_config_entry_first_refresh()
         _LOGGER.debug("async_setup_entry: Modbus hub connected and coordinator first refresh completed")
-    except asyncio.CancelledError:
-        await hub.async_close()
-        raise
-    except TimeoutError as ex:
-        await hub.async_close()
-        raise ConfigEntryNotReady("Sigenergy initialization exceeded the startup deadline") from ex
     except ConfigEntryNotReady:
         # This exception is already logged by the coordinator
         # We can optionally add more context here if needed
         _LOGGER.error("async_setup_entry: Initial data fetch failed. Deferring setup for %s.", entry.title)
         # The coordinator's first refresh will re-raise ConfigEntryNotReady, which is what we want.
-        await hub.async_close()
         raise
     except Exception as ex:
         _LOGGER.error(
@@ -109,7 +87,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         device_id_fn=generate_device_id,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    hub.start_discovery(coordinator)
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     _LOGGER.debug("async_setup_entry: Setup completed successfully for entry: %s", entry.title)

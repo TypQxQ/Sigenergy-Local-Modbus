@@ -1,12 +1,11 @@
 """Diagnostics support for Sigenergy ESS."""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.components.modbus.connection import async_get_connection_info
 from homeassistant.config_entries import ConfigEntry  #pylint: disable=no-name-in-module, syntax-error
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, __version__ as HA_VERSION
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import (
     DeviceEntry,
@@ -19,36 +18,9 @@ try:
 except ImportError:
     pymodbus_version = "unknown"
 
-try:
-    from tmodbus import __version__ as tmodbus_version
-except ImportError:
-    tmodbus_version = "unknown"
-
-from .const import CONF_INVERTER_HAS_DCCHARGER, DOMAIN
-from .alarm import unknown_alarm_diagnostics
-from .modbusregisterdefinitions import (
-    AC_CHARGER_PARAMETER_REGISTERS,
-    AC_CHARGER_RUNNING_INFO_REGISTERS,
-    DC_CHARGER_PARAMETER_REGISTERS,
-    DC_CHARGER_RUNNING_INFO_REGISTERS,
-    INVERTER_PARAMETER_REGISTERS,
-    INVERTER_RUNNING_INFO_REGISTERS,
-    PLANT_ESS_PREHEATING_REGISTERS,
-    PLANT_PARAMETER_REGISTERS,
-    PLANT_RUNNING_INFO_REGISTERS,
-)
+from .const import DOMAIN
 
 TO_REDACT = {CONF_HOST, CONF_USERNAME, CONF_PASSWORD, "inverter_serial_number", "serial_number", "macaddress"}
-
-
-def _register_support_summary(
-    hub, device_type: str, device_name: Optional[str], register_names: set[str]
-) -> Dict[str, Optional[bool]]:
-    """Return `{register_name: True/False/None}` for one device's registers."""
-    return {
-        name: hub.get_register_support(device_type, device_name, name)
-        for name in sorted(register_names)
-    }
 
 
 async def async_get_config_entry_diagnostics(
@@ -187,9 +159,6 @@ async def async_get_config_entry_diagnostics(
         all_devices_diagnostics[device.name or device_identifier] = device_diagnostics
 
     diagnostics_data = {
-        "unknown_alarm_values": unknown_alarm_diagnostics(coordinator.data),
-        "discovery": hub.discovery_diagnostics(),
-        "pv_restore": coordinator.pv_restore_diagnostics(),
         "entry": async_redact_data(entry.as_dict(), TO_REDACT),
         "coordinator": {
             "last_update_success": coordinator.last_update_success,
@@ -198,11 +167,6 @@ async def async_get_config_entry_diagnostics(
                 if coordinator.last_exception else None,
             "latest_fetch_time": coordinator.latest_fetch_time,
             "largest_update_interval": coordinator.largest_update_interval,
-            "startup_fetch_time": coordinator.startup_fetch_time,
-            "update_timeout_count": coordinator.update_timeout_count,
-            "update_failure_count": coordinator.update_failure_count,
-            "partial_update_count": coordinator.partial_update_count,
-            "latest_update_timing": coordinator.latest_update_timing,
         },
         "data": async_redact_data(coordinator.data, TO_REDACT),
         "hub_info": {
@@ -213,23 +177,13 @@ async def async_get_config_entry_diagnostics(
             "ac_charger_count": hub.ac_charger_count,
             "read_only": hub.read_only,
         },
-        "home_assistant_version": HA_VERSION,
         "library_versions": {
             "pymodbus": pymodbus_version,
-            "tmodbus": tmodbus_version,
         },
-        "modbus_connections": [
-            {
-                "endpoint": async_redact_data({"host": info.endpoint[1], "port": info.endpoint[-1]}, TO_REDACT),
-                "connected": info.connected,
-                "config_entries_sharing": len(info.units),
-            }
-            for info in async_get_connection_info(hass)
-        ],
         "all_devices": all_devices_diagnostics,
         "device_summary": {
             "total_devices": len(devices),
-            "device_types": {device_type: len([d for d in all_devices_diagnostics.values() if d["device_type"] == device_type])
+            "device_types": {device_type: len([d for d in all_devices_diagnostics.values() if d["device_type"] == device_type]) 
                            for device_type in set(d["device_type"] for d in all_devices_diagnostics.values())},
         },
     }
@@ -290,9 +244,6 @@ async def async_get_device_diagnostics(
     
     # Base diagnostic data for the device
     device_diagnostics = {
-        "unknown_alarm_values": unknown_alarm_diagnostics(coordinator.data),
-        "discovery": hub.discovery_diagnostics(),
-        "pv_restore": coordinator.pv_restore_diagnostics(),
         "device_info": async_redact_data({
             "name": device.name,
             "model": device.model,
@@ -310,11 +261,6 @@ async def async_get_device_diagnostics(
             "last_exception": str(coordinator.last_exception) if coordinator.last_exception else None,
             "latest_fetch_time": coordinator.latest_fetch_time,
             "largest_update_interval": coordinator.largest_update_interval,
-            "startup_fetch_time": coordinator.startup_fetch_time,
-            "update_timeout_count": coordinator.update_timeout_count,
-            "update_failure_count": coordinator.update_failure_count,
-            "partial_update_count": coordinator.partial_update_count,
-            "latest_update_timing": coordinator.latest_update_timing,
             "sensors_initialized": coordinator.data.get("_sensors_initialized", False) if coordinator.data else False,
         },
         "hub_connection": {
@@ -326,19 +272,14 @@ async def async_get_device_diagnostics(
             "read_only": hub.read_only,
             "probe_retry_delay": hub.probe_retry_delay,
         },
-        "modbus_connections": [
-            {
-                "endpoint": async_redact_data({"host": info.endpoint[1], "port": info.endpoint[-1]}, TO_REDACT),
-                "connected": info.connected,
-                "config_entries_sharing": len(info.units),
-            }
-            for info in async_get_connection_info(hass)
-        ],
-        "home_assistant_version": HA_VERSION,
+        "modbus_clients": {
+            "active_connections": len(hub._clients),
+            "connected_clients": len([k for k, v in hub._connected.items() if v]),
+            "client_locks": len(hub._locks),
+        },
         "library_versions": {
             "pymodbus": pymodbus_version,
-            "tmodbus": tmodbus_version,
-        },
+        }
     }
     
     # Add device-specific data from coordinator
@@ -403,44 +344,20 @@ async def async_get_device_diagnostics(
                     "device_identifier": dev_identifier,
                 }
                 
-        # Add register support information: True/False once probed, None while
-        # still unresolved (see sigen_devices.py's register-support probing).
-        device_diagnostics["all_register_support"] = {
-            "plant": _register_support_summary(
-                hub,
-                "plant",
-                None,
-                set(PLANT_RUNNING_INFO_REGISTERS)
-                | set(PLANT_PARAMETER_REGISTERS)
-                | set(PLANT_ESS_PREHEATING_REGISTERS),
-            ),
+        # Add all register intervals information
+        device_diagnostics["all_register_intervals"] = {
+            "plant": {str(k): v for k, v in hub.plant_register_intervals.items()},
             "inverters": {
-                inv_name: _register_support_summary(
-                    hub,
-                    "inverter",
-                    inv_name,
-                    set(INVERTER_RUNNING_INFO_REGISTERS) | set(INVERTER_PARAMETER_REGISTERS),
-                )
-                for inv_name in hub.inverter_connections
+                inv_name: {str(k): v for k, v in intervals.items()} 
+                for inv_name, intervals in hub.inverter_register_intervals.items()
             },
             "ac_chargers": {
-                ac_name: _register_support_summary(
-                    hub,
-                    "ac_charger",
-                    ac_name,
-                    set(AC_CHARGER_RUNNING_INFO_REGISTERS) | set(AC_CHARGER_PARAMETER_REGISTERS),
-                )
-                for ac_name in hub.ac_charger_connections
+                ac_name: {str(k): v for k, v in intervals.items()} 
+                for ac_name, intervals in hub.ac_charger_register_intervals.items()
             },
             "dc_chargers": {
-                inv_name: _register_support_summary(
-                    hub,
-                    "dc_charger",
-                    f"{inv_name} DC Charger",
-                    set(DC_CHARGER_RUNNING_INFO_REGISTERS) | set(DC_CHARGER_PARAMETER_REGISTERS),
-                )
-                for inv_name, info in hub.inverter_connections.items()
-                if info.get(CONF_INVERTER_HAS_DCCHARGER, False)
+                dc_name: {str(k): v for k, v in intervals.items()} 
+                for dc_name, intervals in hub.dc_charger_register_intervals.items()
             },
         }
         
