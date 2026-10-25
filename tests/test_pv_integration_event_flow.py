@@ -4,11 +4,18 @@ from __future__ import annotations
 import ast
 from datetime import timedelta
 from decimal import Decimal
+from runpy import run_path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
 from test_pv_integration_elapsed_time import SOURCE, START, _SensorHarness, _Trigger, _snapshot
+
+
+# Load the real constant without importing Home Assistant's integration package.
+DEFAULT_MIN_INTEGRATION_TIME = run_path(str(SOURCE.with_name("const.py")))[
+    "DEFAULT_MIN_INTEGRATION_TIME"
+]
 
 
 class _EventSensor(_SensorHarness):
@@ -33,7 +40,7 @@ class _EventSensor(_SensorHarness):
         namespace = {
             "Decimal": Decimal, "IntegrationTrigger": _Trigger,
             "STATE_UNKNOWN": "unknown", "STATE_UNAVAILABLE": "unavailable",
-            "timedelta": timedelta, "DEFAULT_MIN_INTEGRATION_TIME": 5,
+            "timedelta": timedelta, "DEFAULT_MIN_INTEGRATION_TIME": DEFAULT_MIN_INTEGRATION_TIME,
             "dt_util": SimpleNamespace(utcnow=lambda: self.now),
             "safe_decimal": lambda value: Decimal(str(value)),
             "async_call_later": self.schedule, "callback": lambda fn: fn, "_LOGGER": Mock(),
@@ -75,6 +82,29 @@ class _EventSensor(_SensorHarness):
 class PVIntegrationEventFlowTests(unittest.TestCase):
     def assert_area(self, sensor, kw_seconds):
         self.assertLess(abs(sensor._state - Decimal(str(kw_seconds)) / 3600), Decimal("1e-24"))
+
+    def test_event_after_two_seconds_integrates_and_rearms_timer(self):
+        sensor = _EventSensor()
+        sensor._schedule_max_sub_interval_exceeded_if_state_is_numeric(sensor.current_source)
+        sensor.change(_snapshot("1", 0, 1), _snapshot("1.2", 2), 2)
+        self.assert_area(sensor, Decimal("2.2"))
+        self.assertEqual(1, sensor.writes)
+        self.assertEqual(START + timedelta(seconds=2), sensor._last_integration_time)
+        self.assertTrue(sensor.scheduled[0].cancelled)
+        sensor.fire_timer(32)
+        self.assert_area(sensor, Decimal("38.2"))
+        self.assertEqual(2, sensor.writes)
+
+    def test_event_two_seconds_after_timer_counts_only_the_remaining_interval(self):
+        sensor = _EventSensor(trigger=_Trigger.TIME_ELAPSED)
+        sensor._schedule_max_sub_interval_exceeded_if_state_is_numeric(sensor.current_source)
+        sensor.fire_timer(30)
+        sensor.change(_snapshot("1", 0, 31), _snapshot("1.2", 32), 32)
+        self.assert_area(sensor, Decimal("32.2"))
+        self.assertEqual(2, sensor.writes)
+        sensor.fire_timer(62)
+        self.assert_area(sensor, Decimal("68.2"))
+        self.assertEqual(3, sensor.writes)
 
     def test_attribute_event_then_timer_counts_the_entire_interval(self):
         sensor = _EventSensor()
