@@ -25,6 +25,7 @@ except ImportError:
     tmodbus_version = "unknown"
 
 from .const import CONF_INVERTER_HAS_DCCHARGER, DOMAIN
+from .alarm import unsupported_alarm_diagnostics
 from .modbusregisterdefinitions import (
     AC_CHARGER_PARAMETER_REGISTERS,
     AC_CHARGER_RUNNING_INFO_REGISTERS,
@@ -186,6 +187,7 @@ async def async_get_config_entry_diagnostics(
         all_devices_diagnostics[device.name or device_identifier] = device_diagnostics
 
     diagnostics_data = {
+        "unsupported_alarm_values": unsupported_alarm_diagnostics(coordinator.data),
         "discovery": hub.discovery_diagnostics(),
         "pv_restore": coordinator.pv_restore_diagnostics(),
         "entry": async_redact_data(entry.as_dict(), TO_REDACT),
@@ -288,6 +290,7 @@ async def async_get_device_diagnostics(
     
     # Base diagnostic data for the device
     device_diagnostics = {
+        "unsupported_alarm_values": unsupported_alarm_diagnostics(coordinator.data),
         "discovery": hub.discovery_diagnostics(),
         "pv_restore": coordinator.pv_restore_diagnostics(),
         "device_info": async_redact_data({

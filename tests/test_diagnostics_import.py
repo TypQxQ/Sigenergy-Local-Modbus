@@ -39,6 +39,9 @@ class TestDiagnosticsImport(unittest.TestCase):
         modules = {name: types.ModuleType(name) for name in names}
         for module in modules.values():
             module.__path__ = []
+        # Load pure integration helpers from the actual package alongside the
+        # platform; keep only HA/register dependencies stubbed.
+        modules[package].__path__ = [str(SOURCE_PATH.parent)]
         helper = Mock(name="async_get_connection_info")
         modules["homeassistant.components.modbus.connection"].async_get_connection_info = helper
         modules["homeassistant.components.diagnostics"].async_redact_data = Mock()
