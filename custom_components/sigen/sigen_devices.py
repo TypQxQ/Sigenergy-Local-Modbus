@@ -353,13 +353,23 @@ class _ComponentGroup:
         except asyncio.CancelledError:
             self._enqueue(name, names)
             raise
-        except ModbusError:
+        except ModbusError as error:
             self.discovery_failures += 1
             self._discovery_failure_streak += 1
             delay = min(PROBE_RETRY_DELAY * 2 ** min(self._discovery_failure_streak - 1, 3),
                         _MAX_DISCOVERY_BACKOFF)
             self.discovery_retry_at = time.monotonic() + delay
-            self._enqueue(name, names)
+            if len(names) > 1 and not isinstance(error, ModbusConnectionError):
+                # Some optional addresses stay silent instead of rejecting a
+                # read. Narrow the block after backoff so healthy neighbours
+                # can be discovered. Each child still costs a later interval;
+                # an outage keeps the original block and no support decision
+                # is made from a timeout or incomplete response.
+                middle = len(names) // 2
+                self._enqueue(name, names[:middle])
+                self._enqueue(name, names[middle:])
+            else:
+                self._enqueue(name, names)
             raise
         else:
             self._discovery_failure_streak = 0
