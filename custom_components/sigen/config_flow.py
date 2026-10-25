@@ -7,8 +7,9 @@ from typing import Any, Dict, List, Optional, Union
 import asyncio
 import re
 import logging
-from pymodbus.client import AsyncModbusTcpClient
-from pymodbus.exceptions import ConnectionException, ModbusException
+
+from modbus_connection import ModbusError, ModbusTcpParams
+from homeassistant.components.modbus import async_get_temporary_unit
 
 import voluptuous as vol
 
@@ -28,7 +29,6 @@ from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
     async_entries_for_device,
 )
-from .modbus import _suppress_pymodbus_logging, _call_modbus_method_safe
 from .const import (
     DOMAIN,
     DEFAULT_PORT,
@@ -209,6 +209,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         self._devices = {}
         self._selected_plant_entry_id = None
         self._discovered_ip = ""
+        self._pending_probe_task: asyncio.Task[None] | None = None
         self._discovered_device_type: dict[str, list[int]] = {
             DEVICE_TYPE_INVERTER: [],
             DEVICE_TYPE_AC_CHARGER: [],
@@ -343,38 +344,37 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         # Check each deviceID first if it is Inverter (with or without DC Charger) or AC Charger
         # Check until the deviceID does not respond anymore or 247 is reached.
         err = None
-        client = AsyncModbusTcpClient(host=host, port=port, timeout=timeout)
+        params = ModbusTcpParams(host=host, port=port)
 
         try:
-            with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
-                if not await client.connect():
-                    _LOGGER.debug("Modbus connection failed to %s:%s", host, port)
-                    return False
-
+            # Holding a unit for the whole scan keeps this (host, port)
+            # connection open; every probe below acquires its own short-lived
+            # unit on the same shared connection instead of reconnecting.
+            async with async_get_temporary_unit(self.hass, params, DEFAULT_PLANT_SLAVE_ID):
                 _LOGGER.debug("Modbus connected to %s:%s. Checking device type...", host, port)
 
                 # If this is not answering as a plant return false
                 # Returns error message if failed.
                 if await self._async_try_read_register(
-                    client, DEFAULT_PLANT_SLAVE_ID, DEVICE_CHECKS[DEVICE_TYPE_PLANT]):
+                    params, DEFAULT_PLANT_SLAVE_ID, DEVICE_CHECKS[DEVICE_TYPE_PLANT], timeout):
                     return False
 
                 for device_id in range(1, 247):
 
-                    # Check if DC Charger 
+                    # Check if DC Charger
                     if not await self._async_try_read_register(
-                        client, device_id, DEVICE_CHECKS[DEVICE_TYPE_DC_CHARGER]):
+                        params, device_id, DEVICE_CHECKS[DEVICE_TYPE_DC_CHARGER], timeout):
                         self._discovered_device_type[DEVICE_TYPE_DC_CHARGER].append(device_id)
                         self._discovered_device_type[DEVICE_TYPE_INVERTER].append(device_id)
                         continue
                     # Check if Inverter
                     elif not await self._async_try_read_register(
-                        client, device_id, DEVICE_CHECKS[DEVICE_TYPE_INVERTER]):
+                        params, device_id, DEVICE_CHECKS[DEVICE_TYPE_INVERTER], timeout):
                         self._discovered_device_type[DEVICE_TYPE_INVERTER].append(device_id)
                         continue
                     # Check if AC Charger
                     elif not await self._async_try_read_register(
-                        client, device_id, DEVICE_CHECKS[DEVICE_TYPE_AC_CHARGER]):
+                        params, device_id, DEVICE_CHECKS[DEVICE_TYPE_AC_CHARGER], timeout):
                         self._discovered_device_type[DEVICE_TYPE_AC_CHARGER].append(device_id)
                         continue
                     else:
@@ -386,16 +386,12 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 _LOGGER.debug("No inverters found for %s. Skipping device.", self._discovered_ip)
                 return False
 
-        except (ConnectionException, asyncio.TimeoutError) as e:
+        except ModbusError as e:
             err = f"Modbus connection failed for {host}: {e}"
             _LOGGER.debug(err)
         except Exception as e:
             err = f"Unexpected error during device type check for {host}: {e}"
             _LOGGER.warning(err)
-        finally:
-            if client:
-                client.close()
-                _LOGGER.debug("Modbus test client closed for %s.", host)
 
         return True if not err and \
             bool(any(self._discovered_device_type[DEVICE_TYPE_INVERTER])) else False
@@ -517,53 +513,91 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
         # Check the connection
         response = await self._async_try_read_register(
-            AsyncModbusTcpClient(host=host, port=port, timeout=timeout),
+            ModbusTcpParams(host=host, port=port),
             slave_id,
             register_address,
+            timeout,
         )
         # self.async_check_device_type(host, port, slave_id, timeout)
         if response:
             errors[CONF_HOST] = response
         return errors
 
-    async def _async_try_read_register(self, client: AsyncModbusTcpClient, slave_id: int, register_address: int) -> str:
-        """Helper to attempt reading a single Modbus register."""
-        err = ""
-        try:
-            host = client.comm_params.host
-            port = client.comm_params.port
+    async def _async_try_read_register(
+        self,
+        params: ModbusTcpParams,
+        slave_id: int,
+        register_address: int,
+        timeout: float = 1,
+    ) -> str:
+        """Helper to attempt reading a single Modbus register.
 
-            with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
-                if not await client.connect():
-                    err = ("Modbus connection failed to %s:%s" % (host, port))
-                    _LOGGER.debug(err)
-                    return err
+        A timeout stops waiting without cancelling the wire transaction.
+        Before the next check starts its own budget, drain the previous
+        transaction: otherwise its longer wire timeout can occupy the
+        shared connection while every subsequent type check times out in
+        the queue. The total scan can therefore include that drain time.
 
-                _LOGGER.debug("Modbus connected to %s:%s. Checking device type...", host, port)
+        Keep and consume each task explicitly. asyncio.wait() leaves the
+        read running on timeout/caller cancellation, without creating a
+        shield future that reports late errors separately on Python 3.14.
+        """
+        if self._pending_probe_task is not None:
+            await asyncio.wait({self._pending_probe_task})
 
-                result = await _call_modbus_method_safe(
-                    client.read_input_registers,
-                    address=register_address,
-                    count=1,
-                    slave=slave_id,
+        timed_out = False
+        caller_cancelled = False
+
+        async def _read() -> None:
+            async with async_get_temporary_unit(self.hass, params, slave_id) as unit:
+                await unit.read_input_registers(register_address, 1)
+
+        def _log_late_result(task: asyncio.Task) -> None:
+            """Consume every result and log failures after the waiter left."""
+            if self._pending_probe_task is task:
+                self._pending_probe_task = None
+            if task.cancelled():
+                return
+            ex = task.exception()
+            if ex is not None and timed_out:
+                _LOGGER.debug(
+                    "Modbus read for register %s on %s:%s, slave %s failed after "
+                    "the %ss timeout had already elapsed: %s",
+                    register_address, params.host, params.port, slave_id, timeout, ex,
                 )
-                if result and not result.isError():
-                    _LOGGER.debug("Modbus read successful for register %s on %s:%s, slave %s.",
-                                register_address, host, port, slave_id)
-                    return ""
-                else:
-                    err = f"Modbus read failed or returned error for register " +\
-                        f"{register_address} on {host}:{port}, slave {slave_id}."
-                    _LOGGER.debug(err)
-                    return err
-        except (ModbusException, asyncio.TimeoutError) as e:
-            err = "Modbus exception during read for register %s on %s: %s" % \
-                (register_address, host, e)
+            elif ex is not None and caller_cancelled:
+                _LOGGER.debug(
+                    "Modbus read for register %s on %s:%s, slave %s failed after "
+                    "the caller was cancelled: %s",
+                    register_address, params.host, params.port, slave_id, ex,
+                )
+
+        task = asyncio.ensure_future(_read())
+        self._pending_probe_task = task
+        task.add_done_callback(_log_late_result)
+        try:
+            done, _pending = await asyncio.wait({task}, timeout=timeout)
+            if not done:
+                timed_out = True
+                err = "Modbus read timed out after %ss for register %s on %s:%s, slave %s" % \
+                    (timeout, register_address, params.host, params.port, slave_id)
+                _LOGGER.debug(err)
+                return err
+            task.result()
+            _LOGGER.debug("Modbus read successful for register %s on %s:%s, slave %s.",
+                        register_address, params.host, params.port, slave_id)
+            return ""
+        except asyncio.CancelledError:
+            caller_cancelled = True
+            raise
+        except ModbusError as e:
+            err = "Modbus error during read for register %s on %s:%s, slave %s: %s" % \
+                (register_address, params.host, params.port, slave_id, e)
             _LOGGER.debug(err)
             return err
         except Exception as e:
             err = "Unexpected error during Modbus read for register %s on %s: %s" % \
-                (register_address, host, e)
+                (register_address, params.host, e)
             _LOGGER.warning(err)
             return err
 
@@ -574,45 +608,33 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         err = None
         found_device_type = DEVICE_TYPE_UNKNOWN
-        client = AsyncModbusTcpClient(host=host, port=port, timeout=timeout)
+        params = ModbusTcpParams(host=host, port=port)
 
         try:
-            with _suppress_pymodbus_logging(really_suppress= False if _LOGGER.isEnabledFor(logging.DEBUG) else True):
-                if not await client.connect():
-                    _LOGGER.debug("Modbus connection failed to %s:%s", host, port)
-                    return DEVICE_TYPE_UNKNOWN # Cannot determine type if connection fails
+            for device_type, register_address in DEVICE_CHECKS.items():
+                # Returns error message if failed.
+                if not await self._async_try_read_register(
+                    params, slave_id, register_address, timeout):
+                # Special case: If DC Charger register read succeeds, it's an Inverter *with* DC.
+                # The loop structure handles this implicitly by checking DC first.
+                # If the DC check passes, we return DEVICE_TYPE_DC_CHARGER.
+                # If it fails, the next iteration checks the standard inverter register.
+                    found_device_type = device_type
+                    _LOGGER.debug("Identified as %s based on register %s", device_type, register_address)
+                    err = None # Clear any previous error
+                    break # Stop checking once a type is identified
+                else:
+                     err = f"Check failed for {device_type} (register {register_address})"
+                     _LOGGER.debug(err)
 
-                _LOGGER.debug("Modbus connected to %s:%s. Checking device type...", host, port)
-
-                for device_type, register_address in DEVICE_CHECKS.items():
-                    # Returns error message if failed.
-                    if not await self._async_try_read_register(
-                        client, slave_id, register_address):
-                    # Special case: If DC Charger register read succeeds, it's an Inverter *with* DC.
-                    # The loop structure handles this implicitly by checking DC first.
-                    # If the DC check passes, we return DEVICE_TYPE_DC_CHARGER.
-                    # If it fails, the next iteration checks the standard inverter register.
-                        found_device_type = device_type
-                        _LOGGER.debug("Identified as %s based on register %s", device_type, register_address)
-                        err = None # Clear any previous error
-                        break # Stop checking once a type is identified
-                    else:
-                         err = f"Check failed for {device_type} (register {register_address})"
-                         _LOGGER.debug(err)
-
-
-        except (ConnectionException, asyncio.TimeoutError) as e:
+        except ModbusError as e:
             err = f"Modbus connection failed for {host}: {e}"
             _LOGGER.debug(err)
         except Exception as e:
             err = f"Unexpected error during device type check for {host}: {e}"
             _LOGGER.warning(err)
-        finally:
-            if client:
-                client.close()
-                _LOGGER.debug("Modbus test client closed for %s.", host)
 
-        _LOGGER.debug("Final identified type for %s:%s (Slave %s): %s", 
+        _LOGGER.debug("Final identified type for %s:%s (Slave %s): %s",
                       host, port, slave_id, found_device_type)
         return found_device_type if not err else err
 
