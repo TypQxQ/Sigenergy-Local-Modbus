@@ -2,5 +2,6 @@
 .vscode/*
 !.vscode/settings.json
 *.pyc
+/dist/
 Reference/**
 custom_components/sigen/homeassistant/**
