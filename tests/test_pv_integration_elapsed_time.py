@@ -39,6 +39,7 @@ class _State:
     state: str
     last_changed: datetime
     last_reported: datetime
+    last_updated: datetime
 
 
 def _get_integration_method():
@@ -107,13 +108,16 @@ class _SensorHarness:
         self._method(self, old_state, new_state)
 
 
-def _snapshot(value, changed_seconds, reported_seconds=None):
+def _snapshot(value, changed_seconds, reported_seconds=None, *, updated_seconds=None):
     if reported_seconds is None:
         reported_seconds = changed_seconds
+    if updated_seconds is None:
+        updated_seconds = changed_seconds
     return _State(
         str(value),
         START + timedelta(seconds=changed_seconds),
         START + timedelta(seconds=reported_seconds),
+        START + timedelta(seconds=updated_seconds),
     )
 
 
@@ -163,6 +167,19 @@ class PVIntegrationElapsedTimeTests(unittest.TestCase):
         sensor = _SensorHarness(self.method)
         sensor.integrate(_snapshot("0.6", 0), _snapshot("1.4", 10))
         self.assertEqual(sensor._state, Decimal(10) / Decimal(3600))
+
+    def test_attribute_only_event_accounts_for_elapsed_constant_power(self):
+        sensor = _SensorHarness(self.method)
+        sensor.integrate(_snapshot("1.0", 0, 4), _snapshot("1.0", 0, 5, updated_seconds=5))
+        self.assertEqual(sensor._state, Decimal(5) / Decimal(3600))
+
+    def test_nonpositive_event_interval_does_not_decrease_the_counter(self):
+        for at in (0, -1):
+            with self.subTest(at=at):
+                sensor = _SensorHarness(self.method)
+                sensor.integrate(_snapshot("1", 0), _snapshot("1.2", at))
+                self.assertEqual(Decimal(0), sensor._state)
+                self.assertEqual(0, sensor.writes)
 
     def test_missing_or_unavailable_states_are_not_integrated(self):
         cases = (

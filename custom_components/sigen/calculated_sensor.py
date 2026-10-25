@@ -1979,10 +1979,11 @@ class SigenergyIntegrationSensor(SigenergyEntity, RestoreSensor):
         if not (states := self._validate_states(old_state, new_state)):
             return
 
-        # Unchanged power reports advance last_reported without a state change.
-        # Use state-change timestamps so those reports cannot shorten the interval.
+        # Repeated reports advance last_reported without generating an event.
+        # last_updated identifies the previous processed state/attribute event;
+        # last_changed would bridge attribute events already counted by a timer.
         elapsed_seconds = Decimal(
-            (new_state.last_changed - old_state.last_changed).total_seconds()
+            (new_state.last_updated - old_state.last_updated).total_seconds()
             if self._last_integration_trigger == IntegrationTrigger.STATE_EVENT
             else (new_state.last_reported - self._last_integration_time).total_seconds()
         )
