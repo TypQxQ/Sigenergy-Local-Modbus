@@ -31,5 +31,5 @@
   "requirements": [
     "modbus-connection>=4.12.3"
   ],
-  "version": "1.3.0b7"
+  "version": "1.3.0b9"
 }

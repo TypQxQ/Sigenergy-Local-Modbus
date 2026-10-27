@@ -124,6 +124,19 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
         read_addresses = {event.address for event in unit.read_events}
         self.assertNotIn(soh_addr, read_addresses)
 
+    async def test_alarm7_unknown_bitmap_keeps_transport_support_and_reads_next_poll(self) -> None:
+        unit, plant = self._new_plant()
+        key = "plant_general_alarm7"
+        address = self.defs.PLANT_RUNNING_INFO_REGISTERS[key].address
+        unit.load_raw({"input": {address: 0xFFFF}})
+        data = await plant.async_update()
+        self.assertEqual(0xFFFF, data[key])
+        self.assertIs(plant.is_supported(key), True)
+        unit.load_raw({"input": {address: 3}})
+        data = await plant.async_update()
+        self.assertEqual(3, data[key])
+        self.assertIs(plant.is_supported(key), True)
+
     async def test_write_only_command_register_can_be_written(self) -> None:
         unit, plant = self._new_plant()
         await plant.async_write("plant_ess_max_charging_limit", 500)

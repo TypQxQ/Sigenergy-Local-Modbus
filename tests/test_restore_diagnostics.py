@@ -11,6 +11,7 @@ from unittest.mock import Mock
 
 from test_remote_ems_write_readback import _make_coordinator
 from test_pv_restore import pv, NOW
+from test_alarm7_unknown_value import alarm
 
 
 class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
@@ -26,6 +27,7 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
             "async_get_connection_info": Mock(return_value=[]),
             "CONF_INVERTER_HAS_DCCHARGER": "has_dc_charger",
             "HA_VERSION": "2026.10.2", "pymodbus_version": "test", "tmodbus_version": "test",
+            "unknown_alarm_diagnostics": alarm.unknown_alarm_diagnostics,
         }
         for name in ("AC_CHARGER_PARAMETER_REGISTERS", "AC_CHARGER_RUNNING_INFO_REGISTERS",
                      "DC_CHARGER_PARAMETER_REGISTERS", "DC_CHARGER_RUNNING_INFO_REGISTERS",
@@ -41,7 +43,7 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
         coordinator, _hub, _ns = _make_coordinator()
         coordinator.partial_update_count = 7
         coordinator.update_interval = timedelta(seconds=5)
-        coordinator.data = {}
+        coordinator.data = {"plant": {"plant_general_alarm7": 0xFFFF}}
         coordinator.pv_restore_states["sensor.pv"] = {
             "status": "restored", "source": "snapshot",
             "native_value_kwh": "6333.170261123", "sample_updated": "2026-10-18T12:00:00+00:00",
@@ -67,6 +69,7 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
             _plant_host="redacted", _plant_port=502, plant_id=247,
             inverter_count=0, ac_charger_count=0, read_only=True,
             probe_retry_delay=60,
+            inverter_connections={}, ac_charger_connections={}, get_register_support=lambda *args: True,
         )
         entry = SimpleNamespace(entry_id="test", as_dict=lambda: {"entry_id": "test"})
         device = SimpleNamespace(
@@ -77,6 +80,8 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
         entry_result = await namespace["async_get_config_entry_diagnostics"](hass, entry)
         device_result = await namespace["async_get_device_diagnostics"](hass, entry, device)
         for result, health_key in ((entry_result, "coordinator"), (device_result, "coordinator_status")):
+            self.assertEqual("unknown", result["unknown_alarm_values"]["plant_general_alarm7"]["status"])
+            self.assertEqual(0xFFFF, result["unknown_alarm_values"]["plant_general_alarm7"]["raw_value"])
             self.assertEqual(7, result[health_key]["partial_update_count"])
             self.assertEqual("partial", result["discovery"]["devices"]["inverter:1"]["poll_quality"]["status"])
             self.assertEqual("6333.170261123", result["pv_restore"]["sensor.pv"]["native_value_kwh"])
@@ -89,6 +94,11 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(any(key.startswith("_") for key in result["pv_restore"]["sensor.pv"]))
             json.dumps(result)
         self.assertEqual(2, hub.discovery_diagnostics.call_count)
+        coordinator.data["plant"]["plant_general_alarm7"] = 0
+        for download, args in ((namespace["async_get_config_entry_diagnostics"], (hass, entry)),
+                               (namespace["async_get_device_diagnostics"], (hass, entry, device))):
+            result = await download(*args)
+            self.assertEqual({}, result["unknown_alarm_values"])
 
 
 if __name__ == "__main__":

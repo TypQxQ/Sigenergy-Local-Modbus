@@ -47,6 +47,7 @@ from .const import (
     CONF_INVERTER_HAS_DCCHARGER,
 )
 from .sigen_entity import SigenergyEntity
+from .alarm import unknown_alarm_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -230,6 +231,19 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
         self._last_valid_daily_energy_value: Decimal | None = None
         self._last_valid_daily_energy_date: date | None = None
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Explain the unknown alarm bitmap while retaining the entity's identity."""
+        attributes = super().extra_state_attributes
+        if unknown_alarm_value(self.entity_description.key, self._get_raw_value()):
+            return {
+                **(attributes or {}),
+                "alarm_status": "unknown",
+                "alarm_reason": "all_bits_set",
+                "raw_value": 0xFFFF,
+            }
+        return attributes
+
     def _is_near_daily_reset(self) -> bool:
         """Return True if within ±20 minutes of midnight (legitimate daily reset window).
 
@@ -312,6 +326,8 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
     def native_value(self) -> Any:
         """Return the state of the sensor."""
         raw_value = self._get_raw_value()
+        if unknown_alarm_value(self.entity_description.key, raw_value):
+            return "Unknown Alarm"
         data = self.coordinator.data
         if data is None:
             return None
