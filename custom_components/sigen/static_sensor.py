@@ -20,6 +20,7 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from .common import (SigenergySensorEntityDescription)
+from .modbusregisterdefinitions import enum_sensor_options
 
 class StaticSensors:
     # PV string sensor descriptions
@@ -46,6 +47,9 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="plant_grid_sensor_status",
             name="Grid Sensor Status",
+            device_class=SensorDeviceClass.ENUM,
+            options=enum_sensor_options("plant_grid_sensor_status"),
+            translation_key="plant_grid_sensor_status",
             icon="mdi:power-plug",
             entity_category=EntityCategory.DIAGNOSTIC,
             entity_registry_enabled_default=False,
@@ -71,6 +75,9 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="plant_on_off_grid_status",
             name="Grid Connection Status",
+            device_class=SensorDeviceClass.ENUM,
+            options=enum_sensor_options("plant_on_off_grid_status"),
+            translation_key="plant_on_off_grid_status",
             icon="mdi:transmission-tower-off",
         ),
         # Max power metrics
@@ -339,6 +346,9 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="plant_running_state",
             name="Plant Running State",
+            device_class=SensorDeviceClass.ENUM,
+            options=enum_sensor_options("plant_running_state"),
+            translation_key="plant_running_state",
             icon="mdi:power",
         ),
         # Grid sensor phase-specific metrics
@@ -1214,6 +1224,9 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="inverter_running_state",
             name="Running State",
+            device_class=SensorDeviceClass.ENUM,
+            options=enum_sensor_options("inverter_running_state"),
+            translation_key="inverter_running_state",
             icon="mdi:power",
         ),
         SigenergySensorEntityDescription(
@@ -1434,6 +1447,9 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="inverter_output_type",
             name="Output Type",
+            device_class=SensorDeviceClass.ENUM,
+            options=enum_sensor_options("inverter_output_type"),
+            translation_key="inverter_output_type",
             entity_category=EntityCategory.DIAGNOSTIC,
             entity_registry_enabled_default=False,
         ),
@@ -1683,6 +1699,9 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="ac_charger_system_state",
             name="System State",
+            device_class=SensorDeviceClass.ENUM,
+            options=enum_sensor_options("ac_charger_system_state"),
+            translation_key="ac_charger_system_state",
             entity_category=EntityCategory.DIAGNOSTIC,
             icon="mdi:lightning-bolt-circle",
         ),
@@ -1810,6 +1829,9 @@ class StaticSensors:
         SigenergySensorEntityDescription(
             key="dc_charger_running_state",
             name="Running State",
+            device_class=SensorDeviceClass.ENUM,
+            options=enum_sensor_options("dc_charger_running_state"),
+            translation_key="dc_charger_running_state",
             icon="mdi:ev-station",
             entity_category=EntityCategory.DIAGNOSTIC,
         ),

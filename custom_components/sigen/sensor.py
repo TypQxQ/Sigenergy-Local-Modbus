@@ -23,9 +23,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .modbusregisterdefinitions import (
-    RunningState,
-    DCChargerRunningState,
     ALARM_CODES,
+    ENUM_SENSOR_STATES,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .device_registry_compat import parent_device_info
@@ -394,18 +393,14 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             elif self.entity_description.key == "ac_charger_alarm3":
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["AC_CHARGER_ALARM_CODES3"])
 
-        # Handle enums
-        enum_maps = {
-            "plant_on_off_grid_status": {0: "On Grid", 1: "Off Grid (Auto)", 2: "Off Grid (Manual)"},
-            "plant_running_state": {s.value: s.name.replace("_", " ").title() for s in RunningState},
-            "inverter_running_state": {s.value: s.name.replace("_", " ").title() for s in RunningState},
-            "ac_charger_system_state": {0: "Initializing", 1: "Not Connected", 2: "Reserving", 3: "Preparing", 4: "EV Ready", 5: "Charging", 6: "Fault", 7: "Error"},
-            "dc_charger_running_state": {s.value: s.name.replace("_", " ").title() for s in DCChargerRunningState},
-            "inverter_output_type":  {0: "L/N", 1: "L1/L2/L3", 2: "L1/L2/L3/N", 3: "L1/L2/N"},
-            "plant_grid_sensor_status": {0: "Offline", 1: "Online"},
-        }
-        if self.entity_description.key in enum_maps:
-            return enum_maps[self.entity_description.key].get(raw_value, f"Unknown: {raw_value}")
+        # Handle enums. An unrecognised value reports as unknown, because an
+        # enum sensor may only report one of its declared options.
+        enum_states = ENUM_SENSOR_STATES.get(self.entity_description.key)
+        if enum_states is not None:
+            state = enum_states.get(raw_value)
+            if state is None:
+                _LOGGER.debug("Unrecognised value %s for %s", raw_value, self.entity_id)
+            return state
 
         if self._round_digits is not None:
             try:
