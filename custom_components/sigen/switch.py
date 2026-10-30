@@ -291,13 +291,21 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
         if self.coordinator.data is None:
-            raise HomeAssistantError(f"Cannot turn on {self.entity_id}: Coordinator data is unavailable")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="coordinator_unavailable",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
         identifier = self._device_name
         await self.entity_description.turn_on_fn(self.coordinator, identifier)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
         if self.coordinator.data is None:
-            raise HomeAssistantError(f"Cannot turn off {self.entity_id}: Coordinator data is unavailable")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="coordinator_unavailable",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
         identifier = self._device_name
         await self.entity_description.turn_off_fn(self.coordinator, identifier)

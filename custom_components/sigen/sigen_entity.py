@@ -98,8 +98,12 @@ class SigenergyEntity(CoordinatorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self.hub = coordinator.hub
-        # Note: _attr_name is handled by _attr_has_entity_name = True and description.name
-        # self._attr_name = name # We might not need this if using has_entity_name=True
+        # Keep legacy description names as a fallback and for identity generation.
+        # Home Assistant resolves display names from its server language and
+        # preserves names explicitly set by the user in the entity registry.
+        self._attr_translation_key = (
+            getattr(description, "translation_key", None) or description.key
+        )
         self._device_type = device_type
         self._device_id = device_id  # Store original ID (e.g., slave ID for AC charger)
         self._device_name = device_name  # Store device name (e.g., "Inverter 1", "Plant", "AC Charger 1")

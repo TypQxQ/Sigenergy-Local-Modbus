@@ -34,7 +34,8 @@
           "scan_interval": "Scan Interval (seconds)",
           "migrate_yaml": "Migrate legacy YAML sensor values",
           "migrate_yaml_description": "If enabled, initial sensor values will be imported from the legacy YAML configuration (if present).",
-          "read_only": "Read-Only Mode"
+          "read_only": "Read-Only Mode",
+          "slave_id": "Inverter device ID"
         },
         "data_description": {
           "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)"
@@ -101,7 +102,10 @@
       "cannot_be_lower_than_high": "Cannot be lower than the high interval.",
       "cannot_be_lower_than_medium": "Cannot be lower than the medium interval.",
       "invalid_host": "Invalid host address provided.",
-      "invalid_port": "Invalid port number. Must be between 1 and 65535."
+      "invalid_port": "Invalid port number. Must be between 1 and 65535.",
+      "required_value": "Enter a value.",
+      "must_be_number": "Enter a number.",
+      "must_be_at_least_1": "The update interval must be at least 1 second."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured.",
@@ -114,7 +118,8 @@
       "unknown_device_type": "Unknown device type encountered.",
       "no_devices_available": "No devices found for reconfiguration.",
       "invalid_device_selection": "Invalid device selection.",
-      "device_removed": "Device successfully removed."
+      "device_removed": "Device successfully removed.",
+      "plants_exist": "A Sigenergy plant is already configured."
     }
   },
   "options": {
@@ -147,7 +152,8 @@
           "host": "Host (IP address)",
           "port": "Port",
           "read_only": "Read-Only Mode",
-          "scan_interval": "Scan Interval (seconds)"
+          "scan_interval": "Scan Interval (seconds)",
+          "slave_id": "Inverter device ID"
         },
         "data_description": {
           "read_only": "(Prevents Home Assistant from making changes to the Sigenergy system. Recommended for initial setup. Can be changed later in device settings.)"
@@ -200,7 +206,25 @@
       "invalid_port": "Invalid port number. Must be between 1 and 65535.",
       "must_be_divisible_by_high": "Must be divisible by the high interval.",
       "cannot_be_lower_than_high": "Cannot be lower than the high interval.",
-      "cannot_be_lower_than_medium": "Cannot be lower than the medium interval."
+      "cannot_be_lower_than_medium": "Cannot be lower than the medium interval.",
+      "cannot_connect": "Failed to connect to the Sigenergy system. Please check the host and port.",
+      "required_value": "Enter a value.",
+      "must_be_number": "Enter a number.",
+      "must_be_at_least_1": "The update interval must be at least 1 second."
+    },
+    "abort": {
+      "already_configured": "This Sigenergy system is already configured.",
+      "no_plants_available": "No plants are available. Please add a plant first.",
+      "no_inverters_available": "No inverters are available on the selected plant. Please add an inverter first.",
+      "device_added": "Device successfully added to the plant configuration.",
+      "parent_plant_not_found": "The parent plant configuration could not be found.",
+      "parent_inverter_not_found": "The parent inverter configuration could not be found.",
+      "parent_inverter_invalid": "The parent inverter configuration is invalid.",
+      "unknown_device_type": "Unknown device type encountered.",
+      "no_devices_available": "No devices found for reconfiguration.",
+      "invalid_device_selection": "Invalid device selection.",
+      "device_removed": "Device successfully removed.",
+      "plants_exist": "A Sigenergy plant is already configured."
     }
   },
   "entity": {
@@ -209,14 +233,16 @@
         "state": {
           "offline": "Offline",
           "online": "Online"
-        }
+        },
+        "name": "Grid sensor status"
       },
       "plant_on_off_grid_status": {
         "state": {
           "on_grid": "On Grid",
           "off_grid_auto": "Off Grid (Auto)",
           "off_grid_manual": "Off Grid (Manual)"
-        }
+        },
+        "name": "Grid connection status"
       },
       "plant_running_state": {
         "state": {
@@ -225,7 +251,8 @@
           "fault": "Fault",
           "shutdown": "Shutdown",
           "environmental_abnormality": "Environmental Abnormality"
-        }
+        },
+        "name": "Running state"
       },
       "plant_ems_work_mode": {
         "state": {
@@ -236,7 +263,8 @@
           "vpp_scheduling": "VPP Scheduling",
           "remote_ems": "Remote EMS",
           "custom": "Custom"
-        }
+        },
+        "name": "EMS work mode"
       },
       "inverter_running_state": {
         "state": {
@@ -245,7 +273,8 @@
           "fault": "Fault",
           "shutdown": "Shutdown",
           "environmental_abnormality": "Environmental Abnormality"
-        }
+        },
+        "name": "Running state"
       },
       "inverter_output_type": {
         "state": {
@@ -253,7 +282,8 @@
           "l1_l2_l3": "L1/L2/L3",
           "l1_l2_l3_n": "L1/L2/L3/N",
           "l1_l2_n": "L1/L2/N"
-        }
+        },
+        "name": "Output type"
       },
       "ac_charger_system_state": {
         "state": {
@@ -265,7 +295,8 @@
           "charging": "Charging",
           "fault": "Fault",
           "error": "Error"
-        }
+        },
+        "name": "System state"
       },
       "dc_charger_running_state": {
         "state": {
@@ -280,6 +311,1497 @@
           "discharging": "Discharging",
           "alarm": "Alarm",
           "preparing_insulation": "Preparing Insulation"
+        },
+        "name": "Running state"
+      },
+      "plant_daily_grid_import_energy": {
+        "name": "Daily grid import energy"
+      },
+      "plant_daily_grid_export_energy": {
+        "name": "Daily grid export energy"
+      },
+      "plant_daily_third_party_inverter_energy_from_lifetime": {
+        "name": "Daily third party inverter energy"
+      },
+      "power": {
+        "name": "Power"
+      },
+      "plant_system_time": {
+        "name": "System time"
+      },
+      "plant_system_timezone": {
+        "name": "System timezone"
+      },
+      "plant_photovoltaic_power": {
+        "name": "PV power"
+      },
+      "plant_grid_import_power": {
+        "name": "Grid import power"
+      },
+      "plant_grid_export_power": {
+        "name": "Grid export power"
+      },
+      "plant_consumed_power": {
+        "name": "Consumed power"
+      },
+      "plant_daily_pv_energy": {
+        "name": "Daily PV energy"
+      },
+      "plant_daily_battery_charge_energy": {
+        "name": "Daily battery charge energy"
+      },
+      "plant_daily_battery_discharge_energy": {
+        "name": "Daily battery discharge energy"
+      },
+      "inverter_startup_time": {
+        "name": "Startup time"
+      },
+      "inverter_shutdown_time": {
+        "name": "Shutdown time"
+      },
+      "inverter_ess_current": {
+        "name": "Battery current (estimated)"
+      },
+      "pv_string_accumulated_energy": {
+        "name": "Accumulated energy"
+      },
+      "pv_string_daily_energy": {
+        "name": "Daily energy"
+      },
+      "modbus_max_data_fetch_time": {
+        "name": "Modbus maximum data fetch time since restart"
+      },
+      "modbus_latest_fetch_time_high": {
+        "name": "Modbus fetch time"
+      },
+      "voltage": {
+        "name": "Voltage"
+      },
+      "current": {
+        "name": "Current"
+      },
+      "plant_grid_sensor_active_power": {
+        "name": "Grid active power"
+      },
+      "plant_grid_sensor_reactive_power": {
+        "name": "Grid reactive power"
+      },
+      "plant_max_active_power": {
+        "name": "Maximum active power"
+      },
+      "plant_max_apparent_power": {
+        "name": "Maximum apparent power"
+      },
+      "plant_ess_soc": {
+        "name": "Battery state of charge"
+      },
+      "plant_phase_a_active_power": {
+        "name": "Phase A active power"
+      },
+      "plant_phase_b_active_power": {
+        "name": "Phase B active power"
+      },
+      "plant_phase_c_active_power": {
+        "name": "Phase C active power"
+      },
+      "plant_phase_a_reactive_power": {
+        "name": "Phase A reactive power"
+      },
+      "plant_phase_b_reactive_power": {
+        "name": "Phase B reactive power"
+      },
+      "plant_phase_c_reactive_power": {
+        "name": "Phase C reactive power"
+      },
+      "plant_general_alarm1": {
+        "name": "General alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Software version mismatch",
+              "bit_1": "Low insulation resistance",
+              "bit_2": "Over-temperature",
+              "bit_3": "Equipment fault",
+              "bit_4": "System grounding fault",
+              "bit_5": "PV string over-voltage",
+              "bit_6": "PV string reversely connected",
+              "bit_7": "PV string back-filling",
+              "bit_8": "AFCI fault",
+              "bit_9": "Grid power outage",
+              "bit_10": "Grid over-voltage",
+              "bit_11": "Grid under-voltage",
+              "bit_12": "Grid over-frequency",
+              "bit_13": "Grid under-frequency",
+              "bit_14": "Grid voltage imbalance",
+              "bit_15": "DC component of output current out of limit",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "plant_general_alarm2": {
+        "name": "General alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Leak current out of limit",
+              "bit_1": "Communication abnormal",
+              "bit_2": "System internal protection",
+              "bit_3": "AFCI self-checking circuit fault",
+              "bit_4": "Off-grid protection",
+              "bit_5": "Manual operation protection",
+              "bit_6": "Unknown alarm (bit 6)",
+              "bit_7": "Abnormal phase sequence",
+              "bit_8": "Short circuit to PE",
+              "bit_9": "Soft start failure",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "plant_general_alarm3": {
+        "name": "General alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Software version mismatch",
+              "bit_1": "Low insulation resistance to ground",
+              "bit_2": "Temperature too high",
+              "bit_3": "Equipment fault",
+              "bit_4": "Under-temperature",
+              "bit_5": "Internal protection",
+              "bit_6": "Thermal runaway",
+              "bit_7": "Unknown alarm (bit 7)",
+              "bit_8": "Unknown alarm (bit 8)",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "plant_general_alarm4": {
+        "name": "General alarm 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Software version mismatch",
+              "bit_1": "Temperature too high",
+              "bit_2": "Equipment fault",
+              "bit_3": "Excessive leakage current in off-grid output",
+              "bit_4": "N line grounding fault",
+              "bit_5": "Abnormal phase sequence of grid wiring",
+              "bit_6": "Abnormal phase sequence of inverter wiring",
+              "bit_7": "Grid phase loss",
+              "bit_8": "Unknown alarm (bit 8)",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "plant_general_alarm5": {
+        "name": "General alarm 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Software version mismatch",
+              "bit_1": "Low insulation resistance to ground",
+              "bit_2": "Over-temperature",
+              "bit_3": "Equipment fault",
+              "bit_4": "Charging fault",
+              "bit_5": "Equipment protection",
+              "bit_6": "Unknown alarm (bit 6)",
+              "bit_7": "Unknown alarm (bit 7)",
+              "bit_8": "Unknown alarm (bit 8)",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "plant_general_alarm6": {
+        "name": "General alarm 6",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Gateway communication abnormal",
+              "bit_1": "Meter communication abnormal",
+              "bit_2": "AC power sensor communication abnormal",
+              "bit_3": "Unknown alarm (bit 3)",
+              "bit_4": "Unknown alarm (bit 4)",
+              "bit_5": "Unknown alarm (bit 5)",
+              "bit_6": "Hard protection against grid-feed power limit exceedance",
+              "bit_7": "Unknown alarm (bit 7)",
+              "bit_8": "Generator failure to start",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "CLS fault",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "plant_general_alarm7": {
+        "name": "General alarm 7",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "OVGR fault",
+              "bit_1": "RPR fault",
+              "bit_2": "Unknown alarm (bit 2)",
+              "bit_3": "Unknown alarm (bit 3)",
+              "bit_4": "Unknown alarm (bit 4)",
+              "bit_5": "Unknown alarm (bit 5)",
+              "bit_6": "Unknown alarm (bit 6)",
+              "bit_7": "Unknown alarm (bit 7)",
+              "bit_8": "Unknown alarm (bit 8)",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          },
+          "alarm_reason": {
+            "name": "Reason",
+            "state": {
+              "all_bits_set": "All bits set; the alarm meaning is unknown"
+            }
+          }
+        }
+      },
+      "plant_grid_code_rated_frequency": {
+        "name": "Grid code rated frequency"
+      },
+      "plant_grid_code_rated_voltage": {
+        "name": "Grid code rated voltage"
+      },
+      "plant_current_control_command_value": {
+        "name": "Current control command value"
+      },
+      "plant_total_load_power": {
+        "name": "Total load power"
+      },
+      "plant_active_power": {
+        "name": "Active power"
+      },
+      "plant_reactive_power": {
+        "name": "Reactive power"
+      },
+      "plant_sigen_photovoltaic_power": {
+        "name": "Sigen PV power"
+      },
+      "plant_third_party_photovoltaic_power": {
+        "name": "Third-party PV power"
+      },
+      "plant_ess_power": {
+        "name": "Battery power"
+      },
+      "plant_available_max_active_power": {
+        "name": "Available maximum active power"
+      },
+      "plant_available_min_active_power": {
+        "name": "Available minimum active power"
+      },
+      "plant_available_max_reactive_power": {
+        "name": "Available maximum reactive power"
+      },
+      "plant_available_min_reactive_power": {
+        "name": "Available minimum reactive power"
+      },
+      "plant_ess_available_max_charging_power": {
+        "name": "Available maximum charging power"
+      },
+      "plant_ess_available_max_discharging_power": {
+        "name": "Available maximum discharging power"
+      },
+      "plant_grid_sensor_phase_a_active_power": {
+        "name": "Grid phase A active power"
+      },
+      "plant_grid_sensor_phase_b_active_power": {
+        "name": "Grid phase B active power"
+      },
+      "plant_grid_sensor_phase_c_active_power": {
+        "name": "Grid phase C active power"
+      },
+      "plant_grid_sensor_phase_a_reactive_power": {
+        "name": "Grid phase A reactive power"
+      },
+      "plant_grid_sensor_phase_b_reactive_power": {
+        "name": "Grid phase B reactive power"
+      },
+      "plant_grid_sensor_phase_c_reactive_power": {
+        "name": "Grid phase C reactive power"
+      },
+      "plant_ess_rated_charging_power": {
+        "name": "ESS rated charging power"
+      },
+      "plant_ess_rated_discharging_power": {
+        "name": "ESS rated discharging power"
+      },
+      "plant_ess_available_max_charging_capacity": {
+        "name": "Available maximum charging capacity"
+      },
+      "plant_ess_available_max_discharging_capacity": {
+        "name": "Available maximum discharging capacity"
+      },
+      "plant_ess_rated_energy_capacity": {
+        "name": "Rated energy capacity"
+      },
+      "plant_ess_charge_cut_off_soc": {
+        "name": "Charge cut-off SOC"
+      },
+      "plant_ess_discharge_cut_off_soc": {
+        "name": "Discharge cut-off SOC"
+      },
+      "plant_ess_soh": {
+        "name": "Battery state of health"
+      },
+      "plant_pv_total_daily_generation": {
+        "name": "PV daily generation"
+      },
+      "plant_pv_generation_previous_day": {
+        "name": "PV previous day generation"
+      },
+      "plant_ess_average_cell_temperature": {
+        "name": "ESS average cell temperature"
+      },
+      "plant_accumulated_pv_energy": {
+        "name": "Total PV generation"
+      },
+      "plant_daily_consumed_energy": {
+        "name": "Daily load consumption"
+      },
+      "plant_accumulated_consumed_energy": {
+        "name": "Total load consumption"
+      },
+      "plant_smart_load_1_total_consumption": {
+        "name": "[Smart load 1] total consumption"
+      },
+      "plant_smart_load_2_total_consumption": {
+        "name": "[Smart load 2] total consumption"
+      },
+      "plant_smart_load_3_total_consumption": {
+        "name": "[Smart load 3] total consumption"
+      },
+      "plant_smart_load_4_total_consumption": {
+        "name": "[Smart load 4] total consumption"
+      },
+      "plant_smart_load_5_total_consumption": {
+        "name": "[Smart load 5] total consumption"
+      },
+      "plant_smart_load_6_total_consumption": {
+        "name": "[Smart load 6] total consumption"
+      },
+      "plant_smart_load_7_total_consumption": {
+        "name": "[Smart load 7] total consumption"
+      },
+      "plant_smart_load_8_total_consumption": {
+        "name": "[Smart load 8] total consumption"
+      },
+      "plant_smart_load_9_total_consumption": {
+        "name": "[Smart load 9] total consumption"
+      },
+      "plant_smart_load_10_total_consumption": {
+        "name": "[Smart load 10] total consumption"
+      },
+      "plant_smart_load_11_total_consumption": {
+        "name": "[Smart load 11] total consumption"
+      },
+      "plant_smart_load_12_total_consumption": {
+        "name": "[Smart load 12] total consumption"
+      },
+      "plant_smart_load_13_total_consumption": {
+        "name": "[Smart load 13] total consumption"
+      },
+      "plant_smart_load_14_total_consumption": {
+        "name": "[Smart load 14] total consumption"
+      },
+      "plant_smart_load_15_total_consumption": {
+        "name": "[Smart load 15] total consumption"
+      },
+      "plant_smart_load_16_total_consumption": {
+        "name": "[Smart load 16] total consumption"
+      },
+      "plant_smart_load_17_total_consumption": {
+        "name": "[Smart load 17] total consumption"
+      },
+      "plant_smart_load_18_total_consumption": {
+        "name": "[Smart load 18] total consumption"
+      },
+      "plant_smart_load_19_total_consumption": {
+        "name": "[Smart load 19] total consumption"
+      },
+      "plant_smart_load_20_total_consumption": {
+        "name": "[Smart load 20] total consumption"
+      },
+      "plant_smart_load_21_total_consumption": {
+        "name": "[Smart load 21] total consumption"
+      },
+      "plant_smart_load_22_total_consumption": {
+        "name": "[Smart load 22] total consumption"
+      },
+      "plant_smart_load_23_total_consumption": {
+        "name": "[Smart load 23] total consumption"
+      },
+      "plant_smart_load_24_total_consumption": {
+        "name": "[Smart load 24] total consumption"
+      },
+      "plant_smart_load_1_power": {
+        "name": "[Smart load 1] power"
+      },
+      "plant_smart_load_2_power": {
+        "name": "[Smart load 2] power"
+      },
+      "plant_smart_load_3_power": {
+        "name": "[Smart load 3] power"
+      },
+      "plant_smart_load_4_power": {
+        "name": "[Smart load 4] power"
+      },
+      "plant_smart_load_5_power": {
+        "name": "[Smart load 5] power"
+      },
+      "plant_smart_load_6_power": {
+        "name": "[Smart load 6] power"
+      },
+      "plant_smart_load_7_power": {
+        "name": "[Smart load 7] power"
+      },
+      "plant_smart_load_8_power": {
+        "name": "[Smart load 8] power"
+      },
+      "plant_smart_load_9_power": {
+        "name": "[Smart load 9] power"
+      },
+      "plant_smart_load_10_power": {
+        "name": "[Smart load 10] power"
+      },
+      "plant_smart_load_11_power": {
+        "name": "[Smart load 11] power"
+      },
+      "plant_smart_load_12_power": {
+        "name": "[Smart load 12] power"
+      },
+      "plant_smart_load_13_power": {
+        "name": "[Smart load 13] power"
+      },
+      "plant_smart_load_14_power": {
+        "name": "[Smart load 14] power"
+      },
+      "plant_smart_load_15_power": {
+        "name": "[Smart load 15] power"
+      },
+      "plant_smart_load_16_power": {
+        "name": "[Smart load 16] power"
+      },
+      "plant_smart_load_17_power": {
+        "name": "[Smart load 17] power"
+      },
+      "plant_smart_load_18_power": {
+        "name": "[Smart load 18] power"
+      },
+      "plant_smart_load_19_power": {
+        "name": "[Smart load 19] power"
+      },
+      "plant_smart_load_20_power": {
+        "name": "[Smart load 20] power"
+      },
+      "plant_smart_load_21_power": {
+        "name": "[Smart load 21] power"
+      },
+      "plant_smart_load_22_power": {
+        "name": "[Smart load 22] power"
+      },
+      "plant_smart_load_23_power": {
+        "name": "[Smart load 23] power"
+      },
+      "plant_smart_load_24_power": {
+        "name": "[Smart load 24] power"
+      },
+      "plant_total_generation_of_third_party_inverter": {
+        "name": "Total generation of third party inverter"
+      },
+      "plant_accumulated_battery_charge_energy": {
+        "name": "Total charged energy of the ESS"
+      },
+      "plant_accumulated_battery_discharge_energy": {
+        "name": "Total discharged energy of the ESS"
+      },
+      "plant_total_charged_energy_of_the_evdc": {
+        "name": "Total charged energy of the EVDC"
+      },
+      "plant_total_discharged_energy_of_the_evdc": {
+        "name": "Total discharged energy of the EVDC"
+      },
+      "plant_accumulated_grid_import_energy": {
+        "name": "Total imported energy"
+      },
+      "plant_accumulated_grid_export_energy": {
+        "name": "Total exported energy"
+      },
+      "plant_total_energy_output_of_oil_fueled_generator": {
+        "name": "Total energy output of oil fueled generator"
+      },
+      "plant_total_charged_energy_of_the_evac": {
+        "name": "Total charged energy of the EVAC"
+      },
+      "plant_total_generation_of_self_pv": {
+        "name": "Total generation of self PV"
+      },
+      "inverter_model_type": {
+        "name": "Model type"
+      },
+      "inverter_serial_number": {
+        "name": "Serial number"
+      },
+      "inverter_machine_firmware_version": {
+        "name": "Firmware version"
+      },
+      "inverter_rated_active_power": {
+        "name": "Rated active power"
+      },
+      "inverter_max_apparent_power": {
+        "name": "Maximum apparent power"
+      },
+      "inverter_max_active_power": {
+        "name": "Maximum active power"
+      },
+      "inverter_max_absorption_power": {
+        "name": "Maximum absorption power"
+      },
+      "inverter_rated_battery_capacity": {
+        "name": "Rated battery capacity"
+      },
+      "inverter_ess_rated_charge_power": {
+        "name": "ESS rated charge power"
+      },
+      "inverter_ess_rated_discharge_power": {
+        "name": "ESS rated discharge power"
+      },
+      "inverter_ess_daily_charge_energy": {
+        "name": "Daily charge energy"
+      },
+      "inverter_ess_accumulated_charge_energy": {
+        "name": "Total charge energy"
+      },
+      "inverter_ess_daily_discharge_energy": {
+        "name": "Daily discharge energy"
+      },
+      "inverter_ess_accumulated_discharge_energy": {
+        "name": "Total discharge energy"
+      },
+      "inverter_max_active_power_adjustment_value": {
+        "name": "Maximum active power adjustment"
+      },
+      "inverter_min_active_power_adjustment_value": {
+        "name": "Minimum active power adjustment"
+      },
+      "inverter_max_reactive_power_adjustment_value_fed": {
+        "name": "Maximum reactive power fed"
+      },
+      "inverter_max_reactive_power_adjustment_value_absorbed": {
+        "name": "Maximum reactive power absorbed"
+      },
+      "inverter_active_power": {
+        "name": "Active power"
+      },
+      "inverter_reactive_power": {
+        "name": "Reactive power"
+      },
+      "inverter_ess_charge_discharge_power": {
+        "name": "Battery power"
+      },
+      "inverter_ess_max_battery_charge_power": {
+        "name": "Maximum battery charge power"
+      },
+      "inverter_ess_max_battery_discharge_power": {
+        "name": "Maximum battery discharge power"
+      },
+      "inverter_ess_available_battery_charge_energy": {
+        "name": "Available battery charge energy"
+      },
+      "inverter_ess_available_battery_discharge_energy": {
+        "name": "Available battery discharge energy"
+      },
+      "inverter_ess_battery_soc": {
+        "name": "Battery state of charge"
+      },
+      "inverter_ess_battery_soh": {
+        "name": "Battery state of health"
+      },
+      "inverter_ess_average_cell_temperature": {
+        "name": "Battery average cell temperature"
+      },
+      "inverter_ess_average_cell_voltage": {
+        "name": "Battery average cell voltage"
+      },
+      "inverter_ess_maximum_battery_temperature": {
+        "name": "Battery maximum temperature"
+      },
+      "inverter_ess_minimum_battery_temperature": {
+        "name": "Battery minimum temperature"
+      },
+      "inverter_ess_maximum_battery_cell_voltage": {
+        "name": "Battery maximum cell voltage"
+      },
+      "inverter_ess_minimum_battery_cell_voltage": {
+        "name": "Battery minimum cell voltage"
+      },
+      "inverter_alarm1": {
+        "name": "Alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Software version mismatch",
+              "bit_1": "Low insulation resistance",
+              "bit_2": "Over-temperature",
+              "bit_3": "Equipment fault",
+              "bit_4": "System grounding fault",
+              "bit_5": "PV string over-voltage",
+              "bit_6": "PV string reversely connected",
+              "bit_7": "PV string back-filling",
+              "bit_8": "AFCI fault",
+              "bit_9": "Grid power outage",
+              "bit_10": "Grid over-voltage",
+              "bit_11": "Grid under-voltage",
+              "bit_12": "Grid over-frequency",
+              "bit_13": "Grid under-frequency",
+              "bit_14": "Grid voltage imbalance",
+              "bit_15": "DC component of output current out of limit",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "inverter_alarm2": {
+        "name": "Alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Leak current out of limit",
+              "bit_1": "Communication abnormal",
+              "bit_2": "System internal protection",
+              "bit_3": "AFCI self-checking circuit fault",
+              "bit_4": "Off-grid protection",
+              "bit_5": "Manual operation protection",
+              "bit_6": "Unknown alarm (bit 6)",
+              "bit_7": "Abnormal phase sequence",
+              "bit_8": "Short circuit to PE",
+              "bit_9": "Soft start failure",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "inverter_alarm3": {
+        "name": "Alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Software version mismatch",
+              "bit_1": "Low insulation resistance to ground",
+              "bit_2": "Temperature too high",
+              "bit_3": "Equipment fault",
+              "bit_4": "Under-temperature",
+              "bit_5": "Internal protection",
+              "bit_6": "Thermal runaway",
+              "bit_7": "Unknown alarm (bit 7)",
+              "bit_8": "Unknown alarm (bit 8)",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "inverter_alarm4": {
+        "name": "Alarm 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Software version mismatch",
+              "bit_1": "Temperature too high",
+              "bit_2": "Equipment fault",
+              "bit_3": "Excessive leakage current in off-grid output",
+              "bit_4": "N line grounding fault",
+              "bit_5": "Abnormal phase sequence of grid wiring",
+              "bit_6": "Abnormal phase sequence of inverter wiring",
+              "bit_7": "Grid phase loss",
+              "bit_8": "Unknown alarm (bit 8)",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "inverter_alarm5": {
+        "name": "Alarm 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Software version mismatch",
+              "bit_1": "Low insulation resistance to ground",
+              "bit_2": "Over-temperature",
+              "bit_3": "Equipment fault",
+              "bit_4": "Charging fault",
+              "bit_5": "Equipment protection",
+              "bit_6": "Unknown alarm (bit 6)",
+              "bit_7": "Unknown alarm (bit 7)",
+              "bit_8": "Unknown alarm (bit 8)",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "inverter_grid_frequency": {
+        "name": "Grid frequency"
+      },
+      "inverter_pcs_internal_temperature": {
+        "name": "PCS internal temperature"
+      },
+      "inverter_rated_grid_voltage": {
+        "name": "Rated grid voltage"
+      },
+      "inverter_rated_grid_frequency": {
+        "name": "Rated grid frequency"
+      },
+      "inverter_ab_line_voltage": {
+        "name": "A-B line voltage"
+      },
+      "inverter_bc_line_voltage": {
+        "name": "B-C line voltage"
+      },
+      "inverter_ca_line_voltage": {
+        "name": "C-A line voltage"
+      },
+      "inverter_phase_a_voltage": {
+        "name": "Phase A voltage"
+      },
+      "inverter_phase_b_voltage": {
+        "name": "Phase B voltage"
+      },
+      "inverter_phase_c_voltage": {
+        "name": "Phase C voltage"
+      },
+      "inverter_phase_a_current": {
+        "name": "Phase A current"
+      },
+      "inverter_phase_b_current": {
+        "name": "Phase B current"
+      },
+      "inverter_phase_c_current": {
+        "name": "Phase C current"
+      },
+      "inverter_power_factor": {
+        "name": "Power factor"
+      },
+      "inverter_pack_count": {
+        "name": "Battery pack count"
+      },
+      "inverter_pv_string_count": {
+        "name": "PV string count"
+      },
+      "inverter_mppt_count": {
+        "name": "MPPT count"
+      },
+      "inverter_pv_power": {
+        "name": "PV power"
+      },
+      "inverter_insulation_resistance": {
+        "name": "Insulation resistance"
+      },
+      "inverter_active_power_fixed_value_adjustment_feedback": {
+        "name": "Active power fixed value adjustment feedback"
+      },
+      "inverter_reactive_power_fixed_value_adjustment_feedback": {
+        "name": "Reactive power fixed value adjustment feedback"
+      },
+      "inverter_active_power_percentage_adjustment_feedback": {
+        "name": "Active power percentage adjustment feedback"
+      },
+      "inverter_reactive_power_qs_adjustment_feedback": {
+        "name": "Reactive power Q/S adjustment feedback"
+      },
+      "inverter_power_factor_adjustment_feedback": {
+        "name": "Power factor adjustment feedback"
+      },
+      "inverter_daily_pv_energy": {
+        "name": "Daily PV energy"
+      },
+      "inverter_accumulated_pv_energy": {
+        "name": "Total PV energy"
+      },
+      "ac_charger_total_energy_consumed": {
+        "name": "Total energy consumed"
+      },
+      "ac_charger_charging_power": {
+        "name": "Charging power"
+      },
+      "ac_charger_rated_power": {
+        "name": "Rated power"
+      },
+      "ac_charger_rated_current": {
+        "name": "Rated current"
+      },
+      "ac_charger_rated_voltage": {
+        "name": "Rated voltage"
+      },
+      "ac_charger_input_breaker_rated_current": {
+        "name": "Input breaker rated current"
+      },
+      "ac_charger_alarm1": {
+        "name": "Alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Grid overvoltage",
+              "bit_1": "Grid undervoltage",
+              "bit_2": "Overload",
+              "bit_3": "Short circuit",
+              "bit_4": "Charging output overcurrent",
+              "bit_5": "Leak current out of limit",
+              "bit_6": "Grounding fault",
+              "bit_7": "Abnormal phase sequence of grid wiring",
+              "bit_8": "PEN Fault",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "ac_charger_alarm2": {
+        "name": "Alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Leak current detection circuit fault",
+              "bit_1": "Relay stuck",
+              "bit_2": "Pilot circuit fault",
+              "bit_3": "Auxiliary power supply module fault",
+              "bit_4": "Electric lock fault",
+              "bit_5": "Lamp panel communication fault",
+              "bit_6": "Unknown alarm (bit 6)",
+              "bit_7": "Unknown alarm (bit 7)",
+              "bit_8": "Unknown alarm (bit 8)",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "ac_charger_alarm3": {
+        "name": "Alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarm status",
+            "state": {
+              "no_problem": "No problem",
+              "active": "Active alarm",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarms",
+            "state": {
+              "bit_0": "Too high internal temperature",
+              "bit_1": "Charging cable fault",
+              "bit_2": "Meter communication fault",
+              "bit_3": "Unknown alarm (bit 3)",
+              "bit_4": "Unknown alarm (bit 4)",
+              "bit_5": "Unknown alarm (bit 5)",
+              "bit_6": "Unknown alarm (bit 6)",
+              "bit_7": "Unknown alarm (bit 7)",
+              "bit_8": "Unknown alarm (bit 8)",
+              "bit_9": "Unknown alarm (bit 9)",
+              "bit_10": "Unknown alarm (bit 10)",
+              "bit_11": "Unknown alarm (bit 11)",
+              "bit_12": "Unknown alarm (bit 12)",
+              "bit_13": "Unknown alarm (bit 13)",
+              "bit_14": "Unknown alarm (bit 14)",
+              "bit_15": "Unknown alarm (bit 15)",
+              "unknown": "Unknown alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Raw value"
+          }
+        }
+      },
+      "dc_charger_vehicle_battery_voltage": {
+        "name": "Vehicle battery voltage"
+      },
+      "dc_charger_charging_current": {
+        "name": "Charging current"
+      },
+      "dc_charger_output_power": {
+        "name": "Output power"
+      },
+      "dc_charger_vehicle_soc": {
+        "name": "Vehicle SOC"
+      },
+      "dc_charger_current_charging_capacity": {
+        "name": "Charging energy this session"
+      },
+      "dc_charger_current_charging_duration": {
+        "name": "Charging duration this session"
+      },
+      "dc_charger_discharging_current": {
+        "name": "Discharging current"
+      },
+      "dc_charger_current_discharging_capacity": {
+        "name": "Discharging energy this session"
+      },
+      "dc_charger_current_discharging_duration": {
+        "name": "Discharging duration this session"
+      },
+      "dc_charger_total_charging_capacity": {
+        "name": "Total charging energy"
+      },
+      "dc_charger_total_discharging_capacity": {
+        "name": "Total discharging energy"
+      },
+      "dc_charger_rated_charging_power": {
+        "name": "Rated charging power"
+      },
+      "dc_charger_rated_discharging_power": {
+        "name": "Rated discharging power"
+      }
+    },
+    "binary_sensor": {
+      "plant_pv_generating": {
+        "name": "PV generating"
+      },
+      "plant_battery_charging": {
+        "name": "Battery charging"
+      },
+      "plant_battery_discharging": {
+        "name": "Battery discharging"
+      },
+      "plant_exporting_to_grid": {
+        "name": "Exporting to grid"
+      },
+      "plant_importing_from_grid": {
+        "name": "Importing from grid"
+      }
+    },
+    "button": {
+      "plant_grid_power_loss_lockout_alarm_clear": {
+        "name": "Clear grid power loss lockout alarm"
+      },
+      "ac_charger_start": {
+        "name": "Start charging"
+      },
+      "ac_charger_stop": {
+        "name": "Stop charging"
+      },
+      "dc_charger_start": {
+        "name": "Start charging"
+      },
+      "dc_charger_stop": {
+        "name": "Stop charging"
+      }
+    },
+    "number": {
+      "plant_active_power_fixed_target": {
+        "name": "Active power fixed adjustment"
+      },
+      "plant_reactive_power_fixed_target": {
+        "name": "Reactive power fixed adjustment"
+      },
+      "plant_active_power_percentage_target": {
+        "name": "Active power percentage adjustment"
+      },
+      "plant_qs_ratio_target": {
+        "name": "Q/S adjustment"
+      },
+      "plant_power_factor_target": {
+        "name": "Power factor adjustment"
+      },
+      "plant_ess_max_charging_limit": {
+        "name": "ESS maximum charging power limit"
+      },
+      "plant_ess_max_discharging_limit": {
+        "name": "ESS maximum discharging power limit"
+      },
+      "plant_pv_max_power_limit": {
+        "name": "PV maximum power limit"
+      },
+      "plant_grid_point_maximum_export_limitation": {
+        "name": "Grid export power limit"
+      },
+      "plant_grid_maximum_import_limitation": {
+        "name": "Grid import power limit"
+      },
+      "plant_pcs_maximum_export_limitation": {
+        "name": "PCS export power limit"
+      },
+      "plant_pcs_maximum_import_limitation": {
+        "name": "PCS import power limit"
+      },
+      "plant_phase_a_active_power_fixed_target": {
+        "name": "Phase A active power fixed adjustment"
+      },
+      "plant_phase_b_active_power_fixed_target": {
+        "name": "Phase B active power fixed adjustment"
+      },
+      "plant_phase_c_active_power_fixed_target": {
+        "name": "Phase C active power fixed adjustment"
+      },
+      "plant_phase_a_reactive_power_fixed_target": {
+        "name": "Phase A reactive power fixed adjustment"
+      },
+      "plant_phase_b_reactive_power_fixed_target": {
+        "name": "Phase B reactive power fixed adjustment"
+      },
+      "plant_phase_c_reactive_power_fixed_target": {
+        "name": "Phase C reactive power fixed adjustment"
+      },
+      "plant_phase_a_active_power_percentage_target": {
+        "name": "Phase A active power percentage"
+      },
+      "plant_phase_b_active_power_percentage_target": {
+        "name": "Phase B active power percentage"
+      },
+      "plant_phase_c_active_power_percentage_target": {
+        "name": "Phase C active power percentage"
+      },
+      "plant_phase_a_qs_ratio_target": {
+        "name": "Phase A Q/S ratio"
+      },
+      "plant_phase_b_qs_ratio_target": {
+        "name": "Phase B Q/S ratio"
+      },
+      "plant_phase_c_qs_ratio_target": {
+        "name": "Phase C Q/S ratio"
+      },
+      "plant_backup_soc": {
+        "name": "ESS backup state of charge"
+      },
+      "plant_charge_cut_off_soc": {
+        "name": "ESS charge cut-off state of charge"
+      },
+      "plant_discharge_cut_off_soc": {
+        "name": "ESS discharge cut-off state of charge"
+      },
+      "plant_active_power_regulation_gradient": {
+        "name": "[Grid code] active power regulation gradient"
+      },
+      "plant_lvrt_reactive_power_comp_factor": {
+        "name": "[Grid code] LVRT reactive power compensation factor"
+      },
+      "plant_lvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Grid code] LVRT negative-sequence reactive power compensation factor"
+      },
+      "plant_hvrt_reactive_power_comp_factor": {
+        "name": "[Grid code] HVRT reactive power compensation factor"
+      },
+      "plant_hvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Grid code] HVRT negative-sequence reactive power compensation factor"
+      },
+      "plant_over_freq_derating_power_ramp_rate": {
+        "name": "[Grid code] over-frequency derating power ramp rate"
+      },
+      "plant_over_freq_derating_trigger_freq": {
+        "name": "[Grid code] over-frequency derating trigger frequency"
+      },
+      "plant_over_freq_derating_cutoff_freq": {
+        "name": "[Grid code] over-frequency derating cut-off frequency"
+      },
+      "plant_under_freq_power_boost_power_ramp_rate": {
+        "name": "[Grid code] under-frequency power boost power ramp rate"
+      },
+      "plant_under_freq_power_boost_trigger_freq": {
+        "name": "[Grid code] under-frequency power boost trigger frequency"
+      },
+      "plant_under_freq_power_boost_cutoff_freq": {
+        "name": "[Grid code] under-frequency power boost cut-off frequency"
+      },
+      "plant_pcc_power_factor_grid_import": {
+        "name": "Grid import power factor adjustment"
+      },
+      "plant_pcc_power_factor_grid_export": {
+        "name": "Grid export power factor adjustment"
+      },
+      "plant_ess_preheating_reserved_soc": {
+        "name": "ESS preheating reserved SOC"
+      },
+      "inverter_active_power_fixed_adjustment": {
+        "name": "Active power fixed adjustment"
+      },
+      "inverter_reactive_power_fixed_adjustment": {
+        "name": "Reactive power fixed adjustment"
+      },
+      "inverter_active_power_percentage_adjustment": {
+        "name": "Active power percentage adjustment"
+      },
+      "inverter_reactive_power_qs_adjustment": {
+        "name": "Reactive power Q/S adjustment"
+      },
+      "inverter_power_factor_adjustment": {
+        "name": "Power factor adjustment"
+      },
+      "ac_charger_output_current": {
+        "name": "Charger output current"
+      },
+      "dc_charger_max_charging_power_limit": {
+        "name": "Maximum charging power limit"
+      },
+      "dc_charger_max_discharging_power_limit": {
+        "name": "Maximum discharging power limit"
+      },
+      "plant_ess_preheating_tou_start_time": {
+        "name": "ESS preheating TOU slot {slot} start time"
+      },
+      "plant_ess_preheating_tou_end_time": {
+        "name": "ESS preheating TOU slot {slot} end time"
+      },
+      "plant_ess_preheating_tou_target_power": {
+        "name": "ESS preheating TOU slot {slot} target power"
+      }
+    },
+    "select": {
+      "plant_remote_ems_control_mode": {
+        "name": "Remote EMS control mode"
+      },
+      "plant_ess_preheating_mode": {
+        "name": "ESS preheating mode"
+      },
+      "plant_lvrt_enable": {
+        "name": "[Grid code] LVRT enable"
+      },
+      "plant_lvrt_mode": {
+        "name": "[Grid code] LVRT mode"
+      },
+      "plant_lvrt_grid_voltage_protection_blocking": {
+        "name": "[Grid code] LVRT grid voltage protection blocking"
+      },
+      "plant_hvrt_enable": {
+        "name": "[Grid code] HVRT enable"
+      },
+      "plant_hvrt_mode": {
+        "name": "[Grid code] HVRT mode"
+      },
+      "plant_hvrt_grid_voltage_protection_blocking": {
+        "name": "[Grid code] HVRT grid voltage protection blocking"
+      },
+      "plant_over_freq_derating_enable": {
+        "name": "[Grid code] over-frequency derating enable"
+      },
+      "plant_under_freq_power_boost_enable": {
+        "name": "[Grid code] under-frequency power boost enable"
+      }
+    },
+    "switch": {
+      "plant_start_stop": {
+        "name": "Plant power"
+      },
+      "plant_remote_ems_enable": {
+        "name": "Remote EMS (controlled by Home Assistant)"
+      },
+      "plant_independent_phase_power_control_enable": {
+        "name": "Independent phase power control"
+      },
+      "plant_ess_preheating_enable": {
+        "name": "ESS preheating enable"
+      },
+      "plant_ess_preheating_advance_enable": {
+        "name": "ESS preheating advance enable"
+      },
+      "inverter_start_stop": {
+        "name": "Inverter power"
+      },
+      "ac_charger_start_stop": {
+        "name": "AC charger power (deprecated)"
+      },
+      "dc_charging": {
+        "name": "DC charging (deprecated)"
+      }
+    }
+  },
+  "selector": {
+    "device_type": {
+      "options": {
+        "new_plant": "New plant",
+        "inverter": "Inverter",
+        "ac_charger": "AC charger",
+        "dc_charger": "DC charger"
+      }
+    },
+    "configured_device": {
+      "options": {
+        "accumulated_energy": "Change accumulated energy values"
+      }
+    }
+  },
+  "exceptions": {
+    "coordinator_unavailable": {
+      "message": "Cannot control {entity_id}: device data is unavailable."
+    }
+  },
+  "services": {
+    "set_operation_mode": {
+      "name": "Set operation mode",
+      "description": "Set the operation mode of the Sigenergy system.",
+      "fields": {
+        "mode": {
+          "name": "Mode",
+          "description": "The operation mode to set."
+        }
+      }
+    },
+    "set_remote_ems_control_mode": {
+      "name": "Set remote EMS control mode",
+      "description": "Set the remote EMS control mode of the Sigenergy system.",
+      "fields": {
+        "mode": {
+          "name": "Mode",
+          "description": "The remote EMS control mode to set."
+        }
+      }
+    },
+    "set_power_limit": {
+      "name": "Set power limit",
+      "description": "Set a power limit for the Sigenergy system.",
+      "fields": {
+        "value": {
+          "name": "Value",
+          "description": "The power limit value to set."
         }
       }
     }

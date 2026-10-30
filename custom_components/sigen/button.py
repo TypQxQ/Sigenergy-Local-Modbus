@@ -197,6 +197,10 @@ class SigenergyButton(SigenergyEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Press the button."""
         if self.coordinator.data is None:
-            raise HomeAssistantError(f"Cannot press {self.entity_id}: Coordinator data is unavailable")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="coordinator_unavailable",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
         identifier = self._device_name
         await self.entity_description.press_fn(self.coordinator, identifier)

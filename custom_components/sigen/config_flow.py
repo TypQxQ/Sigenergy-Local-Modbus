@@ -29,6 +29,7 @@ from homeassistant.helpers.entity_registry import (
     async_get as async_get_entity_registry,
     async_entries_for_device,
 )
+from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
 from .const import (
     DOMAIN,
     DEFAULT_PORT,
@@ -85,14 +86,11 @@ DEFAULT_PLANT_CONNECTION = {
 # Schema definitions for each step
 STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
     {
-        vol.Required("device_type"): vol.In(
-            {
-                DEVICE_TYPE_NEW_PLANT: "New Plant",
-                DEVICE_TYPE_INVERTER: "Inverter",
-                DEVICE_TYPE_AC_CHARGER: "AC Charger",
-                DEVICE_TYPE_DC_CHARGER: "DC Charger",
-            }
-        ),
+        vol.Required("device_type"): SelectSelector(SelectSelectorConfig(
+            options=[DEVICE_TYPE_NEW_PLANT, DEVICE_TYPE_INVERTER,
+                     DEVICE_TYPE_AC_CHARGER, DEVICE_TYPE_DC_CHARGER],
+            translation_key="device_type",
+        )),
     }
 )
 
@@ -460,7 +458,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             elif device_type == DEVICE_TYPE_INVERTER:
                 has_dc_charger = False
             else:
-                errors[CONF_HOST] = "Couldn't connect."
+                errors[CONF_HOST] = "cannot_connect"
 
             _LOGGER.debug("errors is: %s , %s", str(True if errors else False), errors)
 
@@ -520,7 +518,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         )
         # self.async_check_device_type(host, port, slave_id, timeout)
         if response:
-            errors[CONF_HOST] = response
+            errors[CONF_HOST] = "cannot_connect"
         return errors
 
     async def _async_try_read_register(
@@ -1098,9 +1096,13 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is None:
             # Create schema with device selection
-            schema = vol.Schema(
-                {vol.Required("selected_device"): vol.In(self._devices)}
-            )
+            options = [
+                {"value": key, "label": label}
+                for key, label in self._devices.items()
+            ]
+            schema = vol.Schema({vol.Required("selected_device"): SelectSelector(
+                SelectSelectorConfig(options=options, translation_key="configured_device")
+            )})
 
             return self.async_show_form(
                 step_id=STEP_SELECT_DEVICE,
@@ -1138,7 +1140,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_accumulated_energy_config()
 
         # Fallback
-        return self.async_abort(reason=f"unknown_device_type: {device_type}")
+        return self.async_abort(reason="unknown_device_type")
     
     async def async_step_accumulated_energy_config(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle reconfiguration of accumulated energy sensors."""
@@ -1177,9 +1179,9 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         errors = {}
         for sensor in RESETTABLE_SENSORS.keys():
             if user_input.get(sensor) == "":
-                errors[sensor] = "required value"
+                errors[sensor] = "required_value"
             elif not isinstance(user_input.get(sensor), float):
-                errors[sensor] = "must be a number"
+                errors[sensor] = "must_be_number"
 
         # If there are errors, show the form again with errors
         if errors:

@@ -658,6 +658,8 @@ for i in range(1, 31):
         SigenergyNumberEntityDescription(
             key=f"plant_ess_preheating_tou_{i}_start_time",
             name=f"ESS Preheating TOU Slot {i} Start Time",
+            translation_key="plant_ess_preheating_tou_start_time",
+            translation_placeholders={"slot": str(i)},
             icon="mdi:clock-start",
             native_min_value=0,
             native_max_value=2147483647,
@@ -673,6 +675,8 @@ for i in range(1, 31):
         SigenergyNumberEntityDescription(
             key=f"plant_ess_preheating_tou_{i}_end_time",
             name=f"ESS Preheating TOU Slot {i} End Time",
+            translation_key="plant_ess_preheating_tou_end_time",
+            translation_placeholders={"slot": str(i)},
             icon="mdi:clock-end",
             native_min_value=0,
             native_max_value=2147483647,
@@ -688,6 +692,8 @@ for i in range(1, 31):
         SigenergyNumberEntityDescription(
             key=f"plant_ess_preheating_tou_{i}_target_power",
             name=f"ESS Preheating TOU Slot {i} Target Power",
+            translation_key="plant_ess_preheating_tou_target_power",
+            translation_placeholders={"slot": str(i)},
             icon="mdi:radiator",
             device_class=NumberDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -959,7 +965,11 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
     async def async_set_native_value(self, value: float) -> None:
         """Set the value of the number."""
         if self.coordinator.data is None:
-            raise HomeAssistantError(f"Cannot set value for {self.entity_id}: Coordinator data is unavailable")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="coordinator_unavailable",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
 
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
