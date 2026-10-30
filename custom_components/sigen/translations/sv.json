@@ -1,0 +1,1809 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anslut till Sigenergy energilagringssystem",
+        "description": "Konfigurera ett Sigenergy energilagringssystem för övervakning och styrning via Home Assistant.\n\nKontrollera att Sigenergy-systemet är anslutet till samma nätverk som Home Assistant och att installatören har aktiverat Modbus."
+      },
+      "dhcp_plant_config": {
+        "title": "Konfigurera Sigenergy-anläggning",
+        "description": "En ny Sigenergy-enhet upptäcktes på {ip_address}. Välj inställningar:",
+        "data": {
+          "read_only": "Skrivskyddat läge"
+        },
+        "data_description": {
+          "read_only": "Hindrar Home Assistant från att göra ändringar i Sigenergy-systemet. Rekommenderas vid den första installationen. Kan ändras senare i enhetsinställningarna."
+        }
+      },
+      "device_type": {
+        "title": "Välj enhetstyp",
+        "description": "Välj vilken typ av Sigenergy-enhet du vill lägga till.",
+        "data": {
+          "device_type": "Enhetstyp"
+        }
+      },
+      "plant_config": {
+        "title": "Konfigurera Sigenergy-anläggning",
+        "description": "Konfigurera en ny Sigenergy-anläggning för övervakning och styrning via Home Assistant. Anläggningens Modbus-ID sätts automatiskt till 247.",
+        "data": {
+          "host": "Adress (huvudväxelriktarens IP-adress)",
+          "port": "Port (standard: 502)",
+          "inverter_slave_id": "Växelriktarens enhets-ID (standard: 1)",
+          "ac_charger_slave_ids": "Enhets-ID:n för AC-laddare (kommaseparerade; lämna tomt om inga finns)",
+          "dc_charger_slave_ids": "ID:n för växelriktare med DC-laddare (kommaseparerade)",
+          "scan_interval": "Uppdateringsintervall (sekunder)",
+          "migrate_yaml": "Importera sensorvärden från äldre YAML-konfiguration",
+          "migrate_yaml_description": "Om detta aktiveras hämtas sensorns startvärden från den äldre YAML-konfigurationen, om den finns.",
+          "read_only": "Skrivskyddat läge",
+          "slave_id": "Växelriktarens enhets-ID"
+        },
+        "data_description": {
+          "read_only": "Hindrar Home Assistant från att göra ändringar i Sigenergy-systemet. Rekommenderas vid den första installationen. Kan ändras senare i enhetsinställningarna."
+        }
+      },
+      "select_plant": {
+        "title": "Välj anläggning",
+        "description": "Välj vilken Sigenergy-anläggning enheten ska anslutas till.",
+        "data": {
+          "parent_plant_id": "Anläggning"
+        }
+      },
+      "select_inverter": {
+        "title": "Välj växelriktare",
+        "description": "Välj vilken Sigenergy-växelriktare DC-laddaren ska anslutas till.",
+        "data": {
+          "parent_inverter_id": "Växelriktare"
+        }
+      },
+      "inverter_config": {
+        "title": "Konfigurera Sigenergy-växelriktare",
+        "description": "Konfigurera ytterligare en Sigenergy-växelriktare i samma anläggning.",
+        "data": {
+          "host": "Adress (växelriktarens IP-adress)",
+          "port": "Port (standard: 502)",
+          "slave_id": "Enhets-ID (1–246)"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Konfigurera Sigenergy AC-laddare",
+        "description": "Konfigurera en Sigenergy AC-laddare. Ange adress och port för Modbus-servern (huvudväxelriktaren) samt AC-laddarens enhets-ID.",
+        "data": {
+          "host": "Adress (AC-laddarens IP-adress)",
+          "port": "Port (standard: 502)",
+          "slave_id": "Enhets-ID (1–246)"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Konfigurera Sigenergy DC-laddare",
+        "description": "Konfigurera en Sigenergy DC-laddare som är ansluten till den valda växelriktaren."
+      },
+      "reconfigure": {
+        "title": "Ändra inställningar för Sigenergy-system",
+        "description": "Ändra listan med enhets-ID:n för Sigenergy-systemet.",
+        "data": {
+          "inverter_slave_id": "Växelriktarens enhets-ID (standard: 1)",
+          "ac_charger_slave_ids": "Enhets-ID för AC-laddare (lämna tomt om ingen finns)",
+          "dc_charger_slave_ids": "ID:n för växelriktare med DC-laddare (kommaseparerade)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Det gick inte att ansluta till Sigenergy-systemet. Kontrollera adress och port.",
+      "unknown": "Ett oväntat fel uppstod.",
+      "invalid_integer_value": "Ange ett giltigt heltal.",
+      "each_id_must_be_between_1_and_246": "Varje ID måste vara mellan 1 och 246.",
+      "duplicate_ids_found": "Samma ID har angetts flera gånger.",
+      "dc_charger_requires_inverter": "DC-laddarnas ID:n måste motsvara konfigurerade växelriktares ID:n.",
+      "ac_charger_conflicts_inverter": "AC-laddarnas ID:n måste skilja sig från växelriktarnas ID:n.",
+      "no_plants_available": "Det finns inga anläggningar. Lägg till en anläggning först.",
+      "no_inverters_available": "Det finns inga växelriktare i den valda anläggningen. Lägg till en växelriktare först.",
+      "read_only_mode_error": "Det går inte att skriva till Sigenergy-systemet när skrivskyddat läge är aktiverat.",
+      "must_be_divisible_by_high": "Måste vara jämnt delbart med det snabba uppdateringsintervallet.",
+      "cannot_be_lower_than_high": "Får inte vara kortare än det snabba uppdateringsintervallet.",
+      "cannot_be_lower_than_medium": "Får inte vara kortare än det medelsnabba uppdateringsintervallet.",
+      "invalid_host": "Ogiltig adress.",
+      "invalid_port": "Ogiltig port. Ange ett tal mellan 1 och 65535.",
+      "required_value": "Ange ett värde.",
+      "must_be_number": "Ange ett tal.",
+      "must_be_at_least_1": "Uppdateringsintervallet måste vara minst 1 sekund."
+    },
+    "abort": {
+      "already_configured": "Detta Sigenergy-system är redan konfigurerat.",
+      "no_plants_available": "Det finns inga anläggningar. Lägg till en anläggning först.",
+      "no_inverters_available": "Det finns inga växelriktare i den valda anläggningen. Lägg till en växelriktare först.",
+      "device_added": "Enheten har lagts till i anläggningens konfiguration.",
+      "parent_plant_not_found": "Konfigurationen för den överordnade anläggningen hittades inte.",
+      "parent_inverter_not_found": "Konfigurationen för den överordnade växelriktaren hittades inte.",
+      "parent_inverter_invalid": "Konfigurationen för den överordnade växelriktaren är ogiltig.",
+      "unknown_device_type": "Okänd enhetstyp.",
+      "no_devices_available": "Inga enheter hittades för omkonfigurering.",
+      "invalid_device_selection": "Ogiltigt enhetsval.",
+      "device_removed": "Enheten har tagits bort.",
+      "plants_exist": "En Sigenergy-anläggning är redan konfigurerad."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sigenergy-inställningar",
+        "description": "Ändra inställningar för Sigenergy-integrationen."
+      },
+      "select_device": {
+        "title": "Välj enhet att ändra",
+        "description": "Välj den Sigenergy-anläggning, växelriktare, AC-laddare eller DC-laddare som du vill ändra inställningar för eller ta bort.",
+        "data": {
+          "selected_device": "Enhet"
+        }
+      },
+      "accumulated_energy_config": {
+        "title": "Ackumulerade energivärden",
+        "description": "De ackumulerade energivärdena ersätts när du skickar formuläret.\n\nAnge värden i kWh.",
+        "data": {
+          "sensor.sigen_plant_accumulated_pv_energy": "Anläggningens ackumulerade solenergi",
+          "sensor.sigen_plant_accumulated_consumed_energy": "Anläggningens ackumulerade förbrukade energi",
+          "sensor.sigen_plant_accumulated_grid_import_energy": "Anläggningens ackumulerade importerade energi",
+          "sensor.sigen_plant_accumulated_grid_export_energy": "Anläggningens ackumulerade exporterade energi"
+        }
+      },
+      "plant_config": {
+        "title": "Ändra inställningar för Sigenergy-anläggning",
+        "description": "Ändra anslutningsuppgifter och uppdateringsintervall för anläggningen.",
+        "data": {
+          "host": "Adress (IP-adress)",
+          "port": "Port",
+          "read_only": "Skrivskyddat läge",
+          "scan_interval": "Uppdateringsintervall (sekunder)",
+          "slave_id": "Växelriktarens enhets-ID"
+        },
+        "data_description": {
+          "read_only": "Hindrar Home Assistant från att göra ändringar i Sigenergy-systemet. Rekommenderas vid den första installationen. Kan ändras senare i enhetsinställningarna."
+        }
+      },
+      "inverter_config": {
+        "title": "Ändra inställningar för Sigenergy-växelriktare",
+        "description": "Ändra anslutningsuppgifter för växelriktaren eller ta bort den från anläggningen.",
+        "data": {
+          "remove_device": "Ta bort denna växelriktare",
+          "host": "Adress (IP-adress)",
+          "port": "Port",
+          "slave_id": "Enhets-ID"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Ändra inställningar för Sigenergy AC-laddare",
+        "description": "Ändra anslutningsuppgifter för AC-laddaren eller ta bort den från anläggningen.",
+        "data": {
+          "remove_device": "Ta bort denna AC-laddare",
+          "host": "Adress (IP-adress)",
+          "port": "Port",
+          "slave_id": "Enhets-ID"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Ändra inställningar för Sigenergy DC-laddare",
+        "description": "Ta bort DC-laddaren från den tillhörande växelriktaren.",
+        "data": {
+          "remove_device": "Ta bort denna DC-laddare"
+        }
+      },
+      "reconfigure": {
+        "title": "Ändra inställningar för Sigenergy-system",
+        "description": "Ändra listan med enhets-ID:n för Sigenergy-systemet.",
+        "data": {
+          "inverter_slave_id": "Växelriktarens enhets-ID (standard: 1)",
+          "ac_charger_slave_ids": "Enhets-ID:n för AC-laddare (kommaseparerade; lämna tomt om inga finns)",
+          "dc_charger_slave_ids": "ID:n för växelriktare med DC-laddare (kommaseparerade)"
+        }
+      }
+    },
+    "error": {
+      "invalid_integer_value": "Ange ett giltigt heltal.",
+      "each_id_must_be_between_1_and_246": "Varje ID måste vara mellan 1 och 246.",
+      "duplicate_ids_found": "Samma ID har angetts flera gånger.",
+      "dc_charger_requires_inverter": "DC-laddarnas ID:n måste motsvara konfigurerade växelriktares ID:n.",
+      "ac_charger_conflicts_inverter": "AC-laddarnas ID:n måste skilja sig från växelriktarnas ID:n.",
+      "invalid_host": "Ogiltig adress.",
+      "invalid_port": "Ogiltig port. Ange ett tal mellan 1 och 65535.",
+      "must_be_divisible_by_high": "Måste vara jämnt delbart med det snabba uppdateringsintervallet.",
+      "cannot_be_lower_than_high": "Får inte vara kortare än det snabba uppdateringsintervallet.",
+      "cannot_be_lower_than_medium": "Får inte vara kortare än det medelsnabba uppdateringsintervallet.",
+      "cannot_connect": "Det gick inte att ansluta till Sigenergy-systemet. Kontrollera adress och port.",
+      "required_value": "Ange ett värde.",
+      "must_be_number": "Ange ett tal.",
+      "must_be_at_least_1": "Uppdateringsintervallet måste vara minst 1 sekund."
+    },
+    "abort": {
+      "already_configured": "Detta Sigenergy-system är redan konfigurerat.",
+      "no_plants_available": "Det finns inga anläggningar. Lägg till en anläggning först.",
+      "no_inverters_available": "Det finns inga växelriktare i den valda anläggningen. Lägg till en växelriktare först.",
+      "device_added": "Enheten har lagts till i anläggningens konfiguration.",
+      "parent_plant_not_found": "Konfigurationen för den överordnade anläggningen hittades inte.",
+      "parent_inverter_not_found": "Konfigurationen för den överordnade växelriktaren hittades inte.",
+      "parent_inverter_invalid": "Konfigurationen för den överordnade växelriktaren är ogiltig.",
+      "unknown_device_type": "Okänd enhetstyp.",
+      "no_devices_available": "Inga enheter hittades för omkonfigurering.",
+      "invalid_device_selection": "Ogiltigt enhetsval.",
+      "device_removed": "Enheten har tagits bort.",
+      "plants_exist": "En Sigenergy-anläggning är redan konfigurerad."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "plant_pv_generating": {
+        "name": "Solproduktion"
+      },
+      "plant_battery_charging": {
+        "name": "Batteriladdning"
+      },
+      "plant_battery_discharging": {
+        "name": "Batteriurladdning"
+      },
+      "plant_exporting_to_grid": {
+        "name": "Export till elnätet"
+      },
+      "plant_importing_from_grid": {
+        "name": "Import från elnätet"
+      }
+    },
+    "button": {
+      "plant_grid_power_loss_lockout_alarm_clear": {
+        "name": "Kvittera spärrlarm efter nätavbrott"
+      },
+      "ac_charger_start": {
+        "name": "Starta laddning"
+      },
+      "ac_charger_stop": {
+        "name": "Stoppa laddning"
+      },
+      "dc_charger_start": {
+        "name": "Starta laddning"
+      },
+      "dc_charger_stop": {
+        "name": "Stoppa laddning"
+      }
+    },
+    "sensor": {
+      "plant_daily_grid_import_energy": {
+        "name": "Daglig importerad energi från elnätet"
+      },
+      "plant_daily_grid_export_energy": {
+        "name": "Daglig exporterad energi till elnätet"
+      },
+      "plant_daily_third_party_inverter_energy_from_lifetime": {
+        "name": "Daglig energi från extern växelriktare"
+      },
+      "power": {
+        "name": "Effekt"
+      },
+      "plant_system_time": {
+        "name": "Systemtid"
+      },
+      "plant_system_timezone": {
+        "name": "Systemets tidszon"
+      },
+      "plant_ems_work_mode": {
+        "name": "EMS-driftläge",
+        "state": {
+          "max_self_consumption": "Maximal egenförbrukning",
+          "ai_mode": "AI-läge",
+          "tou": "Tidsstyrning",
+          "full_feed_in_to_grid": "Full inmatning till elnätet",
+          "vpp_scheduling": "VPP-schemaläggning",
+          "remote_ems": "Fjärrstyrd EMS",
+          "custom": "Anpassat"
+        }
+      },
+      "plant_photovoltaic_power": {
+        "name": "Soleffekt"
+      },
+      "plant_grid_import_power": {
+        "name": "Importerad effekt från elnätet"
+      },
+      "plant_grid_export_power": {
+        "name": "Exporterad effekt till elnätet"
+      },
+      "plant_consumed_power": {
+        "name": "Förbrukad effekt"
+      },
+      "plant_daily_pv_energy": {
+        "name": "Daglig solenergi"
+      },
+      "plant_daily_battery_charge_energy": {
+        "name": "Daglig laddenergi till batteriet"
+      },
+      "plant_daily_battery_discharge_energy": {
+        "name": "Daglig urladdningsenergi från batteriet"
+      },
+      "inverter_startup_time": {
+        "name": "Starttid"
+      },
+      "inverter_shutdown_time": {
+        "name": "Avstängningstid"
+      },
+      "inverter_ess_current": {
+        "name": "Batteriström (uppskattad)"
+      },
+      "pv_string_accumulated_energy": {
+        "name": "Ackumulerad energi"
+      },
+      "pv_string_daily_energy": {
+        "name": "Daglig energi"
+      },
+      "modbus_max_data_fetch_time": {
+        "name": "Längsta Modbus-hämtningstid sedan omstart"
+      },
+      "modbus_latest_fetch_time_high": {
+        "name": "Modbus-hämtningstid"
+      },
+      "voltage": {
+        "name": "Spänning"
+      },
+      "current": {
+        "name": "Ström"
+      },
+      "plant_grid_sensor_status": {
+        "name": "Nätmätarstatus",
+        "state": {
+          "offline": "Frånkopplad",
+          "online": "Ansluten"
+        }
+      },
+      "plant_grid_sensor_active_power": {
+        "name": "Aktiv effekt vid elnätet"
+      },
+      "plant_grid_sensor_reactive_power": {
+        "name": "Reaktiv effekt vid elnätet"
+      },
+      "plant_on_off_grid_status": {
+        "name": "Nätanslutningsstatus",
+        "state": {
+          "on_grid": "Nätansluten",
+          "off_grid_auto": "Frånkopplad från elnätet (automatiskt)",
+          "off_grid_manual": "Frånkopplad från elnätet (manuellt)"
+        }
+      },
+      "plant_max_active_power": {
+        "name": "Maximal aktiv effekt"
+      },
+      "plant_max_apparent_power": {
+        "name": "Maximal skenbar effekt"
+      },
+      "plant_ess_soc": {
+        "name": "Batteriets laddningsnivå"
+      },
+      "plant_phase_a_active_power": {
+        "name": "Fas A aktiv effekt"
+      },
+      "plant_phase_b_active_power": {
+        "name": "Fas B aktiv effekt"
+      },
+      "plant_phase_c_active_power": {
+        "name": "Fas C aktiv effekt"
+      },
+      "plant_phase_a_reactive_power": {
+        "name": "Fas A reaktiv effekt"
+      },
+      "plant_phase_b_reactive_power": {
+        "name": "Fas B reaktiv effekt"
+      },
+      "plant_phase_c_reactive_power": {
+        "name": "Fas C reaktiv effekt"
+      },
+      "plant_general_alarm1": {
+        "name": "Allmänt larm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Programvaruversionerna stämmer inte överens",
+              "bit_1": "Låg isolationsresistans",
+              "bit_2": "Övertemperatur",
+              "bit_3": "Utrustningsfel",
+              "bit_4": "Jordningsfel i systemet",
+              "bit_5": "Överspänning i solcellssträng",
+              "bit_6": "Felvänd polaritet i solcellssträng",
+              "bit_7": "Bakström i solcellssträng",
+              "bit_8": "AFCI-fel",
+              "bit_9": "Nätavbrott",
+              "bit_10": "Överspänning i elnätet",
+              "bit_11": "Underspänning i elnätet",
+              "bit_12": "Överfrekvens i elnätet",
+              "bit_13": "Underfrekvens i elnätet",
+              "bit_14": "Spänningsobalans i elnätet",
+              "bit_15": "Likströmskomponenten i utströmmen överskrider gränsen",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "plant_general_alarm2": {
+        "name": "Allmänt larm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Läckströmmen överskrider gränsen",
+              "bit_1": "Kommunikationsstörning",
+              "bit_2": "Systemets interna skydd",
+              "bit_3": "Fel i AFCI-självtestkrets",
+              "bit_4": "Skydd vid ödrift",
+              "bit_5": "Skydd vid manuell manöver",
+              "bit_6": "Okänt larm (bit 6)",
+              "bit_7": "Fel fasföljd",
+              "bit_8": "Kortslutning mot skyddsjord",
+              "bit_9": "Mjukstartsfel",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "plant_general_alarm3": {
+        "name": "Allmänt larm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Programvaruversionerna stämmer inte överens",
+              "bit_1": "Låg isolationsresistans mot jord",
+              "bit_2": "För hög temperatur",
+              "bit_3": "Utrustningsfel",
+              "bit_4": "Undertemperatur",
+              "bit_5": "Internt skydd",
+              "bit_6": "Termisk rusning",
+              "bit_7": "Okänt larm (bit 7)",
+              "bit_8": "Okänt larm (bit 8)",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "plant_general_alarm4": {
+        "name": "Allmänt larm 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Programvaruversionerna stämmer inte överens",
+              "bit_1": "För hög temperatur",
+              "bit_2": "Utrustningsfel",
+              "bit_3": "För hög läckström på ödriftsutgången",
+              "bit_4": "Jordningsfel i neutralledaren",
+              "bit_5": "Fel fasföljd i nätanslutningen",
+              "bit_6": "Fel fasföljd i växelriktaranslutningen",
+              "bit_7": "Fasbortfall i elnätet",
+              "bit_8": "Okänt larm (bit 8)",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "plant_general_alarm5": {
+        "name": "Allmänt larm 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Programvaruversionerna stämmer inte överens",
+              "bit_1": "Låg isolationsresistans mot jord",
+              "bit_2": "Övertemperatur",
+              "bit_3": "Utrustningsfel",
+              "bit_4": "Laddningsfel",
+              "bit_5": "Utrustningsskydd",
+              "bit_6": "Okänt larm (bit 6)",
+              "bit_7": "Okänt larm (bit 7)",
+              "bit_8": "Okänt larm (bit 8)",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "plant_general_alarm6": {
+        "name": "Allmänt larm 6",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Kommunikationsstörning med gateway",
+              "bit_1": "Kommunikationsstörning med mätare",
+              "bit_2": "Kommunikationsstörning med AC-effektmätare",
+              "bit_3": "Okänt larm (bit 3)",
+              "bit_4": "Okänt larm (bit 4)",
+              "bit_5": "Okänt larm (bit 5)",
+              "bit_6": "Hårt skydd mot överskriden effektgräns för nätinmatning",
+              "bit_7": "Okänt larm (bit 7)",
+              "bit_8": "Generatorn kunde inte starta",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "CLS-fel",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "plant_general_alarm7": {
+        "name": "Allmänt larm 7",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "OVGR-fel",
+              "bit_1": "RPR-fel",
+              "bit_2": "Okänt larm (bit 2)",
+              "bit_3": "Okänt larm (bit 3)",
+              "bit_4": "Okänt larm (bit 4)",
+              "bit_5": "Okänt larm (bit 5)",
+              "bit_6": "Okänt larm (bit 6)",
+              "bit_7": "Okänt larm (bit 7)",
+              "bit_8": "Okänt larm (bit 8)",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          },
+          "alarm_reason": {
+            "name": "Orsak",
+            "state": {
+              "all_bits_set": "Alla bitar är satta; larmets betydelse är okänd"
+            }
+          }
+        }
+      },
+      "plant_grid_code_rated_frequency": {
+        "name": "Märkfrekvens enligt nätkod"
+      },
+      "plant_grid_code_rated_voltage": {
+        "name": "Märkspänning enligt nätkod"
+      },
+      "plant_current_control_command_value": {
+        "name": "Aktuellt styrkommandovärde"
+      },
+      "plant_total_load_power": {
+        "name": "Total lasteffekt"
+      },
+      "plant_active_power": {
+        "name": "Aktiv effekt"
+      },
+      "plant_reactive_power": {
+        "name": "Reaktiv effekt"
+      },
+      "plant_sigen_photovoltaic_power": {
+        "name": "Sigen-soleffekt"
+      },
+      "plant_third_party_photovoltaic_power": {
+        "name": "Soleffekt från extern växelriktare"
+      },
+      "plant_ess_power": {
+        "name": "Batterieffekt"
+      },
+      "plant_available_max_active_power": {
+        "name": "Tillgänglig maximal aktiv effekt"
+      },
+      "plant_available_min_active_power": {
+        "name": "Tillgänglig minimal aktiv effekt"
+      },
+      "plant_available_max_reactive_power": {
+        "name": "Tillgänglig maximal reaktiv effekt"
+      },
+      "plant_available_min_reactive_power": {
+        "name": "Tillgänglig minimal reaktiv effekt"
+      },
+      "plant_ess_available_max_charging_power": {
+        "name": "Tillgänglig maximal laddeffekt"
+      },
+      "plant_ess_available_max_discharging_power": {
+        "name": "Tillgänglig maximal urladdningseffekt"
+      },
+      "plant_running_state": {
+        "name": "Driftstatus",
+        "state": {
+          "standby": "Viloläge",
+          "running": "I drift",
+          "fault": "Fel",
+          "shutdown": "Avstängd",
+          "environmental_abnormality": "Avvikande omgivningsförhållanden"
+        }
+      },
+      "plant_grid_sensor_phase_a_active_power": {
+        "name": "Elnät fas A aktiv effekt"
+      },
+      "plant_grid_sensor_phase_b_active_power": {
+        "name": "Elnät fas B aktiv effekt"
+      },
+      "plant_grid_sensor_phase_c_active_power": {
+        "name": "Elnät fas C aktiv effekt"
+      },
+      "plant_grid_sensor_phase_a_reactive_power": {
+        "name": "Elnät fas A reaktiv effekt"
+      },
+      "plant_grid_sensor_phase_b_reactive_power": {
+        "name": "Elnät fas B reaktiv effekt"
+      },
+      "plant_grid_sensor_phase_c_reactive_power": {
+        "name": "Elnät fas C reaktiv effekt"
+      },
+      "plant_ess_rated_charging_power": {
+        "name": "Batteriets märkladdeffekt"
+      },
+      "plant_ess_rated_discharging_power": {
+        "name": "Batteriets märkurladdningseffekt"
+      },
+      "plant_ess_available_max_charging_capacity": {
+        "name": "Tillgänglig maximal laddkapacitet"
+      },
+      "plant_ess_available_max_discharging_capacity": {
+        "name": "Tillgänglig maximal urladdningskapacitet"
+      },
+      "plant_ess_rated_energy_capacity": {
+        "name": "Nominell energikapacitet"
+      },
+      "plant_ess_charge_cut_off_soc": {
+        "name": "Stoppnivå för laddning"
+      },
+      "plant_ess_discharge_cut_off_soc": {
+        "name": "Stoppnivå för urladdning"
+      },
+      "plant_ess_soh": {
+        "name": "Batteriets hälsotillstånd"
+      },
+      "plant_pv_total_daily_generation": {
+        "name": "Dagens solproduktion"
+      },
+      "plant_pv_generation_previous_day": {
+        "name": "Gårdagens solproduktion"
+      },
+      "plant_ess_average_cell_temperature": {
+        "name": "Batteriets genomsnittliga celltemperatur"
+      },
+      "plant_accumulated_pv_energy": {
+        "name": "Total solproduktion"
+      },
+      "plant_daily_consumed_energy": {
+        "name": "Daglig lastförbrukning"
+      },
+      "plant_accumulated_consumed_energy": {
+        "name": "Total lastförbrukning"
+      },
+      "plant_smart_load_1_total_consumption": {
+        "name": "[Smart last 1] Total förbrukning"
+      },
+      "plant_smart_load_2_total_consumption": {
+        "name": "[Smart last 2] Total förbrukning"
+      },
+      "plant_smart_load_3_total_consumption": {
+        "name": "[Smart last 3] Total förbrukning"
+      },
+      "plant_smart_load_4_total_consumption": {
+        "name": "[Smart last 4] Total förbrukning"
+      },
+      "plant_smart_load_5_total_consumption": {
+        "name": "[Smart last 5] Total förbrukning"
+      },
+      "plant_smart_load_6_total_consumption": {
+        "name": "[Smart last 6] Total förbrukning"
+      },
+      "plant_smart_load_7_total_consumption": {
+        "name": "[Smart last 7] Total förbrukning"
+      },
+      "plant_smart_load_8_total_consumption": {
+        "name": "[Smart last 8] Total förbrukning"
+      },
+      "plant_smart_load_9_total_consumption": {
+        "name": "[Smart last 9] Total förbrukning"
+      },
+      "plant_smart_load_10_total_consumption": {
+        "name": "[Smart last 10] Total förbrukning"
+      },
+      "plant_smart_load_11_total_consumption": {
+        "name": "[Smart last 11] Total förbrukning"
+      },
+      "plant_smart_load_12_total_consumption": {
+        "name": "[Smart last 12] Total förbrukning"
+      },
+      "plant_smart_load_13_total_consumption": {
+        "name": "[Smart last 13] Total förbrukning"
+      },
+      "plant_smart_load_14_total_consumption": {
+        "name": "[Smart last 14] Total förbrukning"
+      },
+      "plant_smart_load_15_total_consumption": {
+        "name": "[Smart last 15] Total förbrukning"
+      },
+      "plant_smart_load_16_total_consumption": {
+        "name": "[Smart last 16] Total förbrukning"
+      },
+      "plant_smart_load_17_total_consumption": {
+        "name": "[Smart last 17] Total förbrukning"
+      },
+      "plant_smart_load_18_total_consumption": {
+        "name": "[Smart last 18] Total förbrukning"
+      },
+      "plant_smart_load_19_total_consumption": {
+        "name": "[Smart last 19] Total förbrukning"
+      },
+      "plant_smart_load_20_total_consumption": {
+        "name": "[Smart last 20] Total förbrukning"
+      },
+      "plant_smart_load_21_total_consumption": {
+        "name": "[Smart last 21] Total förbrukning"
+      },
+      "plant_smart_load_22_total_consumption": {
+        "name": "[Smart last 22] Total förbrukning"
+      },
+      "plant_smart_load_23_total_consumption": {
+        "name": "[Smart last 23] Total förbrukning"
+      },
+      "plant_smart_load_24_total_consumption": {
+        "name": "[Smart last 24] Total förbrukning"
+      },
+      "plant_smart_load_1_power": {
+        "name": "[Smart last 1] Effekt"
+      },
+      "plant_smart_load_2_power": {
+        "name": "[Smart last 2] Effekt"
+      },
+      "plant_smart_load_3_power": {
+        "name": "[Smart last 3] Effekt"
+      },
+      "plant_smart_load_4_power": {
+        "name": "[Smart last 4] Effekt"
+      },
+      "plant_smart_load_5_power": {
+        "name": "[Smart last 5] Effekt"
+      },
+      "plant_smart_load_6_power": {
+        "name": "[Smart last 6] Effekt"
+      },
+      "plant_smart_load_7_power": {
+        "name": "[Smart last 7] Effekt"
+      },
+      "plant_smart_load_8_power": {
+        "name": "[Smart last 8] Effekt"
+      },
+      "plant_smart_load_9_power": {
+        "name": "[Smart last 9] Effekt"
+      },
+      "plant_smart_load_10_power": {
+        "name": "[Smart last 10] Effekt"
+      },
+      "plant_smart_load_11_power": {
+        "name": "[Smart last 11] Effekt"
+      },
+      "plant_smart_load_12_power": {
+        "name": "[Smart last 12] Effekt"
+      },
+      "plant_smart_load_13_power": {
+        "name": "[Smart last 13] Effekt"
+      },
+      "plant_smart_load_14_power": {
+        "name": "[Smart last 14] Effekt"
+      },
+      "plant_smart_load_15_power": {
+        "name": "[Smart last 15] Effekt"
+      },
+      "plant_smart_load_16_power": {
+        "name": "[Smart last 16] Effekt"
+      },
+      "plant_smart_load_17_power": {
+        "name": "[Smart last 17] Effekt"
+      },
+      "plant_smart_load_18_power": {
+        "name": "[Smart last 18] Effekt"
+      },
+      "plant_smart_load_19_power": {
+        "name": "[Smart last 19] Effekt"
+      },
+      "plant_smart_load_20_power": {
+        "name": "[Smart last 20] Effekt"
+      },
+      "plant_smart_load_21_power": {
+        "name": "[Smart last 21] Effekt"
+      },
+      "plant_smart_load_22_power": {
+        "name": "[Smart last 22] Effekt"
+      },
+      "plant_smart_load_23_power": {
+        "name": "[Smart last 23] Effekt"
+      },
+      "plant_smart_load_24_power": {
+        "name": "[Smart last 24] Effekt"
+      },
+      "plant_total_generation_of_third_party_inverter": {
+        "name": "Total produktion från extern växelriktare"
+      },
+      "plant_accumulated_battery_charge_energy": {
+        "name": "Total laddenergi till batteriet"
+      },
+      "plant_accumulated_battery_discharge_energy": {
+        "name": "Total urladdningsenergi från batteriet"
+      },
+      "plant_total_charged_energy_of_the_evdc": {
+        "name": "Total laddenergi via DC-laddare"
+      },
+      "plant_total_discharged_energy_of_the_evdc": {
+        "name": "Total urladdningsenergi via DC-laddare"
+      },
+      "plant_accumulated_grid_import_energy": {
+        "name": "Total importerad energi"
+      },
+      "plant_accumulated_grid_export_energy": {
+        "name": "Total exporterad energi"
+      },
+      "plant_total_energy_output_of_oil_fueled_generator": {
+        "name": "Total energi från bränsledriven generator"
+      },
+      "plant_total_charged_energy_of_the_evac": {
+        "name": "Total laddenergi via AC-laddare"
+      },
+      "plant_total_generation_of_self_pv": {
+        "name": "Total egen solproduktion"
+      },
+      "inverter_model_type": {
+        "name": "Modelltyp"
+      },
+      "inverter_serial_number": {
+        "name": "Serienummer"
+      },
+      "inverter_machine_firmware_version": {
+        "name": "Firmwareversion"
+      },
+      "inverter_rated_active_power": {
+        "name": "Nominell aktiv effekt"
+      },
+      "inverter_max_apparent_power": {
+        "name": "Maximal skenbar effekt"
+      },
+      "inverter_max_active_power": {
+        "name": "Maximal aktiv effekt"
+      },
+      "inverter_max_absorption_power": {
+        "name": "Maximal absorberad effekt"
+      },
+      "inverter_rated_battery_capacity": {
+        "name": "Nominell batterikapacitet"
+      },
+      "inverter_ess_rated_charge_power": {
+        "name": "Batteriets märkladdeffekt"
+      },
+      "inverter_ess_rated_discharge_power": {
+        "name": "Batteriets märkurladdningseffekt"
+      },
+      "inverter_ess_daily_charge_energy": {
+        "name": "Daglig laddenergi"
+      },
+      "inverter_ess_accumulated_charge_energy": {
+        "name": "Total laddenergi"
+      },
+      "inverter_ess_daily_discharge_energy": {
+        "name": "Daglig urladdningsenergi"
+      },
+      "inverter_ess_accumulated_discharge_energy": {
+        "name": "Total urladdningsenergi"
+      },
+      "inverter_running_state": {
+        "name": "Driftstatus",
+        "state": {
+          "standby": "Viloläge",
+          "running": "I drift",
+          "fault": "Fel",
+          "shutdown": "Avstängd",
+          "environmental_abnormality": "Avvikande omgivningsförhållanden"
+        }
+      },
+      "inverter_max_active_power_adjustment_value": {
+        "name": "Maximalt börvärde för aktiv effekt"
+      },
+      "inverter_min_active_power_adjustment_value": {
+        "name": "Minimalt börvärde för aktiv effekt"
+      },
+      "inverter_max_reactive_power_adjustment_value_fed": {
+        "name": "Maximal avgiven reaktiv effekt"
+      },
+      "inverter_max_reactive_power_adjustment_value_absorbed": {
+        "name": "Maximal absorberad reaktiv effekt"
+      },
+      "inverter_active_power": {
+        "name": "Aktiv effekt"
+      },
+      "inverter_reactive_power": {
+        "name": "Reaktiv effekt"
+      },
+      "inverter_ess_charge_discharge_power": {
+        "name": "Batterieffekt"
+      },
+      "inverter_ess_max_battery_charge_power": {
+        "name": "Maximal laddeffekt för batteriet"
+      },
+      "inverter_ess_max_battery_discharge_power": {
+        "name": "Maximal urladdningseffekt för batteriet"
+      },
+      "inverter_ess_available_battery_charge_energy": {
+        "name": "Tillgänglig laddenergi till batteriet"
+      },
+      "inverter_ess_available_battery_discharge_energy": {
+        "name": "Tillgänglig urladdningsenergi från batteriet"
+      },
+      "inverter_ess_battery_soc": {
+        "name": "Batteriets laddningsnivå"
+      },
+      "inverter_ess_battery_soh": {
+        "name": "Batteriets hälsotillstånd"
+      },
+      "inverter_ess_average_cell_temperature": {
+        "name": "Batteriets genomsnittliga celltemperatur"
+      },
+      "inverter_ess_average_cell_voltage": {
+        "name": "Batteriets genomsnittliga cellspänning"
+      },
+      "inverter_ess_maximum_battery_temperature": {
+        "name": "Batteriets högsta temperatur"
+      },
+      "inverter_ess_minimum_battery_temperature": {
+        "name": "Batteriets lägsta temperatur"
+      },
+      "inverter_ess_maximum_battery_cell_voltage": {
+        "name": "Batteriets högsta cellspänning"
+      },
+      "inverter_ess_minimum_battery_cell_voltage": {
+        "name": "Batteriets lägsta cellspänning"
+      },
+      "inverter_alarm1": {
+        "name": "Larm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Programvaruversionerna stämmer inte överens",
+              "bit_1": "Låg isolationsresistans",
+              "bit_2": "Övertemperatur",
+              "bit_3": "Utrustningsfel",
+              "bit_4": "Jordningsfel i systemet",
+              "bit_5": "Överspänning i solcellssträng",
+              "bit_6": "Felvänd polaritet i solcellssträng",
+              "bit_7": "Bakström i solcellssträng",
+              "bit_8": "AFCI-fel",
+              "bit_9": "Nätavbrott",
+              "bit_10": "Överspänning i elnätet",
+              "bit_11": "Underspänning i elnätet",
+              "bit_12": "Överfrekvens i elnätet",
+              "bit_13": "Underfrekvens i elnätet",
+              "bit_14": "Spänningsobalans i elnätet",
+              "bit_15": "Likströmskomponenten i utströmmen överskrider gränsen",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "inverter_alarm2": {
+        "name": "Larm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Läckströmmen överskrider gränsen",
+              "bit_1": "Kommunikationsstörning",
+              "bit_2": "Systemets interna skydd",
+              "bit_3": "Fel i AFCI-självtestkrets",
+              "bit_4": "Skydd vid ödrift",
+              "bit_5": "Skydd vid manuell manöver",
+              "bit_6": "Okänt larm (bit 6)",
+              "bit_7": "Fel fasföljd",
+              "bit_8": "Kortslutning mot skyddsjord",
+              "bit_9": "Mjukstartsfel",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "inverter_alarm3": {
+        "name": "Larm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Programvaruversionerna stämmer inte överens",
+              "bit_1": "Låg isolationsresistans mot jord",
+              "bit_2": "För hög temperatur",
+              "bit_3": "Utrustningsfel",
+              "bit_4": "Undertemperatur",
+              "bit_5": "Internt skydd",
+              "bit_6": "Termisk rusning",
+              "bit_7": "Okänt larm (bit 7)",
+              "bit_8": "Okänt larm (bit 8)",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "inverter_alarm4": {
+        "name": "Larm 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Programvaruversionerna stämmer inte överens",
+              "bit_1": "För hög temperatur",
+              "bit_2": "Utrustningsfel",
+              "bit_3": "För hög läckström på ödriftsutgången",
+              "bit_4": "Jordningsfel i neutralledaren",
+              "bit_5": "Fel fasföljd i nätanslutningen",
+              "bit_6": "Fel fasföljd i växelriktaranslutningen",
+              "bit_7": "Fasbortfall i elnätet",
+              "bit_8": "Okänt larm (bit 8)",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "inverter_alarm5": {
+        "name": "Larm 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Programvaruversionerna stämmer inte överens",
+              "bit_1": "Låg isolationsresistans mot jord",
+              "bit_2": "Övertemperatur",
+              "bit_3": "Utrustningsfel",
+              "bit_4": "Laddningsfel",
+              "bit_5": "Utrustningsskydd",
+              "bit_6": "Okänt larm (bit 6)",
+              "bit_7": "Okänt larm (bit 7)",
+              "bit_8": "Okänt larm (bit 8)",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "inverter_grid_frequency": {
+        "name": "Nätfrekvens"
+      },
+      "inverter_pcs_internal_temperature": {
+        "name": "Intern PCS-temperatur"
+      },
+      "inverter_output_type": {
+        "name": "Utgångstyp",
+        "state": {
+          "l_n": "L/N",
+          "l1_l2_l3": "L1/L2/L3",
+          "l1_l2_l3_n": "L1/L2/L3/N",
+          "l1_l2_n": "L1/L2/N"
+        }
+      },
+      "inverter_rated_grid_voltage": {
+        "name": "Nominell nätspänning"
+      },
+      "inverter_rated_grid_frequency": {
+        "name": "Nominell nätfrekvens"
+      },
+      "inverter_ab_line_voltage": {
+        "name": "Huvudspänning A–B"
+      },
+      "inverter_bc_line_voltage": {
+        "name": "Huvudspänning B–C"
+      },
+      "inverter_ca_line_voltage": {
+        "name": "Huvudspänning C–A"
+      },
+      "inverter_phase_a_voltage": {
+        "name": "Fas A spänning"
+      },
+      "inverter_phase_b_voltage": {
+        "name": "Fas B spänning"
+      },
+      "inverter_phase_c_voltage": {
+        "name": "Fas C spänning"
+      },
+      "inverter_phase_a_current": {
+        "name": "Fas A ström"
+      },
+      "inverter_phase_b_current": {
+        "name": "Fas B ström"
+      },
+      "inverter_phase_c_current": {
+        "name": "Fas C ström"
+      },
+      "inverter_power_factor": {
+        "name": "Effektfaktor"
+      },
+      "inverter_pack_count": {
+        "name": "Antal batteripaket"
+      },
+      "inverter_pv_string_count": {
+        "name": "Antal solcellssträngar"
+      },
+      "inverter_mppt_count": {
+        "name": "Antal MPPT"
+      },
+      "inverter_pv_power": {
+        "name": "Soleffekt"
+      },
+      "inverter_insulation_resistance": {
+        "name": "Isolationsresistans"
+      },
+      "inverter_active_power_fixed_value_adjustment_feedback": {
+        "name": "Återläst fast börvärde för aktiv effekt"
+      },
+      "inverter_reactive_power_fixed_value_adjustment_feedback": {
+        "name": "Återläst fast börvärde för reaktiv effekt"
+      },
+      "inverter_active_power_percentage_adjustment_feedback": {
+        "name": "Återläst börvärde för aktiv effekt i procent"
+      },
+      "inverter_reactive_power_qs_adjustment_feedback": {
+        "name": "Återläst Q/S-börvärde för reaktiv effekt"
+      },
+      "inverter_power_factor_adjustment_feedback": {
+        "name": "Återläst börvärde för effektfaktor"
+      },
+      "inverter_daily_pv_energy": {
+        "name": "Daglig solenergi"
+      },
+      "inverter_accumulated_pv_energy": {
+        "name": "Total solenergi"
+      },
+      "ac_charger_system_state": {
+        "name": "Systemstatus",
+        "state": {
+          "initializing": "Initierar",
+          "not_connected": "Inte ansluten",
+          "reserving": "Reserverar",
+          "preparing": "Förbereder",
+          "ev_ready": "Fordon redo",
+          "charging": "Laddar",
+          "fault": "Fel",
+          "error": "Fel"
+        }
+      },
+      "ac_charger_total_energy_consumed": {
+        "name": "Total förbrukad energi"
+      },
+      "ac_charger_charging_power": {
+        "name": "Laddeffekt"
+      },
+      "ac_charger_rated_power": {
+        "name": "Märkeffekt"
+      },
+      "ac_charger_rated_current": {
+        "name": "Märkström"
+      },
+      "ac_charger_rated_voltage": {
+        "name": "Märkspänning"
+      },
+      "ac_charger_input_breaker_rated_current": {
+        "name": "Ingångsbrytarens märkström"
+      },
+      "ac_charger_alarm1": {
+        "name": "Larm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Överspänning i elnätet",
+              "bit_1": "Underspänning i elnätet",
+              "bit_2": "Överbelastning",
+              "bit_3": "Kortslutning",
+              "bit_4": "Överström på laddutgången",
+              "bit_5": "Läckströmmen överskrider gränsen",
+              "bit_6": "Jordningsfel",
+              "bit_7": "Fel fasföljd i nätanslutningen",
+              "bit_8": "PEN-fel",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "ac_charger_alarm2": {
+        "name": "Larm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "Fel i kretsen för läckströmsdetektering",
+              "bit_1": "Relä har fastnat",
+              "bit_2": "Fel i pilotkrets",
+              "bit_3": "Fel i hjälpkraftsmodul",
+              "bit_4": "Fel i elektriskt lås",
+              "bit_5": "Kommunikationsfel med indikatorpanel",
+              "bit_6": "Okänt larm (bit 6)",
+              "bit_7": "Okänt larm (bit 7)",
+              "bit_8": "Okänt larm (bit 8)",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "ac_charger_alarm3": {
+        "name": "Larm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Larmstatus",
+            "state": {
+              "no_problem": "Inga problem",
+              "active": "Aktivt larm",
+              "unknown": "Okänt larm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Larm",
+            "state": {
+              "bit_0": "För hög intern temperatur",
+              "bit_1": "Fel på laddkabel",
+              "bit_2": "Kommunikationsfel med mätare",
+              "bit_3": "Okänt larm (bit 3)",
+              "bit_4": "Okänt larm (bit 4)",
+              "bit_5": "Okänt larm (bit 5)",
+              "bit_6": "Okänt larm (bit 6)",
+              "bit_7": "Okänt larm (bit 7)",
+              "bit_8": "Okänt larm (bit 8)",
+              "bit_9": "Okänt larm (bit 9)",
+              "bit_10": "Okänt larm (bit 10)",
+              "bit_11": "Okänt larm (bit 11)",
+              "bit_12": "Okänt larm (bit 12)",
+              "bit_13": "Okänt larm (bit 13)",
+              "bit_14": "Okänt larm (bit 14)",
+              "bit_15": "Okänt larm (bit 15)",
+              "unknown": "Okänt larm"
+            }
+          },
+          "raw_value": {
+            "name": "Råvärde"
+          }
+        }
+      },
+      "dc_charger_vehicle_battery_voltage": {
+        "name": "Fordonets batterispänning"
+      },
+      "dc_charger_charging_current": {
+        "name": "Laddström"
+      },
+      "dc_charger_output_power": {
+        "name": "Utgående effekt"
+      },
+      "dc_charger_vehicle_soc": {
+        "name": "Fordonets laddningsnivå"
+      },
+      "dc_charger_current_charging_capacity": {
+        "name": "Laddenergi denna session"
+      },
+      "dc_charger_current_charging_duration": {
+        "name": "Laddtid denna session"
+      },
+      "dc_charger_running_state": {
+        "name": "Driftstatus",
+        "state": {
+          "idle": "Vänteläge",
+          "occupied": "Upptagen",
+          "preparing_comm": "Förbereder kommunikation",
+          "charging": "Laddar",
+          "fault": "Fel",
+          "scheduled": "Schemalagd",
+          "ended": "Avslutad",
+          "charger_unavailable": "Otillgänglig",
+          "discharging": "Laddar ur",
+          "alarm": "Larm",
+          "preparing_insulation": "Förbereder isolationskontroll"
+        }
+      },
+      "dc_charger_discharging_current": {
+        "name": "Urladdningsström"
+      },
+      "dc_charger_current_discharging_capacity": {
+        "name": "Urladdningsenergi denna session"
+      },
+      "dc_charger_current_discharging_duration": {
+        "name": "Urladdningstid denna session"
+      },
+      "dc_charger_total_charging_capacity": {
+        "name": "Total laddenergi"
+      },
+      "dc_charger_total_discharging_capacity": {
+        "name": "Total urladdningsenergi"
+      },
+      "dc_charger_rated_charging_power": {
+        "name": "Nominell laddeffekt"
+      },
+      "dc_charger_rated_discharging_power": {
+        "name": "Nominell urladdningseffekt"
+      }
+    },
+    "number": {
+      "plant_active_power_fixed_target": {
+        "name": "Fast börvärde för aktiv effekt"
+      },
+      "plant_reactive_power_fixed_target": {
+        "name": "Fast börvärde för reaktiv effekt"
+      },
+      "plant_active_power_percentage_target": {
+        "name": "Börvärde för aktiv effekt i procent"
+      },
+      "plant_qs_ratio_target": {
+        "name": "Q/S-börvärde"
+      },
+      "plant_power_factor_target": {
+        "name": "Börvärde för effektfaktor"
+      },
+      "plant_ess_max_charging_limit": {
+        "name": "Maximal laddningsgräns för batteriet"
+      },
+      "plant_ess_max_discharging_limit": {
+        "name": "Maximal urladdningsgräns för batteriet"
+      },
+      "plant_pv_max_power_limit": {
+        "name": "Maximal effektgräns för solproduktion"
+      },
+      "plant_grid_point_maximum_export_limitation": {
+        "name": "Effektgräns för export till elnätet"
+      },
+      "plant_grid_maximum_import_limitation": {
+        "name": "Effektgräns för import från elnätet"
+      },
+      "plant_pcs_maximum_export_limitation": {
+        "name": "Effektgräns för PCS-export"
+      },
+      "plant_pcs_maximum_import_limitation": {
+        "name": "Effektgräns för PCS-import"
+      },
+      "plant_phase_a_active_power_fixed_target": {
+        "name": "Fas A fast börvärde för aktiv effekt"
+      },
+      "plant_phase_b_active_power_fixed_target": {
+        "name": "Fas B fast börvärde för aktiv effekt"
+      },
+      "plant_phase_c_active_power_fixed_target": {
+        "name": "Fas C fast börvärde för aktiv effekt"
+      },
+      "plant_phase_a_reactive_power_fixed_target": {
+        "name": "Fas A fast börvärde för reaktiv effekt"
+      },
+      "plant_phase_b_reactive_power_fixed_target": {
+        "name": "Fas B fast börvärde för reaktiv effekt"
+      },
+      "plant_phase_c_reactive_power_fixed_target": {
+        "name": "Fas C fast börvärde för reaktiv effekt"
+      },
+      "plant_phase_a_active_power_percentage_target": {
+        "name": "Fas A börvärde för aktiv effekt i procent"
+      },
+      "plant_phase_b_active_power_percentage_target": {
+        "name": "Fas B börvärde för aktiv effekt i procent"
+      },
+      "plant_phase_c_active_power_percentage_target": {
+        "name": "Fas C börvärde för aktiv effekt i procent"
+      },
+      "plant_phase_a_qs_ratio_target": {
+        "name": "Fas A Q/S-förhållande"
+      },
+      "plant_phase_b_qs_ratio_target": {
+        "name": "Fas B Q/S-förhållande"
+      },
+      "plant_phase_c_qs_ratio_target": {
+        "name": "Fas C Q/S-förhållande"
+      },
+      "plant_backup_soc": {
+        "name": "Batteriets reservladdningsnivå"
+      },
+      "plant_charge_cut_off_soc": {
+        "name": "Batteriets stoppnivå för laddning"
+      },
+      "plant_discharge_cut_off_soc": {
+        "name": "Batteriets stoppnivå för urladdning"
+      },
+      "plant_active_power_regulation_gradient": {
+        "name": "[Nätkod] Reglergradient för aktiv effekt"
+      },
+      "plant_lvrt_reactive_power_comp_factor": {
+        "name": "[Nätkod] LVRT-kompensationsfaktor för reaktiv effekt"
+      },
+      "plant_lvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Nätkod] LVRT-kompensationsfaktor för reaktiv minussystemeffekt"
+      },
+      "plant_hvrt_reactive_power_comp_factor": {
+        "name": "[Nätkod] HVRT-kompensationsfaktor för reaktiv effekt"
+      },
+      "plant_hvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Nätkod] HVRT-kompensationsfaktor för reaktiv minussystemeffekt"
+      },
+      "plant_over_freq_derating_power_ramp_rate": {
+        "name": "[Nätkod] Effektramp för nedreglering vid överfrekvens"
+      },
+      "plant_over_freq_derating_trigger_freq": {
+        "name": "[Nätkod] Startfrekvens för nedreglering vid överfrekvens"
+      },
+      "plant_over_freq_derating_cutoff_freq": {
+        "name": "[Nätkod] Stoppfrekvens för nedreglering vid överfrekvens"
+      },
+      "plant_under_freq_power_boost_power_ramp_rate": {
+        "name": "[Nätkod] Effektramp för effektökning vid underfrekvens"
+      },
+      "plant_under_freq_power_boost_trigger_freq": {
+        "name": "[Nätkod] Startfrekvens för effektökning vid underfrekvens"
+      },
+      "plant_under_freq_power_boost_cutoff_freq": {
+        "name": "[Nätkod] Stoppfrekvens för effektökning vid underfrekvens"
+      },
+      "plant_pcc_power_factor_grid_import": {
+        "name": "Börvärde för effektfaktor vid nätimport"
+      },
+      "plant_pcc_power_factor_grid_export": {
+        "name": "Börvärde för effektfaktor vid nätexport"
+      },
+      "plant_ess_preheating_reserved_soc": {
+        "name": "Reserverad laddningsnivå för batteriförvärmning"
+      },
+      "inverter_active_power_fixed_adjustment": {
+        "name": "Fast börvärde för aktiv effekt"
+      },
+      "inverter_reactive_power_fixed_adjustment": {
+        "name": "Fast börvärde för reaktiv effekt"
+      },
+      "inverter_active_power_percentage_adjustment": {
+        "name": "Börvärde för aktiv effekt i procent"
+      },
+      "inverter_reactive_power_qs_adjustment": {
+        "name": "Q/S-börvärde för reaktiv effekt"
+      },
+      "inverter_power_factor_adjustment": {
+        "name": "Börvärde för effektfaktor"
+      },
+      "ac_charger_output_current": {
+        "name": "Laddarens utström"
+      },
+      "dc_charger_max_charging_power_limit": {
+        "name": "Maximal laddeffektgräns"
+      },
+      "dc_charger_max_discharging_power_limit": {
+        "name": "Maximal urladdningseffektgräns"
+      },
+      "plant_ess_preheating_tou_start_time": {
+        "name": "Batteriförvärmning TOU-period {slot} starttid"
+      },
+      "plant_ess_preheating_tou_end_time": {
+        "name": "Batteriförvärmning TOU-period {slot} sluttid"
+      },
+      "plant_ess_preheating_tou_target_power": {
+        "name": "Batteriförvärmning TOU-period {slot} börvärde för effekt"
+      }
+    },
+    "select": {
+      "plant_remote_ems_control_mode": {
+        "name": "Fjärrstyrningsläge för EMS"
+      },
+      "plant_ess_preheating_mode": {
+        "name": "Förvärmningsläge för batteriet"
+      },
+      "plant_lvrt_enable": {
+        "name": "[Nätkod] LVRT-aktivering"
+      },
+      "plant_lvrt_mode": {
+        "name": "[Nätkod] LVRT-läge"
+      },
+      "plant_lvrt_grid_voltage_protection_blocking": {
+        "name": "[Nätkod] Blockering av nätspänningsskydd vid LVRT"
+      },
+      "plant_hvrt_enable": {
+        "name": "[Nätkod] HVRT-aktivering"
+      },
+      "plant_hvrt_mode": {
+        "name": "[Nätkod] HVRT-läge"
+      },
+      "plant_hvrt_grid_voltage_protection_blocking": {
+        "name": "[Nätkod] Blockering av nätspänningsskydd vid HVRT"
+      },
+      "plant_over_freq_derating_enable": {
+        "name": "[Nätkod] Aktivering av nedreglering vid överfrekvens"
+      },
+      "plant_under_freq_power_boost_enable": {
+        "name": "[Nätkod] Aktivering av effektökning vid underfrekvens"
+      }
+    },
+    "switch": {
+      "plant_start_stop": {
+        "name": "Anläggningens strömbrytare"
+      },
+      "plant_remote_ems_enable": {
+        "name": "Fjärrstyrd EMS (styrs av Home Assistant)"
+      },
+      "plant_independent_phase_power_control_enable": {
+        "name": "Oberoende effektstyrning per fas"
+      },
+      "plant_ess_preheating_enable": {
+        "name": "Batteriförvärmning"
+      },
+      "plant_ess_preheating_advance_enable": {
+        "name": "Avancerad batteriförvärmning"
+      },
+      "inverter_start_stop": {
+        "name": "Växelriktarens strömbrytare"
+      },
+      "ac_charger_start_stop": {
+        "name": "AC-laddarens strömbrytare (utfasad)"
+      },
+      "dc_charging": {
+        "name": "DC-laddning (utfasad)"
+      }
+    }
+  },
+  "selector": {
+    "device_type": {
+      "options": {
+        "new_plant": "Ny anläggning",
+        "inverter": "Växelriktare",
+        "ac_charger": "AC-laddare",
+        "dc_charger": "DC-laddare"
+      }
+    },
+    "configured_device": {
+      "options": {
+        "accumulated_energy": "Ändra ackumulerade energivärden"
+      }
+    }
+  },
+  "exceptions": {
+    "coordinator_unavailable": {
+      "message": "Det går inte att styra {entity_id}: mätdata saknas."
+    }
+  },
+  "services": {
+    "set_operation_mode": {
+      "name": "Ställ in driftläge",
+      "description": "Ställ in Sigenergy-systemets driftläge.",
+      "fields": {
+        "mode": {
+          "name": "Läge",
+          "description": "Driftläget som ska användas."
+        }
+      }
+    },
+    "set_remote_ems_control_mode": {
+      "name": "Ställ in fjärrstyrningsläge för EMS",
+      "description": "Ställ in Sigenergy-systemets fjärrstyrningsläge för EMS.",
+      "fields": {
+        "mode": {
+          "name": "Läge",
+          "description": "Fjärrstyrningsläget som ska användas."
+        }
+      }
+    },
+    "set_power_limit": {
+      "name": "Ställ in effektgräns",
+      "description": "Ställ in en effektgräns för Sigenergy-systemet.",
+      "fields": {
+        "value": {
+          "name": "Värde",
+          "description": "Effektgränsen som ska användas."
+        }
+      }
+    }
+  }
+}

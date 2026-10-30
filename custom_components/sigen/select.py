@@ -418,7 +418,11 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         if self.coordinator.data is None:
-            raise HomeAssistantError(f"Cannot select option for {self.entity_id}: Coordinator data is unavailable")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="coordinator_unavailable",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
 
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
