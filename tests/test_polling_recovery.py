@@ -280,8 +280,8 @@ class TestPollingRecovery(unittest.IsolatedAsyncioTestCase):
             await self.group.async_write("set_first", 999)
             self.unit.load_raw({"input": {100: 999}})
             finish.set()
-            with self.assertRaises(self.devices.ModbusError):
-                await old
+            self.assertEqual(999, (await old)["first"])
+            self.assertEqual(1, self.group.poll_write_recoveries)
             self.assertEqual(999, (await self.group.async_update())["first"])
 
     async def test_persisted_split_jobs_resume_without_repeating_the_rejected_parent(self):
