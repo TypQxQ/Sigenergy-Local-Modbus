@@ -2439,7 +2439,7 @@ INVERTER_RUNNING_INFO_REGISTERS = {
         address=31023,
         count=1,
         register_type=RegisterType.READ_ONLY,
-        data_type=DataType.U16,
+        data_type=DataType.S16,
         gain=1000,
         description="Power Factor",
     ),

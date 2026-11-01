@@ -392,7 +392,7 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        if not super().available:
+        if not super().available or not self._control_reading_available():
             return False
 
         # Use device_name as the primary identifier passed to the lambda/function
@@ -402,7 +402,7 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the selected entity option."""
-        if self.coordinator.data is None:
+        if not self._control_reading_available():
             return None
 
         # Use device_name as the primary identifier passed to the lambda/function
@@ -417,7 +417,7 @@ class SigenergySelect(SigenergyEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        if self.coordinator.data is None:
+        if self.coordinator.data is None or not self.available:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="coordinator_unavailable",

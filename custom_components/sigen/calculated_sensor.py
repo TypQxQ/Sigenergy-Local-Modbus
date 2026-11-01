@@ -22,6 +22,7 @@ from homeassistant.const import (
     EntityCategory,
     UnitOfPower,
     UnitOfElectricCurrent,
+    UnitOfTime,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
@@ -420,6 +421,49 @@ class SigenergyCalculations:
             return None
 
         return consumed_power
+
+    @staticmethod
+    def calculate_battery_time_remaining(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Estimate hours above backup reserve at current household consumption.
+
+        This is battery-only autonomy, independent of current battery charging
+        or discharging power and future solar/grid contributions. All inputs
+        use coordinator-native units (percent, kWh and kW).
+        """
+        plant = (coordinator_data or {}).get("plant")
+        if not isinstance(plant, dict):
+            return None
+
+        values = []
+        for key in ("plant_ess_soc", "plant_backup_soc", "plant_ess_rated_energy_capacity"):
+            raw = plant.get(key)
+            # safe_decimal(None) is zero for other callers; missing data must
+            # remain unknown here instead of implying a depleted battery.
+            if raw is None or isinstance(raw, bool):
+                return None
+            number = safe_decimal(raw)
+            if number is None or not number.is_finite():
+                return None
+            values.append(number)
+        soc, reserve, capacity = values
+        if not (0 <= soc <= 100 and 0 <= reserve <= 100) or capacity <= 0:
+            return None
+        if soc <= reserve:
+            return Decimal(0)
+
+        consumed_power = SigenergyCalculations.calculate_plant_consumed_power(
+            None, coordinator_data, extra_params
+        )
+        if consumed_power is None or isinstance(consumed_power, bool):
+            return None
+        consumption = safe_decimal(consumed_power)
+        if consumption is None or not consumption.is_finite() or consumption <= 0:
+            return None
+        return (soc - reserve) / Decimal(100) * capacity / consumption
 
     @staticmethod
     def _calculate_total_inverter_energy(
@@ -2246,6 +2290,25 @@ class SigenergyCalculatedSensors:
                 ),
             ),
             suggested_display_precision=3,
+            round_digits=6,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_battery_time_remaining",
+            name="Battery Time Remaining",
+            translation_key="plant_battery_time_remaining",
+            device_class=SensorDeviceClass.DURATION,
+            native_unit_of_measurement=UnitOfTime.HOURS,
+            icon="mdi:battery-clock-outline",
+            value_fn=SigenergyCalculations.calculate_battery_time_remaining,
+            extra_fn_data=True,
+            register_support_alternatives=(
+                ("plant_ess_soc", "plant_backup_soc", "plant_ess_rated_energy_capacity",
+                 "plant_general_load_power"),
+                ("plant_ess_soc", "plant_backup_soc", "plant_ess_rated_energy_capacity",
+                 "plant_active_power", "plant_grid_sensor_active_power",
+                 "plant_third_party_photovoltaic_power"),
+            ),
+            suggested_display_precision=1,
             round_digits=6,
         ),
         SigenergySensorEntityDescription(

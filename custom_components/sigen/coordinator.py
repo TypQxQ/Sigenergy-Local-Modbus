@@ -162,6 +162,16 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     except Exception:
                         ac_charger_data[name] = {}
 
+                # Unknown/unsupported registers during discovery are expected.
+                # A poll with actual read failures and no usable readings is
+                # a total outage, not a successful partial update. Keep the old
+                # snapshot until HA marks the coordinator unavailable.
+                readings = [plant_data, *inverter_data.values(),
+                            *dc_charger_data.values(), *ac_charger_data.values()]
+                if (any(item["status"] in {"partial", "error"} for item in device_timings.values())
+                        and not any(value is not None for values in readings for value in values.values())):
+                    raise UpdateFailed("No Sigenergy register readings succeeded")
+
                 # Merge fetched data into existing coordinator data
                 # Preserve the _sensors_initialized flag across updates
                 sensors_initialized = self.data.get("_sensors_initialized", False) if self.data else False

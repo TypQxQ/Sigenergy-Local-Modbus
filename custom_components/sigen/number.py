@@ -780,7 +780,7 @@ INVERTER_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         # Use identifier (device_name for inverters)
-        value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_power_factor_adjustment", 0) / 1000,
+        value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_power_factor_adjustment"),
         set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("inverter", identifier, "inverter_power_factor_adjustment", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -933,7 +933,7 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
     @property
     def native_value(self) -> float | None:
         """Return the value of the number."""
-        if self.coordinator.data is None:
+        if not self._control_reading_available():
             return None
             
         # Use device_name as the primary identifier passed to the lambda/function
@@ -941,7 +941,7 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
         try:
             value = self.entity_description.value_fn(self.coordinator.data, identifier)
             # Ensure the value is a float
-            return float(value) if value is not None else 0.0
+            return float(value) if value is not None else None
         except (TypeError, ValueError, KeyError) as e:
             _LOGGER.error(
                 "Error getting native value for %s (identifier: %s): %s",
@@ -955,7 +955,7 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        if not super().available:
+        if not super().available or not self._control_reading_available():
             return False
             
         # Use device_name as the primary identifier passed to the lambda/function
@@ -964,7 +964,7 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the value of the number."""
-        if self.coordinator.data is None:
+        if self.coordinator.data is None or not self.available:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="coordinator_unavailable",
