@@ -11,6 +11,11 @@ from unittest.mock import AsyncMock, Mock
 
 from test_remote_ems_write_readback import _make_coordinator
 
+try:
+    import voluptuous as vol
+except ModuleNotFoundError:
+    vol = None
+
 SOURCE = Path(__file__).resolve().parents[1] / "custom_components/sigen"
 
 
@@ -69,6 +74,43 @@ def options_flow(scope):
 def plant_input(interval):
     return {"host": "192.0.2.1", "port": 502, "slave_id": 247,
             "inverter_slave_ids": 1, "read_only": True, "scan_interval": interval}
+
+
+@unittest.skipUnless(vol is not None, "Install voluptuous to exercise the real form schema")
+class TestPlantSchema(unittest.TestCase):
+    def setUp(self):
+        scope = load_flows()
+        scope["vol"] = vol
+        tree = ast.parse((SOURCE / "config_flow.py").read_text(encoding="utf-8"))
+        node = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                    and n.name == "generate_plant_schema")
+        module = ast.Module(body=[ast.ImportFrom(module="__future__",
+            names=[ast.alias(name="annotations")], level=0), node], type_ignores=[])
+        exec(compile(ast.fix_missing_locations(module), str(SOURCE / "config_flow.py"), "exec"), scope)
+        self.generate_schema = scope["generate_plant_schema"]
+
+    def schema_and_input(self, initial, interval):
+        data = plant_input(interval)
+        data.pop("slave_id" if initial else "inverter_slave_ids")
+        schema = self.generate_schema(data, use_inverter_device_id=initial, display_update_frq=True)
+        return schema, data
+
+    def test_real_setup_and_options_schema_accept_and_coerce_supported_intervals(self):
+        for initial in (True, False):
+            for interval in (1, 2, 5, "1", "5"):
+                with self.subTest(initial=initial, interval=interval):
+                    schema, data = self.schema_and_input(initial, interval)
+                    result = schema(data)
+                    self.assertEqual(int(interval), result["scan_interval"])
+                    self.assertIsInstance(result["scan_interval"], int)
+
+    def test_real_setup_and_options_schema_reject_intervals_below_one(self):
+        for initial in (True, False):
+            for interval in (0, -1, "0", "-1"):
+                with self.subTest(initial=initial, interval=interval):
+                    schema, data = self.schema_and_input(initial, interval)
+                    with self.assertRaises(vol.Invalid):
+                        schema(data)
 
 
 class TestPollingInterval(unittest.IsolatedAsyncioTestCase):
