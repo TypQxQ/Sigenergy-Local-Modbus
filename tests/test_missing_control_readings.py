@@ -42,7 +42,8 @@ def load_controls():
                                         ('switch.py', 'SigenergySwitch', 'SwitchEntity'),
                                         ('select.py', 'SigenergySelect', 'SelectEntity')]:
         tree = ast.parse((ROOT / filename).read_text(encoding='utf-8'))
-        helpers = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith('_deprecated_')]
+        helpers = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                   and (n.name.startswith('_deprecated_') or n.name == '_power_limit_value')]
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == classname)
         cls.body = [n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name != '__init__']
         scope[parent] = type(parent, (), {})
@@ -56,7 +57,7 @@ def description(filename, key, scope):
         kw.arg == 'key' and isinstance(kw.value, ast.Constant) and kw.value.value == key for kw in n.keywords))
     attrs = {'key': key, 'available_fn': lambda *args: True}
     for kw in node.keywords:
-        if kw.arg in {'register_support_keys', 'value_fn', 'is_on_fn', 'current_option_fn', 'available_fn'}:
+        if kw.arg in {'register_support_keys', 'value_fn', 'set_value_fn', 'is_on_fn', 'current_option_fn', 'available_fn'}:
             attrs[kw.arg] = eval(compile(ast.Expression(kw.value), filename, 'eval'), scope)
     return SimpleNamespace(**attrs)
 

@@ -40,13 +40,23 @@ from .sigen_entity import SigenergyEntity # Import the new base class
 _LOGGER = logging.getLogger(__name__)
 
 
+def _power_limit_value(value: float | None) -> float | None:
+    """Hide the all-ones U32 power-limit marker, keeping raw readback intact.
+
+    The control can still accept a valid limit. Missing reads retain their
+    separate availability checks; this marker does not prove unsupported or
+    unlimited operation.
+    """
+    return None if value == 0xFFFFFFFF / 1000 else value
+
+
 @dataclass(frozen=True)
 class SigenergyNumberEntityDescription(NumberEntityDescription):
     """Class describing Sigenergy number entities."""
 
     # Provide default lambdas instead of None to satisfy type checker
     # The second argument 'identifier' will be device_name for inverters, device_id otherwise
-    value_fn: Callable[[Dict[str, Any], Optional[Any]], float] = lambda data, identifier: 0.0
+    value_fn: Callable[[Dict[str, Any], Optional[Any]], float | None] = lambda data, identifier: 0.0
     # Make set_value_fn async and update type hint
     # Make set_value_fn async and update type hint to accept coordinator
     set_value_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any], float], Coroutine[Any, Any, None]] = lambda coordinator, identifier, value: asyncio.sleep(0) # Placeholder async lambda
@@ -136,7 +146,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_ess_max_charging_limit", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_ess_max_charging_limit")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_ess_max_charging_limit", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -151,7 +161,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_ess_max_discharging_limit", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_ess_max_discharging_limit")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_ess_max_discharging_limit", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -166,7 +176,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_pv_max_power_limit", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_pv_max_power_limit")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pv_max_power_limit", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -182,7 +192,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_grid_point_maximum_export_limitation", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_grid_point_maximum_export_limitation")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_grid_point_maximum_export_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -198,7 +208,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_grid_maximum_import_limitation", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_grid_maximum_import_limitation")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_grid_maximum_import_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -213,7 +223,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_export_limitation", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_pcs_maximum_export_limitation")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcs_maximum_export_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -228,7 +238,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_import_limitation", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_pcs_maximum_import_limitation")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcs_maximum_import_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
