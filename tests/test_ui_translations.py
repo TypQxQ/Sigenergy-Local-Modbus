@@ -59,6 +59,32 @@ class TestUICatalogues(unittest.TestCase):
                     self.assertIsInstance(reason, ast.Constant)
                     self.assertIn(reason.value, self.en[section]["abort"])
 
+    def test_generated_connection_forms_have_labels_for_their_actual_field_keys(self):
+        # The config constant is plural (inverter_slave_ids). Checking only
+        # catalogue parity misses a label filed under an unused singular key.
+        constants = {"CONF_HOST": "host", "CONF_PORT": "port", "CONF_SLAVE_ID": "slave_id"}
+        for node in ast.parse((P / "const.py").read_text(encoding="utf-8")).body:
+            if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+                try:
+                    constants[node.targets[0].id] = ast.literal_eval(node.value)
+                except (ValueError, TypeError):
+                    pass
+        scope = {**constants, "_LOGGER": SimpleNamespace(debug=lambda *args: None),
+                 "vol": SimpleNamespace(Required=lambda key, **kwargs: key,
+                                        Schema=lambda data: data, All=lambda *args: None,
+                                        Coerce=lambda value: value)}
+        tree = ast.parse((P / "config_flow.py").read_text(encoding="utf-8"))
+        node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "generate_plant_schema")
+        exec(compile(ast.Module(body=[node], type_ignores=[]), "config_flow.py", "exec",
+                     flags=__future__.annotations.compiler_flag), scope)
+        values = {"host": "192.0.2.1", "port": 502, "slave_id": 247,
+                  constants["CONF_INVERTER_SLAVE_ID"]: 1, "read_only": True, "scan_interval": 5}
+        for new_installation, category in ((True, "config"), (False, "options")):
+            fields = scope["generate_plant_schema"](values, use_inverter_device_id=new_installation,
+                                                     display_update_frq=True)
+            for catalogue in (self.en, self.sv):
+                self.assertLessEqual(set(fields), set(catalogue[category]["step"]["plant_config"]["data"]))
+
     def test_alarm_bits_and_reserved_bits_have_labels_in_each_language(self):
         for key in alarm.ALARM_REGISTER_GROUPS:
             if key not in self.en["entity"]["sensor"]:

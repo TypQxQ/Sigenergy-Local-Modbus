@@ -1044,7 +1044,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
             # Add the plant itself with host info
             self._devices[f"plant_{plant_entry_id}"] = (
-                f"{plant_name} (Host: {plant_host})"
+                f"{plant_name} ({plant_host})"
             )
 
             # Add inverters
@@ -1054,7 +1054,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             for inv_name, inv_details in inverter_connections.items():
                 device_key = f"inverter_{inv_name}"
 
-                display_name = f"{inv_name} (Host: {inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
+                display_name = f"{inv_name} ({inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
 
                 self._devices[device_key] = display_name
 
@@ -1064,7 +1064,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             for ac_name, ac_details in ac_charger_connections.items():
                 device_key = f"ac_{ac_name}"
 
-                display_name = f"{ac_name} (Host: {ac_details.get(CONF_HOST)}, ID: {ac_details.get(CONF_SLAVE_ID)})"
+                display_name = f"{ac_name} ({ac_details.get(CONF_HOST)}, ID: {ac_details.get(CONF_SLAVE_ID)})"
 
                 self._devices[device_key] = display_name
 
@@ -1074,7 +1074,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                     continue
 
                 device_key = f"dc_{inv_name}"
-                display_name = f"{inv_name} DC Charger (Host: {inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
+                display_name = f"{inv_name} DC Charger ({inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
 
                 self._devices[device_key] = display_name
             
