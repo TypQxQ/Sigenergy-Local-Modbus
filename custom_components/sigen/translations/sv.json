@@ -28,14 +28,14 @@
         "data": {
           "host": "Adress (huvudväxelriktarens IP-adress)",
           "port": "Port (standard: 502)",
-          "inverter_slave_id": "Växelriktarens enhets-ID (standard: 1)",
+          "inverter_slave_ids": "Växelriktarens enhets-ID (standard: 1)",
           "ac_charger_slave_ids": "Enhets-ID:n för AC-laddare (kommaseparerade; lämna tomt om inga finns)",
           "dc_charger_slave_ids": "ID:n för växelriktare med DC-laddare (kommaseparerade)",
           "scan_interval": "Uppdateringsintervall (sekunder)",
           "migrate_yaml": "Importera sensorvärden från äldre YAML-konfiguration",
           "migrate_yaml_description": "Om detta aktiveras hämtas sensorns startvärden från den äldre YAML-konfigurationen, om den finns.",
           "read_only": "Skrivskyddat läge",
-          "slave_id": "Växelriktarens enhets-ID"
+          "slave_id": "Anläggningens enhets-ID"
         },
         "data_description": {
           "read_only": "Hindrar Home Assistant från att göra ändringar i Sigenergy-systemet. Rekommenderas vid den första installationen. Kan ändras senare i enhetsinställningarna."
@@ -81,7 +81,7 @@
         "title": "Ändra inställningar för Sigenergy-system",
         "description": "Ändra listan med enhets-ID:n för Sigenergy-systemet.",
         "data": {
-          "inverter_slave_id": "Växelriktarens enhets-ID (standard: 1)",
+          "inverter_slave_ids": "Växelriktarens enhets-ID (standard: 1)",
           "ac_charger_slave_ids": "Enhets-ID för AC-laddare (lämna tomt om ingen finns)",
           "dc_charger_slave_ids": "ID:n för växelriktare med DC-laddare (kommaseparerade)"
         }
@@ -153,7 +153,7 @@
           "port": "Port",
           "read_only": "Skrivskyddat läge",
           "scan_interval": "Uppdateringsintervall (sekunder)",
-          "slave_id": "Växelriktarens enhets-ID"
+          "slave_id": "Anläggningens enhets-ID"
         },
         "data_description": {
           "read_only": "Hindrar Home Assistant från att göra ändringar i Sigenergy-systemet. Rekommenderas vid den första installationen. Kan ändras senare i enhetsinställningarna."
@@ -190,7 +190,7 @@
         "title": "Ändra inställningar för Sigenergy-system",
         "description": "Ändra listan med enhets-ID:n för Sigenergy-systemet.",
         "data": {
-          "inverter_slave_id": "Växelriktarens enhets-ID (standard: 1)",
+          "inverter_slave_ids": "Växelriktarens enhets-ID (standard: 1)",
           "ac_charger_slave_ids": "Enhets-ID:n för AC-laddare (kommaseparerade; lämna tomt om inga finns)",
           "dc_charger_slave_ids": "ID:n för växelriktare med DC-laddare (kommaseparerade)"
         }
