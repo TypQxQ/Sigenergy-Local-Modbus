@@ -42,7 +42,8 @@ def load_controls():
                                         ('switch.py', 'SigenergySwitch', 'SwitchEntity'),
                                         ('select.py', 'SigenergySelect', 'SelectEntity')]:
         tree = ast.parse((ROOT / filename).read_text(encoding='utf-8'))
-        helpers = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith('_deprecated_')]
+        helpers = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                   and (n.name.startswith('_deprecated_') or n.name == '_power_limit_value')]
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == classname)
         cls.body = [n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name != '__init__']
         scope[parent] = type(parent, (), {})

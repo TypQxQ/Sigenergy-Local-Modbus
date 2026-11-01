@@ -74,11 +74,14 @@ command. Include an automation trace and full debug log when reporting failures.
 
 ## Modbus limitations
 
-- PCS import/export power limits show **Unknown** when registers 40042/40044
-  return the protocol's invalid value `0xFFFFFFFF`. These controls remain
-  available for setting a valid limit. This value does not prove that the
-  register is unsupported or that the limit is unlimited. A communication
-  failure still makes the affected control unavailable.
+- Plant power-limit controls show **Unknown** for all-ones `0xFFFFFFFF`
+  readback. This covers ESS charging/discharging, PV, grid import/export and
+  PCS import/export limits (40032-40044). The protocol explicitly documents
+  this value as invalid for the PCS limits; DEV also reports it for other
+  plant limits. These controls remain available for setting a valid limit.
+  This value does not prove that the register is unsupported or that the
+  limit is unlimited. A communication failure still makes the affected
+  control unavailable.
 - PSS (Packaged Substation System) and PID (Potential Induced Degradation)
   devices from Modbus protocol V2.9 are excluded because they cannot be tested.
 - The Sigen app's grid-side details are not fully exposed through documented

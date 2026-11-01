@@ -1,4 +1,4 @@
-"""A reported invalid PCS limit is unknown but can still be configured."""
+"""A reported all-ones plant power limit is unknown but can still be configured."""
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -7,12 +7,19 @@ from modbus_connection.mock import MockModbusConnection
 import test_missing_control_readings as controls
 from test_sigen_components import _load_sigen_module
 
-EXPORT = 'plant_pcs_maximum_export_limitation'
-IMPORT = 'plant_pcs_maximum_import_limitation'
+LIMITS = {
+    'plant_ess_max_charging_limit': 40032,
+    'plant_ess_max_discharging_limit': 40034,
+    'plant_pv_max_power_limit': 40036,
+    'plant_grid_point_maximum_export_limitation': 40038,
+    'plant_grid_maximum_import_limitation': 40040,
+    'plant_pcs_maximum_export_limitation': 40042,
+    'plant_pcs_maximum_import_limitation': 40044,
+}
 SENTINEL = 0xFFFFFFFF
 
 
-class TestPCSLimitSentinel(unittest.IsolatedAsyncioTestCase):
+class TestPowerLimitSentinel(unittest.IsolatedAsyncioTestCase):
     entity = controls.TestMissingControlReadings.entity
 
     def setUp(self):
@@ -20,19 +27,20 @@ class TestPCSLimitSentinel(unittest.IsolatedAsyncioTestCase):
         self.devices = _load_sigen_module('sigen_devices')
         self.components = _load_sigen_module('sigen_components')
 
-    async def read_limits(self, export_raw=SENTINEL, import_raw=SENTINEL):
+    async def read_limits(self, raw=SENTINEL):
         unit = MockModbusConnection().for_unit(247)
-        unit.load_raw({'holding': {40042: export_raw >> 16, 40043: export_raw & 0xFFFF,
-                                   40044: import_raw >> 16, 40045: import_raw & 0xFFFF}})
+        unit.load_raw({'holding': {word_address: value
+                                   for address in LIMITS.values()
+                                   for word_address, value in ((address, raw >> 16), (address + 1, raw & 0xFFFF))}})
         group = self.devices._ComponentGroup({'parameters': self.components.PlantParameters(unit)}, {})
         group.enable_incremental({}, lambda: None, 'fixture')
-        group._field_support['parameters'].update({EXPORT: True, IMPORT: True})
+        group._field_support['parameters'].update({key: True for key in LIMITS})
         values = await group.async_update()
         return unit, group, values
 
     async def test_real_decoded_sentinel_is_unknown_but_supported_and_available(self):
         _, group, values = await self.read_limits()
-        for key in (EXPORT, IMPORT):
+        for key in LIMITS:
             with self.subTest(key=key):
                 e = self.entity('number', key, values)
                 self.assertEqual(4294967.295, values[key])
@@ -43,7 +51,7 @@ class TestPCSLimitSentinel(unittest.IsolatedAsyncioTestCase):
 
     async def test_unknown_limit_accepts_one_write_and_displays_fresh_readback(self):
         unit, group, values = await self.read_limits()
-        for key, address in ((EXPORT, 40042), (IMPORT, 40044)):
+        for key, address in LIMITS.items():
             with self.subTest(key=key):
                 e = self.entity('number', key, values)
                 self.assertIsNone(e.native_value)
@@ -61,8 +69,8 @@ class TestPCSLimitSentinel(unittest.IsolatedAsyncioTestCase):
     async def test_valid_zero_and_other_limits_are_not_filtered(self):
         for raw in (0, 1, 12345, 100000, 0xFFFFFFFE):
             with self.subTest(raw=raw):
-                _, _, values = await self.read_limits(raw, raw)
-                for key in (EXPORT, IMPORT):
+                _, _, values = await self.read_limits(raw)
+                for key in LIMITS:
                     e = self.entity('number', key, values)
                     self.assertTrue(e.available)
                     self.assertEqual(values[key], e.native_value)
@@ -70,9 +78,9 @@ class TestPCSLimitSentinel(unittest.IsolatedAsyncioTestCase):
 
     async def test_real_read_failure_remains_unavailable_and_blocks_writes(self):
         unit, group, _ = await self.read_limits()
-        unit.fail_read(40042, ModbusTimeoutError('mock timeout'), register_type='holding')
+        unit.fail_read(40032, ModbusTimeoutError('mock timeout'), register_type='holding')
         values = await group.async_update()
-        for key in (EXPORT, IMPORT):
+        for key in LIMITS:
             with self.subTest(key=key):
                 e = self.entity('number', key, values)
                 e.coordinator.async_write_parameter = AsyncMock()
@@ -83,8 +91,8 @@ class TestPCSLimitSentinel(unittest.IsolatedAsyncioTestCase):
                     await e.async_set_native_value(5)
                 e.coordinator.async_write_parameter.assert_not_awaited()
 
-    async def test_undocumented_limits_are_not_reinterpreted(self):
-        for key in ('plant_grid_maximum_import_limitation', 'plant_ess_max_charging_limit'):
+    async def test_unrelated_numbers_are_not_reinterpreted(self):
+        for key in ('plant_active_power_fixed_target', 'plant_reactive_power_fixed_target'):
             e = self.entity('number', key, {key: SENTINEL / 1000})
             self.assertEqual(SENTINEL / 1000, e.native_value)
             self.assertTrue(e.available)
