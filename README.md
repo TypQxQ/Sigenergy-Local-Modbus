@@ -1,169 +1,74 @@
-# <img src="https://brands.home-assistant.io/sigen/dark_icon.png" alt="Sigenergy" width="50" style="vertical-align:Left;" />  Sigenergy ESS Integration for Home Assistant
+# Sigenergy ESS for Home Assistant
 
-[![Stable][releases-shield]][releases] [![HACS Badge][hacs-badge]][hacs-link] ![Project Maintenance][maintenance-shield] [![GitHub Activity][commits-shield]][commits] [![License][license-shield]](LICENSE)
+[![Release](https://img.shields.io/github/release/TypQxQ/Sigenergy-Local-Modbus.svg)](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases/latest)
+[![License](https://img.shields.io/github/license/TypQxQ/Sigenergy-Local-Modbus.svg)](LICENSE)
 
-<!-- ![Downloads][downloads]  -->
+Monitor and control your Sigenergy ESS locally over Modbus TCP: solar production,
+battery and grid power, energy counters, EMS modes, and AC/DC chargers.
+Includes English and Swedish names, status labels and setup dialogs.
 
-[commits-shield]: https://img.shields.io/github/commit-activity/y/TypQxQ/Sigenergy-Local-Modbus.svg
-[commits]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/commits/main
-[license-shield]: https://img.shields.io/github/license/TypQxQ/Sigenergy-Local-Modbus.svg
-[maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
-[releases-shield]: https://img.shields.io/github/release/TypQxQ/Sigenergy-Local-Modbus.svg
-[releases]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases/latest
-[hacs-badge]: https://img.shields.io/badge/HACS-Default-41BDF5.svg
-[downloads]: https://img.shields.io/github/downloads/TypQxQ/Sigenergy-Local-Modbus/total
-[hacs-link]: https://hacs.xyz/
-
-## Overview
-Monitor and control your Sigenergy Energy Storage System (ESS) from Home Assistant.
-
-## Features
-- **UI‑Driven Setup** with DHCP discovery of inverters and chargers
-- **Dynamic Device Management** (Plants, Inverters, AC/DC Chargers)
-- **Real‑Time Metrics** for power flows, energy statistics, SoC/SoH
-- **Control Capabilities** for EMS (energy management system) work modes and more
-- **Configurable update interval** in three update frequencies for faster updates
-
-## Enhance with Add-ons
-Take your setup further with community add-ons and tools:
-- [Si-GCG "sigenergy_projects"](https://github.com/Si-GCG/sigenergy_projects)
-- [Energy Flow Dashboard](Dashboards/energy_flow_gauge/readme.md)
-- [Custom Enegy prices with Battery charge and Grid import](Dashboards/nordpool_energy_chart/readme.md)
-- [Step-by-step guide for EMHASS](https://sigenergy.annable.me/)
-
-More add-ons and enhancements are coming; stay tuned!
+**Upgrading to 2.0?** Eight status sensors use new stored values. Read the
+[migration guide](docs/migrations/2.0.md) before updating automation comparisons.
 
 ## Requirements
-- Sigenergy ESS firmware `SPC109` or newer is required starting with version `v1.1.0` of the integration. If your device runs older firmware and does not auto-update, upgrade the firmware or use a previous integration release until you have updated the firmware.
-- [Home Assistant](https://www.home-assistant.io/) at least version `2026.10` (requires Python `3.14.2` or newer).
-- [Sigenergy ESS](https://www.sigenergy.com/) with Modbus‑TCP enabled by your installer. And preferably confirmed with a screenshot of your `DeviceID`. If using an AC Charger, that will have the id `1` and the inverter has to be set to a higher ID, for example `2`.
-- Preferably assign a **static IP** to your Sigenergy device in your router to ensure it always receives the same IP address.
 
-## Installation
-### HACS (Recommended)
+- Home Assistant **2026.10+** (Python **3.14.2+**).
+- Sigenergy firmware **SPC109+**, with **Modbus TCP enabled and saved** by your installer.
+- Your inverter's IP address and device ID. Reserve its IP address in your router.
+- AC chargers normally use ID **1**; assign inverters different IDs when sharing
+  the connection. DC chargers are accessed through their inverter.
 
+## Install
 
-The [Home Assistant Community Store (HACS)](https://www.hacs.xyz/) is a custom integration that provides a UI to manage custom elements such as Sigenergy ESS in Home Assistant.
-You first need to [install and configure](https://www.hacs.xyz/docs/use/) it before following these instructions below.
+1. **HA 2026.11+:** open **Settings → Marketplace**, search for **Sigenergy ESS**
+   and install it. Marketplace is built in; existing HACS installations migrate
+   automatically. See [Home Assistant's Marketplace guide](https://contributors.home-assistant.io/marketplace/how-it-works/).
+   **HA 2026.10:** [install HACS](https://www.hacs.xyz/docs/use/), then find and
+   download **Sigenergy ESS** there.
+2. Restart Home Assistant.
+3. Continue with setup below. To try a beta, enable prereleases for this
+   repository in Marketplace/HACS and select the beta version.
 
+[![Open in Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=TypQxQ&repository=Sigenergy-Local-Modbus&category=integration)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TypQxQ&repository=Sigenergy-Local-Modbus&category=Integration)
+[Open in HACS on HA 2026.10](https://my.home-assistant.io/redirect/hacs_repository/?owner=TypQxQ&repository=Sigenergy-Local-Modbus&category=integration)
 
-1. Go to **HACS > Integrations** in Home Assistant
-2. Search and install **Sigenergy ESS Integration**
-3. Restart Home Assistant
+**Manual installation:** download `sigen.zip` from a [release](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases),
+extract its contents directly into `config/custom_components/sigen/`, then restart.
+Use the installation ZIP, not GitHub's source archive.
 
-### Manual
-1. Download `sigen.zip` from the desired [release](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases).
-2. Extract its contents directly into your HA `custom_components/sigen/` folder. Starting with v1.3.0b2, `manifest.json` and the Python files are at the ZIP root. For older releases using GitHub's source archive, copy the archive's `custom_components/sigen` directory instead.
-3. Restart Home Assistant
+## Set up
 
-Starting with v1.3.0b2, HACS installs the dedicated `sigen.zip` release asset. Its download count measures downloads of that file for the release; older source-archive downloads are not included.
+1. Open **Settings → Devices & services** and configure the discovered Sigenergy
+   system, or choose **Add integration → Sigenergy ESS**.
+2. Enter the inverter IP, port (**502** by default), and inverter device ID.
+   The plant device ID defaults to **247**.
+3. Add more devices through **Add integration → Sigenergy ESS**, selecting the
+   existing plant. Devices in a plant should normally share the same IP and port.
 
-## Configuration & Usage
-### Plant Concept
-Central **Plant** entry groups devices by Host/IP and Port where the Port is by default `502` and the IP is the one of the first Inverter.
-```
-Plant (IP:Port)
-   ├─ Inverter 1 (ID 2)
-   │    └─ DC Charger (via Inverter 2)
-   ├─ Inverter 2 (ID 3)
-   └─ AC Charger (ID 1) ** Is 1 by default and very hard to change **
-```
+Change read-only mode, polling interval and device settings using **Configure**
+on the integration entry.
 
-### Initial Setup (Discovery)
-![Discovered Sigenergy System](docs/images/discovery_demo.png)
-1. Navigate to **Settings > Devices & Services**
-2. If your Sigenergy device is discovered automatically on the network, it will appear under **Discovered**.
-    * If not discovered, try unplugging and replugging the network cable of your Sigenergy system.
-    * If discovery still fails, see the [Troubleshooting](#troubleshooting) section below.
-
-> [!NOTE]
-> Controls are **read-only by default**. To enable control features, you must explicitly activate them in the integration configuration **and** allow them in Home Assistant. This precaution helps prevent unintended changes or adverse effects.
-
-### Manual Initial Setup
-1. Navigate to **Settings > Devices & Services > Add Integration**
-2. Search for **Sigenergy**
-3. If discovered, click **Configure**; otherwise select manually
-4. Enter **Host IP**, **Port** (default 502), and first **Device ID**
-5. Add additional Inverters/Chargers via the same Plant entry
-
-### Reconfiguration & Options
-1. Navigate to **Settings > Devices & Services**.
-2. Find your **Sigenergy** integration entry and click **Configure**.
-3. From the configuration menu, you can:
-    * Adjust **Plant** settings (e.g., read-only, refresh intervals).
-    * Modify settings for individual **Inverters** or **Chargers**.
-
-> [!NOTE]
-> While it is technically possible to assign different IP addresses and ports to devices, it is not advised. For best results and more reliable operation, all devices within a plant should use the same IP address and port.
-
-### Add Additional Devices
-
-1. Navigate to **Settings > Devices & Services**.
-2. Select the **Sigenergy** integration and click **Add Device**.
-3. Follow the prompts to add extra inverters, chargers, or a new plant.
-
-## Entities & Controls
-
-* **Plant Entities:** active/reactive power, PV power, SoC, grid flows, EMS mode
-* **Inverter Entities:** MPPT metrics, battery SoC/SoH, phase data
-* **AC Charger:** charging power, total energy, system state
-* **Controls:** EMS work modes are exposed via `select` entities, and optional `button`/`switch` controls are available
-
-> [!NOTE]
-> Controls are **read-only by default** unless  explicitly enabled in the integration configuration.
-
-## Known Limitations & Important Notes
-
-- **Modbus Protocol v2.9 Support & PSS/PID Exclusion:** Support for PSS (Packaged Substation System) and PID (Potential Induced Degradation) devices added in Modbus Protocol v2.9 (released 2026-05-13) is **intentionally excluded** because they are commercial enterprise devices and we cannot test them.
-- **Sigenergy "Grid side info" is not fully available over local Modbus.** The grid-side details shown in the Sigen app are not currently exposed through a stable Modbus register set. The grid phase voltage/current sensors that were added in `v1.2.2` have been removed in this version because they are no longer supported or documented in the official Modbus Protocol V2.9.
-- **`Register validation failed ... exception_code=2` usually means an unsupported register.** If you see this in debug logs, the integration is likely skipping registers your device does not expose, not failing the whole integration. Address `30281` is `Merged Alarm7` in the `2025-11-28` V2.8 document and may be unsupported if your firmware does not expose the newer plant registers.
-- **Controls and diagnostic entities are conservative by default.** Write controls and many diagnostic sensors are disabled by default. To use controls, disable read-only mode in the integration options and enable the specific entity in Home Assistant only if you understand the setting.
-- **Device IDs and topology matter.** AC chargers are normally device ID `1`; inverters must use another ID. DC charger data is read via the inverter, and all devices in a plant should normally use the same host and port.
-
-
-### Remote EMS automation sequencing
-
-Starting with v1.3.0, changing the plant's Remote EMS enable switch or control mode waits for a new device readback before the action completes successfully. A matching cached value or a poll that started before the write is not accepted as confirmation. Confirmation waits for at most 60 seconds and does not repeat the write.
-
-If confirmation fails, the action reports an error explaining that the write was sent but could not be confirmed. The inverter may already have applied it: check the current state before deciding whether another command is needed. Other parameter writes retain batched updates.
-
-Automations should enable Remote EMS, wait for the enabled state and mode-select availability, and then select the desired mode. A fixed sleep is not confirmation. Home Assistant skips service calls targeting unavailable entities before the integration receives them, so this change cannot recover a command that was never delivered. The broader simultaneous loss of several controls in [issue #427](https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues/427) still needs complete debug logs and an automation trace.
-
-## Quickstart Automation Example
-```yaml
-alias: "Notify on Low Battery"
-trigger:
-  - platform: state
-    entity_id: sensor.plant_battery_soc
-    to: "<20"
-action:
-  - service: notify.mobile_app
-    data:
-      title: "Battery Low"
-      message: "SoC dropped below 20%"
-```
+**Controls start in read-only mode.** To use them, disable read-only mode in the
+integration options and enable the required control entities in Home Assistant.
+Check each setting before changing it. For EMS automation sequencing and device
+details, see the [usage guide](docs/USAGE.md).
 
 ## Troubleshooting
-- Ensure your installer tapped **SAVE** after enabling Modbus‑TCP on your device.
-- Verify IP and firewall settings.
-- Ensure again Modbus‑TCP is enabled on your ESS.
-- Check Home Assistant logs for `sigen` errors.
 
-## Contributing
-Contributions welcome!
-1. Fork the repo and create a branch
-2. Add tests under `tests/components/sigen/`
-3. Follow Home Assistant coding and config‑flow patterns
-4. Submit a Pull Request to this repository
+- Confirm your installer enabled Modbus TCP and pressed **Save**.
+- Check IP address, device IDs, port and firewall rules.
+- Download integration diagnostics and capture a debug log before reporting a
+  problem: [log guide](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/54).
+- Ask in [Discussions](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions)
+  or report a bug in [Issues](https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues).
 
-## Support & Links
-- [Issues](https://github.com/TypQxQ/Sigenergy-Local-Modbus/issues)
-- [Discussions](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions)
-- [Add-ons & tools by Si-GCG](https://github.com/Si-GCG/sigenergy_projects)
-- [Step-by-step guide automating a Sigenergy system with Home Assistant using EMHASS and Amber Electric in Australia](https://sigenergy.annable.me/)
-- [HACS docs](https://hacs.xyz/)
+## Dashboards and tools
 
-## License
-[MIT License](LICENSE) © [Andrei Ignat]
+- [Energy Flow Dashboard](Dashboards/energy_flow_gauge/readme.md)
+- [Energy price and charging chart](Dashboards/nordpool_energy_chart/readme.md)
+- [Si-GCG's projects](https://github.com/Si-GCG/sigenergy_projects)
+- [EMHASS guide](https://sigenergy.annable.me/)
+
+Contributions welcome: add relevant tests under `tests/` and open a pull request.
+Licensed under [MIT](LICENSE).
