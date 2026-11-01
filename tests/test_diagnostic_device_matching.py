@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,9 +26,9 @@ class TestDiagnosticDeviceMatching(unittest.IsolatedAsyncioTestCase):
                      'dc_chargers': {'Garage': {'dc_charger_output_power': 3}},
                      'ac_chargers': {'Wallbox': {'ac_charger_charging_power': 7}}}
         for name in ('Garage', 'Garage East', 'Roof PV Inverter'):
-            self.data['inverters'][name] = {'inverter_pv_string_count': 24,
+            self.data['inverters'][name] = {'inverter_pv_string_count': 36,
                                             'inverter_active_power': len(name)}
-            for index in range(1, 25):
+            for index in range(1, 37):
                 self.data['inverters'][name].update({f'inverter_pv{index}_voltage': 100 + index,
                                                     f'inverter_pv{index}_current': index / 10})
         self.coordinator = SimpleNamespace(data=self.data, last_update_success=True,
@@ -40,7 +41,7 @@ class TestDiagnosticDeviceMatching(unittest.IsolatedAsyncioTestCase):
             ac_charger_count=1, read_only=False, probe_retry_delay=60,
             discovery_diagnostics=lambda: {}, get_register_support=lambda *args: True)
         self.hass = SimpleNamespace(data={'sigen': {'entry': {'coordinator': self.coordinator, 'hub': self.hub}}})
-        self.scope = {'DOMAIN': 'sigen', 'CONF_INVERTER_HAS_DCCHARGER': self.flag,
+        self.scope = {'re': re, 'DOMAIN': 'sigen', 'CONF_INVERTER_HAS_DCCHARGER': self.flag,
             'TO_REDACT': set(), 'HA_VERSION': 'fixture', 'pymodbus_version': 'fixture', 'tmodbus_version': 'fixture',
             'async_get_device_registry': lambda hass: None,
             'async_entries_for_config_entry': lambda registry, entry_id: self.devices,
@@ -52,7 +53,9 @@ class TestDiagnosticDeviceMatching(unittest.IsolatedAsyncioTestCase):
         common = ast.parse((P / 'common.py').read_text(encoding='utf-8'))
         nodes = [n for n in common.body if isinstance(n, ast.FunctionDef) and n.name == 'generate_device_id']
         tree = ast.parse((P / 'diagnostics.py').read_text(encoding='utf-8'))
-        nodes.extend(n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))
+        nodes.extend(n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                     or (isinstance(n, ast.Assign) and any(isinstance(t, ast.Name)
+                         and t.id == '_PV_STRING_INDICES' for t in n.targets)))
         module = ast.Module(body=[ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')], level=0), *nodes], type_ignores=[])
         exec(compile(ast.fix_missing_locations(module), str(P / 'diagnostics.py'), 'exec'), self.scope)
 
@@ -91,6 +94,17 @@ class TestDiagnosticDeviceMatching(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual('inverter', result['device_type'])
                 self.assertEqual(self.data['inverters'][name], result['device_data'])
 
+    async def test_pv25_through_pv36_have_readings_in_both_reports(self):
+        for index in range(25, 37):
+            with self.subTest(index=index):
+                combined, single = await self.reports(f'entry_garage_pv{index}')
+                for report in (combined, single):
+                    self.assertEqual('pv_string', report['device_type'])
+                    self.assertEqual(index, report['pv_string_number'])
+                    self.assertEqual(100 + index, report['device_data'][f'pv{index}_voltage'])
+                    self.assertEqual(index / 10, report['device_data'][f'pv{index}_current'])
+                self.assertIn(f'Garage PV{index}', single['all_device_data']['pv_strings'])
+
     async def test_pv_in_a_parent_name_is_not_a_string_marker(self):
         _, result = await self.reports('entry_roof_pv_inverter_pv10')
         self.assertEqual(10, result['pv_string_number'])
@@ -109,7 +123,7 @@ class TestDiagnosticDeviceMatching(unittest.IsolatedAsyncioTestCase):
 
     async def test_stale_cross_entry_and_malformed_identifiers_do_not_guess(self):
         for identifier in ('entry_old_inverter', 'other_garage', 'entry_garage_pv0',
-                           'entry_garage_pv25', 'entry_garage_pv100', 'entry_garage_pv01',
+                           'entry_garage_pv37', 'entry_garage_pv100', 'entry_garage_pv01',
                            'entry_garage_pv1_extra'):
             with self.subTest(identifier=identifier):
                 _, result = await self.reports(identifier)

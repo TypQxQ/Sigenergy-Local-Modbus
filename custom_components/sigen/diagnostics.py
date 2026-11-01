@@ -1,6 +1,7 @@
 """Diagnostics support for Sigenergy ESS."""
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Optional
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -41,6 +42,13 @@ from .modbusregisterdefinitions import (
 
 TO_REDACT = {CONF_HOST, CONF_USERNAME, CONF_PASSWORD, "inverter_serial_number", "serial_number", "macaddress"}
 
+# Follow declared PV registers rather than maintaining another string ceiling.
+_PV_STRING_INDICES = tuple(sorted(
+    int(key.removeprefix("inverter_pv").removesuffix("_voltage"))
+    for key in INVERTER_RUNNING_INFO_REGISTERS
+    if re.fullmatch(r"inverter_pv[1-9][0-9]*_voltage", key)
+))
+
 
 def _register_support_summary(
     hub, device_type: str, device_name: Optional[str], register_names: set[str]
@@ -64,7 +72,7 @@ def _resolve_diagnostic_device(hub, entry_id: str, identifier: str) -> tuple[str
         if (connection.get(CONF_INVERTER_HAS_DCCHARGER, False)
                 and identifier == f"{entry_id}_{generate_device_id(name + ' DC Charger', 'dc_charger')}"):
             matches.append(("dc_charger", name, None))
-        for index in range(1, 25):
+        for index in _PV_STRING_INDICES:
             if identifier == f"{parent}_pv{index}":
                 matches.append(("pv_string", name, index))
     for name in hub.ac_charger_connections:
