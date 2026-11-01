@@ -1773,6 +1773,9 @@
     }
   },
   "exceptions": {
+    "invalid_pcc_power_factor": {
+      "message": "Cannot set PCC power factor to {value}. Use -0.999 to -0.8, or 0.8 to 1."
+    },
     "coordinator_unavailable": {
       "message": "Cannot control {entity_id}: device data is unavailable."
     }

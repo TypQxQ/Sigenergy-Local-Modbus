@@ -1,6 +1,7 @@
 """Diagnostics support for Sigenergy ESS."""
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Optional
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -26,6 +27,7 @@ except ImportError:
 
 from .const import CONF_INVERTER_HAS_DCCHARGER, DOMAIN
 from .alarm import unknown_alarm_diagnostics
+from .common import generate_device_id
 from .modbusregisterdefinitions import (
     AC_CHARGER_PARAMETER_REGISTERS,
     AC_CHARGER_RUNNING_INFO_REGISTERS,
@@ -40,6 +42,13 @@ from .modbusregisterdefinitions import (
 
 TO_REDACT = {CONF_HOST, CONF_USERNAME, CONF_PASSWORD, "inverter_serial_number", "serial_number", "macaddress"}
 
+# Follow declared PV registers rather than maintaining another string ceiling.
+_PV_STRING_INDICES = tuple(sorted(
+    int(key.removeprefix("inverter_pv").removesuffix("_voltage"))
+    for key in INVERTER_RUNNING_INFO_REGISTERS
+    if re.fullmatch(r"inverter_pv[1-9][0-9]*_voltage", key)
+))
+
 
 def _register_support_summary(
     hub, device_type: str, device_name: Optional[str], register_names: set[str]
@@ -49,6 +58,56 @@ def _register_support_summary(
         name: hub.get_register_support(device_type, device_name, name)
         for name in sorted(register_names)
     }
+
+
+def _resolve_diagnostic_device(hub, entry_id: str, identifier: str) -> tuple[str, str | None, int | None]:
+    """Match existing identifiers against configuration, never display substrings."""
+    matches = []
+    if identifier == f"{entry_id}_plant":
+        matches.append(("plant", "plant", None))
+    for name, connection in hub.inverter_connections.items():
+        parent = f"{entry_id}_{generate_device_id(name, 'inverter')}"
+        if identifier == parent:
+            matches.append(("inverter", name, None))
+        if (connection.get(CONF_INVERTER_HAS_DCCHARGER, False)
+                and identifier == f"{entry_id}_{generate_device_id(name + ' DC Charger', 'dc_charger')}"):
+            matches.append(("dc_charger", name, None))
+        for index in _PV_STRING_INDICES:
+            if identifier == f"{parent}_pv{index}":
+                matches.append(("pv_string", name, index))
+    for name in hub.ac_charger_connections:
+        if identifier == f"{entry_id}_{generate_device_id(name, 'ac_charger')}":
+            matches.append(("ac_charger", name, None))
+    # A stale or colliding identifier must not select another device's data.
+    return matches[0] if len(matches) == 1 else ("unknown", None, None)
+
+
+def _diagnostic_device_data(data, role: str, name: str | None, pv_index: int | None) -> dict:
+    """Use the same exact data lookup in both diagnostic entry points."""
+    result = {"device_data": {}}
+    if not data:
+        return result
+    if role == "plant":
+        result["device_data"] = data.get("plant", {})
+    elif role in {"inverter", "ac_charger", "dc_charger"}:
+        collection = {"inverter": "inverters", "ac_charger": "ac_chargers", "dc_charger": "dc_chargers"}[role]
+        result["device_data"] = data.get(collection, {}).get(name, {})
+    elif role == "pv_string" and pv_index is not None:
+        inverter = data.get("inverters", {}).get(name, {})
+        result.update({
+            "device_data": {
+                f"pv{pv_index}_voltage": inverter.get(f"inverter_pv{pv_index}_voltage"),
+                f"pv{pv_index}_current": inverter.get(f"inverter_pv{pv_index}_current"),
+                "parent_inverter": name,
+                "pv_string_number": pv_index,
+                "pv_string_count": inverter.get("inverter_pv_string_count"),
+                "mppt_count": inverter.get("inverter_mppt_count"),
+                "total_pv_power": inverter.get("inverter_pv_power"),
+            },
+            "parent_inverter": name,
+            "pv_string_number": pv_index,
+        })
+    return result
 
 
 async def async_get_config_entry_diagnostics(
@@ -77,38 +136,10 @@ async def async_get_config_entry_diagnostics(
         if not device_identifier:
             continue
             
-        # Parse the device identifier to determine device type and name
-        if device_identifier == f"{config_entry_id}_plant":
-            device_type = "plant"
-            device_name = "plant"
-        else:
-            # Remove config entry prefix to get the actual device ID
-            device_id = device_identifier.replace(f"{config_entry_id}_", "")
-            
-            # Determine device type based on device ID pattern
-            if "inverter" in device_id.lower():
-                if "pv" in device_id.lower():
-                    device_type = "pv_string"
-                    # Extract PV string number
-                    pv_num = None
-                    for i in range(1, 25):  # Support up to 24 PV strings
-                        if f"pv{i}" in device_id.lower():
-                            pv_num = i
-                            break
-                    device_name = device_id.replace("_", " ").title()
-                elif "dc_charger" in device_id.lower():
-                    device_type = "dc_charger"
-                    device_name = device_id.replace("_", " ").title()
-                else:
-                    device_type = "inverter"
-                    device_name = device_id.replace("_", " ").title()
-            elif "ac_charger" in device_id.lower():
-                device_type = "ac_charger"  
-                device_name = device_id.replace("_", " ").title()
-            else:
-                device_type = "unknown"
-                device_name = device_id
-        
+        device_type, device_name, pv_num = _resolve_diagnostic_device(
+            hub, config_entry_id, device_identifier
+        )
+
         # Build device diagnostic data
         device_diagnostics = {
             "device_info": async_redact_data({
@@ -124,65 +155,10 @@ async def async_get_config_entry_diagnostics(
             "device_identifier": device_identifier,
         }
         
-        # Add device-specific data from coordinator
-        if coordinator.data:
-            if device_type == "plant":
-                device_diagnostics["device_data"] = async_redact_data(coordinator.data.get("plant", {}), TO_REDACT)
-            elif device_type == "inverter":
-                # Find the inverter data by matching device name patterns
-                inverter_data = {}
-                for inv_name, inv_data in coordinator.data.get("inverters", {}).items():
-                    if device_name.lower().replace(" ", "_") in inv_name.lower().replace(" ", "_"):
-                        inverter_data = inv_data
-                        break
-                device_diagnostics["device_data"] = async_redact_data(inverter_data, TO_REDACT)
-            elif device_type == "ac_charger":
-                # Find AC charger data
-                ac_charger_data = {}
-                for ac_name, ac_data in coordinator.data.get("ac_chargers", {}).items():
-                    if device_name.lower().replace(" ", "_") in ac_name.lower().replace(" ", "_"):
-                        ac_charger_data = ac_data
-                        break
-                device_diagnostics["device_data"] = async_redact_data(ac_charger_data, TO_REDACT)
-            elif device_type == "dc_charger":
-                # Find DC charger data  
-                dc_charger_data = {}
-                for dc_name, dc_data in coordinator.data.get("dc_chargers", {}).items():
-                    if device_name.lower().replace(" ", "_") in dc_name.lower().replace(" ", "_"):
-                        dc_charger_data = dc_data
-                        break
-                device_diagnostics["device_data"] = async_redact_data(dc_charger_data, TO_REDACT)
-            elif device_type == "pv_string":
-                # PV string data is contained within inverter data
-                # Extract the parent inverter name and PV string number
-                parent_inverter = device_id.split("_pv")[0].replace(f"{config_entry_id}_", "").replace("_", " ").title()
-                pv_num = None
-                for i in range(1, 25):  # Support up to 24 PV strings
-                    if f"pv{i}" in device_id.lower():
-                        pv_num = i
-                        break
-                
-                pv_string_data = {}
-                for inv_name, inv_data in coordinator.data.get("inverters", {}).items():
-                    if parent_inverter.lower().replace(" ", "_") in inv_name.lower().replace(" ", "_"):
-                        if pv_num:
-                            # Extract PV-specific data from inverter data
-                            pv_string_data = {
-                                f"pv{pv_num}_voltage": inv_data.get(f"inverter_pv{pv_num}_voltage"),
-                                f"pv{pv_num}_current": inv_data.get(f"inverter_pv{pv_num}_current"),
-                                "parent_inverter": inv_name,
-                                "pv_string_number": pv_num,
-                                "pv_string_count": inv_data.get("inverter_pv_string_count"),
-                                "mppt_count": inv_data.get("inverter_mppt_count"),
-                                "total_pv_power": inv_data.get("inverter_pv_power"),
-                            }
-                        break
-                device_diagnostics["device_data"] = async_redact_data(pv_string_data, TO_REDACT)
-                device_diagnostics["parent_inverter"] = parent_inverter
-                device_diagnostics["pv_string_number"] = pv_num
-        else:
-            device_diagnostics["device_data"] = {}
-        
+        device_diagnostics.update(
+            _diagnostic_device_data(coordinator.data, device_type, device_name, pv_num)
+        )
+
         # Use device name as key for the diagnostics
         all_devices_diagnostics[device.name or device_identifier] = device_diagnostics
 
@@ -255,39 +231,10 @@ async def async_get_device_diagnostics(
     if not device_identifier:
         return {"error": "Device identifier not found"}
     
-    # Parse the device identifier to determine device type and name
-    config_entry_id = entry.entry_id
-    if device_identifier == f"{config_entry_id}_plant":
-        device_type = "plant"
-        device_name = "plant"
-    else:
-        # Remove config entry prefix to get the actual device ID
-        device_id = device_identifier.replace(f"{config_entry_id}_", "")
-        
-        # Determine device type based on device ID pattern
-        if "inverter" in device_id.lower():
-            if "pv" in device_id.lower():
-                device_type = "pv_string"
-                # Extract PV string number
-                pv_num = None
-                for i in range(1, 25):  # Support up to 24 PV strings
-                    if f"pv{i}" in device_id.lower():
-                        pv_num = i
-                        break
-                device_name = device_id.replace("_", " ").title()
-            elif "dc_charger" in device_id.lower():
-                device_type = "dc_charger"
-                device_name = device_id.replace("_", " ").title()
-            else:
-                device_type = "inverter"
-                device_name = device_id.replace("_", " ").title()
-        elif "ac_charger" in device_id.lower():
-            device_type = "ac_charger"  
-            device_name = device_id.replace("_", " ").title()
-        else:
-            device_type = "unknown"
-            device_name = device_id
-    
+    device_type, device_name, pv_num = _resolve_diagnostic_device(
+        hub, entry.entry_id, device_identifier
+    )
+
     # Base diagnostic data for the device
     device_diagnostics = {
         "unknown_alarm_values": unknown_alarm_diagnostics(coordinator.data),
@@ -341,6 +288,10 @@ async def async_get_device_diagnostics(
         },
     }
     
+    device_diagnostics.update(
+        _diagnostic_device_data(coordinator.data, device_type, device_name, pv_num)
+    )
+
     # Add device-specific data from coordinator
     if coordinator.data:
         # Extract PV string data from inverter data for comprehensive diagnostics
