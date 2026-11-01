@@ -2,7 +2,7 @@
 import asyncio
 from copy import deepcopy
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from modbus_connection import ModbusConnectionError
 import test_polling_recovery as recovery
@@ -52,6 +52,63 @@ class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
         self.assertEqual(1, self.group.poll_write_restarts)
         self.assertEqual(1, self.group.poll_write_recovery_failures)
         self.assertIsNone(self.group._read_round)
+
+    async def test_rejected_saved_round_write_gets_one_fresh_retry(self):
+        for validator in (AsyncMock(return_value=False), None):
+            with self.subTest(identity_validator=validator is not None):
+                self.group = self.make_group()
+                self.support_all()
+                self.group._confirm_endpoint_identity = validator
+                self.unit.load_raw({"input": {100: 123}})
+                original = self.unit.read_input_registers
+                started, finish = asyncio.Event(), asyncio.Event()
+                writes, calls = [], []
+                async def read(address, count):
+                    calls.append(address)
+                    if address == 500:
+                        if not finish.is_set():
+                            started.set()
+                            await finish.wait()
+                        elif not writes:
+                            writes.append(999)
+                            await self.group.async_write("set_first", 999)
+                            self.unit.load_raw({"input": {100: 999}})
+                    return await original(address, count)
+                with patch.object(self.unit, "read_input_registers", read), \
+                     patch.object(self.unit, "write_register", wraps=self.unit.write_register) as write:
+                    interrupted = asyncio.create_task(self.group.async_update())
+                    try:
+                        await started.wait()
+                        interrupted.cancel()
+                        with self.assertRaises(asyncio.CancelledError):
+                            await interrupted
+                        self.assertEqual([123], self.group._read_round["words"]["telemetry"]["first"])
+                    finally:
+                        finish.set()
+                        await asyncio.gather(interrupted, return_exceptions=True)
+                    result = await self.group.async_update()
+                self.assertEqual(999, result["first"])
+                self.assertEqual([100, 500, 100, 500, 100, 500], calls)
+                self.assertEqual(1, write.call_count)
+                self.assertEqual(1, self.group.poll_write_restarts)
+                self.assertEqual(1, self.group.poll_write_recoveries)
+                self.assertEqual(0, self.group.poll_write_recovery_failures)
+
+    async def test_identity_reset_during_saved_round_validation_does_not_retry(self):
+        self.support_all()
+        self.group._read_round = {"started": self.devices.time.monotonic(), "words": {},
+                                  "attempted": {}, "identity": {"fixture": "stable"}}
+        async def validate(expected):
+            self.group.reset_poll_progress()
+            # A subsequent write must not hide the identity reset.
+            await self.group.async_write("set_first", 999)
+            return True
+        self.group._confirm_endpoint_identity = validate
+        with patch.object(self.unit, "read_input_registers", wraps=self.unit.read_input_registers) as read:
+            with self.assertRaisesRegex(self.devices.ModbusError, "identity validation"):
+                await self.group.async_update()
+        self.assertEqual(0, read.call_count)
+        self.assertEqual(0, self.group.poll_write_restarts)
 
     async def test_identity_reset_never_retries_even_if_followed_by_write(self):
         self.support_all()

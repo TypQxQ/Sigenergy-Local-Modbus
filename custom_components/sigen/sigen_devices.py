@@ -567,6 +567,10 @@ class _ComponentGroup:
                 oldest = min([time.monotonic(), *self._prefetched_at.values()])
                 self._read_round = {"started": oldest, "words": {}, "attempted": {}, "failures": {},
                                     "identity": deepcopy(self._identity_snapshot())}
+                # Rejecting saved samples can advance the reset epoch. This
+                # fresh round must compare against its own epoch, while the
+                # identity-validation checks above retain the earlier one.
+                reset_epoch = self._reset_epoch
             else:
                 self.poll_resumes += 1
             progress = self._read_round
