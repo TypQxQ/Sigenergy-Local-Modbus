@@ -184,6 +184,32 @@ class SigenergyEntity(CoordinatorEntity):
 
         super()._handle_coordinator_update()
 
+    def _control_reading_available(self) -> bool:
+        """Require live backing values for readable controls, preserving zero.
+
+        Register support is a capability, not proof of a successful current
+        read. Explicitly dependency-free write-only controls retain their own
+        availability rules. Calculated sensors do not use this control guard.
+        """
+        data = self.coordinator.data
+        if data is None:
+            return False
+        if self._device_type == DEVICE_TYPE_PLANT:
+            values = data.get("plant", {})
+        elif self._device_type == DEVICE_TYPE_INVERTER:
+            values = data.get("inverters", {}).get(self._device_name, {})
+        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
+            values = data.get("ac_chargers", {}).get(self._device_name, {})
+        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
+            name = self._device_name.replace(" DC Charger", "").strip()
+            values = data.get("dc_chargers", {}).get(name, {})
+        else:
+            return False
+        keys = getattr(self.entity_description, "register_support_keys", None)
+        if keys is None:
+            keys = (self.entity_description.key,)
+        return all(values.get(key) is not None for key in keys)
+
     @property
     def available(self) -> bool:
         """Return if entity is available."""

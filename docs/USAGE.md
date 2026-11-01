@@ -55,6 +55,13 @@ value or a poll that started before the write is not confirmation. Confirmation
 waits for at most 60 seconds and does not repeat the write. Other parameter writes
 retain batched updates.
 
+If a readable control's backing value is missing after a failed read, the
+control becomes unavailable until that value recovers. Missing readings are
+not reported as `0`, `off` or a default option; real zero/off readings remain
+valid. Healthy devices continue updating during partial failures. A failed poll
+with no usable readings is reported as a coordinator failure. Write-only
+commands retain their separate availability rules.
+
 If confirmation fails, the action reports that the write was sent but could not
 be confirmed. The inverter may already have applied it: check the current state
 before deciding whether another command is needed.
