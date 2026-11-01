@@ -1,7 +1,15 @@
-# Sigenergy ESS for Home Assistant
+# <img src="https://brands.home-assistant.io/sigen/dark_icon.png" alt="Sigenergy" width="50" /> Sigenergy ESS for Home Assistant
 
-[![Release](https://img.shields.io/github/release/TypQxQ/Sigenergy-Local-Modbus.svg)](https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases/latest)
-[![License](https://img.shields.io/github/license/TypQxQ/Sigenergy-Local-Modbus.svg)](LICENSE)
+[![Stable][releases-shield]][releases] [![Marketplace / HACS][store-shield]][store] ![Project Maintenance][maintenance-shield] [![GitHub Activity][commits-shield]][commits] [![License][license-shield]](LICENSE)
+
+[releases-shield]: https://img.shields.io/github/release/TypQxQ/Sigenergy-Local-Modbus.svg
+[releases]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases/latest
+[store-shield]: https://img.shields.io/badge/Marketplace%20%2F%20HACS-Default-41BDF5.svg
+[store]: https://my.home-assistant.io/redirect/hacs_repository/?owner=TypQxQ&repository=Sigenergy-Local-Modbus&category=integration
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
+[commits-shield]: https://img.shields.io/github/commit-activity/y/TypQxQ/Sigenergy-Local-Modbus.svg
+[commits]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/commits/main
+[license-shield]: https://img.shields.io/github/license/TypQxQ/Sigenergy-Local-Modbus.svg
 
 Monitor and control your Sigenergy ESS locally over Modbus TCP: solar production,
 battery and grid power, energy counters, EMS modes, and AC/DC chargers.
@@ -13,10 +21,21 @@ Includes English and Swedish names, status labels and setup dialogs.
 ## Requirements
 
 - Home Assistant **2026.10+** (Python **3.14.2+**).
-- Sigenergy firmware **SPC109+**, with **Modbus TCP enabled and saved** by your installer.
+- Sigenergy firmware **SPC109+**, with **Modbus TCP enabled** (see below).
 - Your inverter's IP address and device ID. Reserve its IP address in your router.
 - AC chargers normally use ID **1**; assign inverters different IDs when sharing
   the connection. DC chargers are accessed through their inverter.
+
+## Enable Modbus TCP
+
+In the Sigenergy app:
+
+1. Open **Settings**.
+2. Select **System Settings**.
+3. Open **Modbus TCP Server Settings**.
+4. Tick the **Enable** checkbox.
+
+If the menu is unavailable, ask your installer to enable Modbus TCP.
 
 ## Install
 
@@ -56,7 +75,7 @@ details, see the [usage guide](docs/USAGE.md).
 
 ## Troubleshooting
 
-- Confirm your installer enabled Modbus TCP and pressed **Save**.
+- Check that Modbus TCP is enabled in the Sigenergy app.
 - Check IP address, device IDs, port and firewall rules.
 - Download integration diagnostics and capture a debug log before reporting a
   problem: [log guide](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/54).
