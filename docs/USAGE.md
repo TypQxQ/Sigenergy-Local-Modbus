@@ -20,6 +20,29 @@ devices to an existing plant. Use the integration entry's **Configure** menu to
 change plant or device settings. Keep the same host and port across a plant
 unless your installation requires a different layout.
 
+## Battery time remaining
+
+The plant's **Battery time remaining** sensor estimates how long the battery
+could supply the current household consumption above the configured backup SOC:
+
+`hours = max(SOC - backup SOC, 0) / 100 × rated capacity (kWh) / consumed power (kW)`
+
+The estimate is available while charging, discharging or idle. It assumes no
+further contribution from solar or the grid, and constant household demand.
+It uses the same consumption calculation as **Consumed power**, including its
+fallback for older firmware. No additional Modbus requests are made.
+
+At or below the reserve it reports `0`. With energy above reserve, zero/negative
+or missing consumption reports `unknown`. Missing/invalid SOC, reserve or
+capacity also reports `unknown`. This is an estimate, not a guaranteed backup
+duration; rated capacity does not account for all losses or battery ageing.
+
+The native unit is **hours**. Existing dashboard templates such as
+`sensor.available_battery_minutes` and user-created helpers are retained. When
+switching a dashboard or automation to the new sensor, check its entity ID and
+unit; convert hours to minutes where the consumer expects minutes. Historical
+helper data is not rewritten or transferred to the new entity.
+
 ## Controls and Remote EMS
 
 Read-only mode is enabled by default. Write controls and many diagnostic entities

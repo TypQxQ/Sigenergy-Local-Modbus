@@ -302,6 +302,9 @@
       "plant_grid_export_power": {
         "name": "Exporterad effekt till elnätet"
       },
+      "plant_battery_time_remaining": {
+        "name": "Återstående batteritid"
+      },
       "plant_consumed_power": {
         "name": "Förbrukad effekt"
       },

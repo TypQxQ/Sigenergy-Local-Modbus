@@ -341,6 +341,9 @@
       "plant_grid_export_power": {
         "name": "Grid export power"
       },
+      "plant_battery_time_remaining": {
+        "name": "Battery time remaining"
+      },
       "plant_consumed_power": {
         "name": "Consumed power"
       },
