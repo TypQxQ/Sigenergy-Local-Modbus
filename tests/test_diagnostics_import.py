@@ -34,6 +34,7 @@ class TestDiagnosticsImport(unittest.TestCase):
             "homeassistant.helpers.device_registry",
             package,
             f"{package}.const",
+            f"{package}.common",
             f"{package}.modbusregisterdefinitions",
         )
         modules = {name: types.ModuleType(name) for name in names}
@@ -57,6 +58,7 @@ class TestDiagnosticsImport(unittest.TestCase):
         modules[f"{package}.const"].__dict__.update(
             CONF_INVERTER_HAS_DCCHARGER="has_dc_charger", DOMAIN="sigen"
         )
+        modules[f"{package}.common"].generate_device_id = Mock()
         for device in ("AC_CHARGER", "DC_CHARGER", "INVERTER", "PLANT"):
             for kind in ("PARAMETER", "RUNNING_INFO"):
                 setattr(

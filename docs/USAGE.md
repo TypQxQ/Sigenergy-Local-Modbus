@@ -74,6 +74,10 @@ command. Include an automation trace and full debug log when reporting failures.
 
 ## Modbus limitations
 
+- PCC import/export power-factor controls (40157/40158) accept values greater
+  than -1 and at most -0.8, or from 0.8 through 1, as defined in protocol V2.9.
+  Values in the middle interval are rejected before a command is sent. At the
+  register's 0.001 resolution, the lowest configurable value is -0.999.
 - Plant power-limit controls show **Unknown** for all-ones `0xFFFFFFFF`
   readback. This covers ESS charging/discharging, PV, grid import/export and
   PCS import/export limits (40032-40044). The protocol explicitly documents

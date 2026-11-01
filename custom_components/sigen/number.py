@@ -624,7 +624,7 @@ PLANT_NUMBERS = [
         key="plant_pcc_power_factor_grid_import",
         name="Grid Import Power Factor Adjustment",
         icon="mdi:sine-wave",
-        native_min_value=-1,
+        native_min_value=-0.999,
         native_max_value=1,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
@@ -637,7 +637,7 @@ PLANT_NUMBERS = [
         key="plant_pcc_power_factor_grid_export",
         name="Grid Export Power Factor Adjustment",
         icon="mdi:sine-wave",
-        native_min_value=-1,
+        native_min_value=-0.999,
         native_max_value=1,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
@@ -979,6 +979,18 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
                 translation_domain=DOMAIN,
                 translation_key="coordinator_unavailable",
                 translation_placeholders={"entity_id": self.entity_id},
+            )
+
+        # PCC registers 40157/40158 have a disjoint protocol range. HA's
+        # ordinary min/max validation cannot reject its forbidden middle.
+        # At 0.001 resolution, lower inputs can round to the excluded -1.
+        if self.entity_description.key in {
+            "plant_pcc_power_factor_grid_import", "plant_pcc_power_factor_grid_export",
+        } and not (-0.999 <= value <= -0.8 or 0.8 <= value <= 1):
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_pcc_power_factor",
+                translation_placeholders={"value": str(value)},
             )
 
         # Use device_name as the primary identifier passed to the lambda/function
