@@ -46,7 +46,7 @@ class SigenergyNumberEntityDescription(NumberEntityDescription):
 
     # Provide default lambdas instead of None to satisfy type checker
     # The second argument 'identifier' will be device_name for inverters, device_id otherwise
-    value_fn: Callable[[Dict[str, Any], Optional[Any]], float] = lambda data, identifier: 0.0
+    value_fn: Callable[[Dict[str, Any], Optional[Any]], float | None] = lambda data, identifier: 0.0
     # Make set_value_fn async and update type hint
     # Make set_value_fn async and update type hint to accept coordinator
     set_value_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any], float], Coroutine[Any, Any, None]] = lambda coordinator, identifier, value: asyncio.sleep(0) # Placeholder async lambda
@@ -213,7 +213,12 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_export_limitation", 0),
+        # Protocol 40042/40044: 0xFFFFFFFF is not a valid limit. Preserve the
+        # raw coordinator reading so this supported control stays writable.
+        value_fn=lambda data, _: (
+            None if data["plant"].get("plant_pcs_maximum_export_limitation") == 0xFFFFFFFF / 1000
+            else data["plant"].get("plant_pcs_maximum_export_limitation")
+        ),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcs_maximum_export_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -228,7 +233,10 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_import_limitation", 0),
+        value_fn=lambda data, _: (
+            None if data["plant"].get("plant_pcs_maximum_import_limitation") == 0xFFFFFFFF / 1000
+            else data["plant"].get("plant_pcs_maximum_import_limitation")
+        ),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcs_maximum_import_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,

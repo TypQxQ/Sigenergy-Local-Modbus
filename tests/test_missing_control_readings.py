@@ -56,7 +56,7 @@ def description(filename, key, scope):
         kw.arg == 'key' and isinstance(kw.value, ast.Constant) and kw.value.value == key for kw in n.keywords))
     attrs = {'key': key, 'available_fn': lambda *args: True}
     for kw in node.keywords:
-        if kw.arg in {'register_support_keys', 'value_fn', 'is_on_fn', 'current_option_fn', 'available_fn'}:
+        if kw.arg in {'register_support_keys', 'value_fn', 'set_value_fn', 'is_on_fn', 'current_option_fn', 'available_fn'}:
             attrs[kw.arg] = eval(compile(ast.Expression(kw.value), filename, 'eval'), scope)
     return SimpleNamespace(**attrs)
 
