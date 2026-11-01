@@ -188,12 +188,13 @@ template:
       - name: "Available Battery Minutes"
         unit_of_measurement: "min"
         state: >
-          {% if states('sensor.sigen_plant_battery_state_of_charge') == states('number.sigen_plant_ess_backup_state_of_charge') %}
+          {% set battery_power = states('sensor.sigen_plant_battery_power')|float(0)|abs %}
+          {% if battery_power == 0 or states('sensor.sigen_plant_battery_state_of_charge') == states('number.sigen_plant_ess_backup_state_of_charge') %}
             0
           {% else %}
             {% set available_soc = states('sensor.sigen_plant_battery_state_of_charge')|float(0) - states('number.sigen_plant_ess_backup_state_of_charge')|float(0) %}
             {% set available_kwh = available_soc / 100 * states('sensor.sigen_plant_rated_energy_capacity')|float(0) %}
-            {% set minutes_remaining = available_kwh / states('sensor.sigen_plant_battery_power')|float(0)|abs %}
+            {% set minutes_remaining = available_kwh / battery_power %}
             {{ (minutes_remaining * 60) | int }}
           {% endif %}
 
