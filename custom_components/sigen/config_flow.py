@@ -37,6 +37,7 @@ from .const import (
     DEFAULT_PLANT_SLAVE_ID,
     DEFAULT_READ_ONLY,
     DEFAULT_SCAN_INTERVAL,
+    MIN_SCAN_INTERVAL,
     CONF_HOST,
     CONF_PORT,
     CONF_SLAVE_ID,
@@ -67,11 +68,7 @@ from .const import (
     CONF_INVERTER_SLAVE_ID,
     CONF_PARENT_INVERTER_ID,
     STEP_SELECT_DEVICE,
-    STEP_ACCUMULATED_ENERGY_CONFIG,
-    RESETTABLE_SENSORS,
-    CONF_VALUES_TO_INIT,
 )
-from .common import (safe_decimal, safe_float)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -132,7 +129,9 @@ def generate_plant_schema(
 
     if display_update_frq:
         validation_schema[vol.Required(CONF_SCAN_INTERVAL,
-                                       default=user_input.get(CONF_SCAN_INTERVAL,DEFAULT_SCAN_INTERVAL))] = vol.All(vol.Coerce(int))
+                                       default=user_input.get(CONF_SCAN_INTERVAL,DEFAULT_SCAN_INTERVAL))] = vol.All(
+                                           vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL)
+                                       )
 
     schema = vol.Schema(validation_schema)
     return schema
@@ -440,6 +439,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
                 step_id=STEP_PLANT_CONFIG,
                 data_schema=schema,
             )
+
+        if user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL) < MIN_SCAN_INTERVAL:
+            errors[CONF_SCAN_INTERVAL] = "must_be_at_least_1"
 
         # Process and validate inverter ID
         try:
@@ -1077,10 +1079,6 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 display_name = f"{inv_name} DC Charger ({inv_details.get(CONF_HOST)}, ID: {inv_details.get(CONF_SLAVE_ID)})"
 
                 self._devices[device_key] = display_name
-            
-            # Add special case for changing Accumulated values
-            self._devices["accumulated_energy"] = "Change Accumulated Energy Sensors"
-
         _LOGGER.debug("Loaded devices for selection: %s", self._devices)
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
@@ -1143,76 +1141,8 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_abort(reason="unknown_device_type")
     
     async def async_step_accumulated_energy_config(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Handle reconfiguration of accumulated energy sensors."""
-        errors = {}
-
-        def generate_accumulated_energy_schema(data_source: Dict):
-            # Define the schema for the accumulated energy sensor configuration
-            schema = {}
-            for sensor, sensor_name in RESETTABLE_SENSORS.items():
-                current_value = self.hass.states.get(sensor)
-                if not current_value:
-                    _LOGGER.debug("Sensor %s not found in states", sensor)
-                    current_value = 0.0
-                else:
-                    val = safe_float(current_value.state)
-                    if val is None or val == "unknown":
-                        current_value = 0.0
-                    else:
-                        current_value = val #* 1000  # Convert to kWh
-                try:
-                    _LOGGER.debug("Current value for %s: %s", sensor, current_value)
-                    schema[vol.Required(sensor, default=data_source.get(sensor, current_value))] = vol.All(
-                        vol.Coerce(float), vol.Range(min=0.0, max=100000000000.000)
-                    )
-                except Exception as e:
-                    _LOGGER.error("Error processing sensor %s: %s", sensor, e)
-            return vol.Schema(schema)
-        
-        if user_input is None:
-            return self.async_show_form(
-                step_id=STEP_ACCUMULATED_ENERGY_CONFIG,
-                data_schema=generate_accumulated_energy_schema(self._data),
-            )
-
-        # Validate the user input and update the configuration
-        errors = {}
-        for sensor in RESETTABLE_SENSORS.keys():
-            if user_input.get(sensor) == "":
-                errors[sensor] = "required_value"
-            elif not isinstance(user_input.get(sensor), float):
-                errors[sensor] = "must_be_number"
-
-        # If there are errors, show the form again with errors
-        if errors:
-            return self.async_show_form(
-                step_id=STEP_ACCUMULATED_ENERGY_CONFIG,
-                data_schema=generate_accumulated_energy_schema(user_input),
-                errors=errors,
-            )
-
-        # If chose to reset values, save sensor values to reset.
-        values_to_initialize = {}
-        for sensor, value in user_input.items():
-            if sensor in RESETTABLE_SENSORS:
-                values_to_initialize[sensor] = value * 1000000.0  # Convert to MW
-                _LOGGER.debug("Adding %s as init value for %s", value, sensor)
-
-        new_data = dict(self._data) # Start with existing data
-        # Save choice if to migrate data at first run after plant being added.
-        new_data[CONF_VALUES_TO_INIT] = values_to_initialize
-        _LOGGER.debug("Values to init as 0: %s", values_to_initialize)
-
-        # Update data if changed (optional check, keeping existing behavior for now)
-        self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-
-        # Save configuration to file
-        self.hass.config_entries._async_schedule_save()
-
-        # Reload the entry to ensure changes take effect
-        await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-
-        return self.async_create_entry(title="Sigenergy", data=new_data)
+        """Reject stale forms for the retired legacy energy adjustment."""
+        return self.async_abort(reason="legacy_energy_adjustment_removed")
 
 
     async def async_step_plant_config(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -1240,7 +1170,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Validate scan intervals
         scan_interval = user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
-        if scan_interval < 1:
+        if scan_interval < MIN_SCAN_INTERVAL:
             errors[CONF_SCAN_INTERVAL] = "must_be_at_least_1"
 
         if errors:

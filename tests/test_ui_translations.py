@@ -72,6 +72,7 @@ class TestUICatalogues(unittest.TestCase):
         scope = {**constants, "_LOGGER": SimpleNamespace(debug=lambda *args: None),
                  "vol": SimpleNamespace(Required=lambda key, **kwargs: key,
                                         Schema=lambda data: data, All=lambda *args: None,
+                                        Range=lambda **kwargs: None,
                                         Coerce=lambda value: value)}
         tree = ast.parse((P / "config_flow.py").read_text(encoding="utf-8"))
         node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "generate_plant_schema")

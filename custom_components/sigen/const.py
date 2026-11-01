@@ -60,6 +60,7 @@ DEFAULT_PORT = 502
 DEFAULT_PLANT_SLAVE_ID = 247  # Plant address
 DEFAULT_INVERTER_SLAVE_ID = 1  # Default Inverter address
 DEFAULT_SCAN_INTERVAL = 5
+MIN_SCAN_INTERVAL = 1
 DEFAULT_INVERTER_COUNT = 1
 DEFAULT_READ_ONLY = True  # Default to read-only mode
 DEFAULT_MIN_INTEGRATION_TIME = 1  # Minimum integration time in seconds

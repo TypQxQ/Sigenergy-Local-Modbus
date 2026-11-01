@@ -224,7 +224,8 @@
       "no_devices_available": "No devices found for reconfiguration.",
       "invalid_device_selection": "Invalid device selection.",
       "device_removed": "Device successfully removed.",
-      "plants_exist": "A Sigenergy plant is already configured."
+      "plants_exist": "A Sigenergy plant is already configured.",
+      "legacy_energy_adjustment_removed": "Manual adjustment of the legacy accumulated-energy sensors is no longer supported. No values were changed."
     }
   },
   "entity": {

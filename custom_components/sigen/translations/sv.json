@@ -224,7 +224,8 @@
       "no_devices_available": "Inga enheter hittades för omkonfigurering.",
       "invalid_device_selection": "Ogiltigt enhetsval.",
       "device_removed": "Enheten har tagits bort.",
-      "plants_exist": "En Sigenergy-anläggning är redan konfigurerad."
+      "plants_exist": "En Sigenergy-anläggning är redan konfigurerad.",
+      "legacy_energy_adjustment_removed": "Manuell justering av de äldre sensorerna för ackumulerad energi stöds inte längre. Inga värden har ändrats."
     }
   },
   "entity": {
