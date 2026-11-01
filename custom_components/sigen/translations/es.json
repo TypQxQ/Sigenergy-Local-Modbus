@@ -1,0 +1,1816 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar al sistema de almacenamiento de energía Sigenergy",
+        "description": "Configure un sistema de almacenamiento de energía Sigenergy para supervisarlo y controlarlo con Home Assistant.\n\nAsegúrese de que el sistema Sigenergy esté conectado a la misma red que Home Assistant y de que el instalador haya activado Modbus."
+      },
+      "dhcp_plant_config": {
+        "title": "Configurar la instalación Sigenergy",
+        "description": "Se ha detectado un nuevo dispositivo Sigenergy en {ip_address}. Seleccione las opciones de configuración:",
+        "data": {
+          "read_only": "Modo de solo lectura"
+        },
+        "data_description": {
+          "read_only": "(Impide que Home Assistant realice cambios en el sistema Sigenergy. Recomendado para la configuración inicial. Se puede cambiar después en los ajustes del dispositivo.)"
+        }
+      },
+      "device_type": {
+        "title": "Seleccionar el tipo de dispositivo",
+        "description": "Seleccione el tipo de dispositivo Sigenergy que desea añadir.",
+        "data": {
+          "device_type": "Tipo de dispositivo"
+        }
+      },
+      "plant_config": {
+        "title": "Configurar la instalación Sigenergy",
+        "description": "Configure una nueva instalación Sigenergy para supervisarla y controlarla con Home Assistant. El ID de la instalación se establecerá automáticamente en 247.",
+        "data": {
+          "host": "Host (dirección IP del inversor Sigenergy principal)",
+          "port": "Puerto (502 de forma predeterminada)",
+          "inverter_slave_ids": "ID del inversor (1 de forma predeterminada)",
+          "ac_charger_slave_ids": "ID de los cargadores CA (separados por comas si hay varios; dejar vacío si no hay cargador CA)",
+          "dc_charger_slave_ids": "ID de los inversores con cargadores CC conectados (separados por comas si hay varios)",
+          "scan_interval": "Intervalo de lectura (segundos)",
+          "migrate_yaml": "Migrar los valores de sensores de la configuración YAML anterior",
+          "migrate_yaml_description": "Si se activa, los valores iniciales de los sensores se importarán de la configuración YAML anterior, si existe.",
+          "read_only": "Modo de solo lectura",
+          "slave_id": "ID de la instalación"
+        },
+        "data_description": {
+          "read_only": "(Impide que Home Assistant realice cambios en el sistema Sigenergy. Recomendado para la configuración inicial. Se puede cambiar después en los ajustes del dispositivo.)"
+        }
+      },
+      "select_plant": {
+        "title": "Seleccionar la instalación",
+        "description": "Seleccione la instalación Sigenergy a la que se conectará este dispositivo.",
+        "data": {
+          "parent_plant_id": "Instalación"
+        }
+      },
+      "select_inverter": {
+        "title": "Seleccionar el inversor",
+        "description": "Seleccione el inversor Sigenergy al que se conectará este cargador CC.",
+        "data": {
+          "parent_inverter_id": "Inversor"
+        }
+      },
+      "inverter_config": {
+        "title": "Configurar el inversor Sigenergy",
+        "description": "Configure un inversor Sigenergy adicional conectado a la misma instalación.",
+        "data": {
+          "host": "Host (dirección IP de este inversor)",
+          "port": "Puerto (502 de forma predeterminada)",
+          "slave_id": "ID del dispositivo (entre 1 y 246)"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Configurar el cargador CA Sigenergy",
+        "description": "Configure un cargador CA Sigenergy. Introduzca la dirección del host y el puerto del servidor Modbus (inversor principal), así como el ID de este cargador CA.",
+        "data": {
+          "host": "Host (dirección IP de este cargador CA)",
+          "port": "Puerto (502 de forma predeterminada)",
+          "slave_id": "ID del dispositivo (entre 1 y 246)"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Configurar el cargador CC Sigenergy",
+        "description": "Configure un cargador CC Sigenergy conectado al inversor seleccionado."
+      },
+      "reconfigure": {
+        "title": "Reconfigurar el sistema Sigenergy",
+        "description": "Actualice la lista de ID de dispositivos de este sistema Sigenergy.",
+        "data": {
+          "inverter_slave_ids": "ID del inversor (1 de forma predeterminada)",
+          "ac_charger_slave_ids": "ID del cargador CA (dejar vacío si no hay cargador CA)",
+          "dc_charger_slave_ids": "ID de los inversores con cargadores CC conectados (separados por comas si hay varios)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se ha podido conectar al sistema Sigenergy. Compruebe el host y el puerto.",
+      "unknown": "Se ha producido un error inesperado.",
+      "invalid_integer_value": "Valor entero no válido.",
+      "each_id_must_be_between_1_and_246": "Cada ID debe estar entre 1 y 246.",
+      "duplicate_ids_found": "Se han encontrado ID duplicados.",
+      "dc_charger_requires_inverter": "Los ID de los cargadores CC deben corresponder a los ID de inversores configurados.",
+      "ac_charger_conflicts_inverter": "Los ID de los cargadores CA deben ser diferentes de los ID de los inversores.",
+      "no_plants_available": "No hay instalaciones disponibles. Añada primero una instalación.",
+      "no_inverters_available": "No hay inversores disponibles en la instalación seleccionada. Añada primero un inversor.",
+      "read_only_mode_error": "No se puede escribir en el sistema Sigenergy en modo de solo lectura.",
+      "must_be_divisible_by_high": "Debe ser divisible por el intervalo alto.",
+      "cannot_be_lower_than_high": "No puede ser inferior al intervalo alto.",
+      "cannot_be_lower_than_medium": "No puede ser inferior al intervalo medio.",
+      "invalid_host": "Dirección de host no válida.",
+      "invalid_port": "Número de puerto no válido. Debe estar entre 1 y 65535.",
+      "required_value": "Introduzca un valor.",
+      "must_be_number": "Introduzca un número.",
+      "must_be_at_least_1": "El intervalo de actualización debe ser de al menos 1 segundo."
+    },
+    "abort": {
+      "already_configured": "Este sistema Sigenergy ya está configurado.",
+      "no_plants_available": "No hay instalaciones disponibles. Añada primero una instalación.",
+      "no_inverters_available": "No hay inversores disponibles en la instalación seleccionada. Añada primero un inversor.",
+      "device_added": "El dispositivo se ha añadido a la configuración de la instalación.",
+      "parent_plant_not_found": "No se ha encontrado la configuración de la instalación principal.",
+      "parent_inverter_not_found": "No se ha encontrado la configuración del inversor principal.",
+      "parent_inverter_invalid": "La configuración del inversor principal no es válida.",
+      "unknown_device_type": "Tipo de dispositivo desconocido.",
+      "no_devices_available": "No se han encontrado dispositivos para reconfigurar.",
+      "invalid_device_selection": "Selección de dispositivo no válida.",
+      "device_removed": "El dispositivo se ha eliminado.",
+      "plants_exist": "Ya hay una instalación Sigenergy configurada."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de Sigenergy",
+        "description": "Configure las opciones de la integración Sigenergy."
+      },
+      "select_device": {
+        "title": "Seleccionar el dispositivo que desea reconfigurar",
+        "description": "Seleccione el dispositivo Sigenergy (instalación, inversor o cargador CA o CC) que desea reconfigurar o eliminar.",
+        "data": {
+          "selected_device": "Dispositivo"
+        }
+      },
+      "accumulated_energy_config": {
+        "title": "Valores de los sensores de energía acumulada",
+        "description": "Al ENVIAR se restablecen los valores de los sensores de energía acumulada (por ejemplo, los totales de energía).\n\nIntroduzca los valores en kWh.",
+        "data": {
+          "sensor.sigen_plant_accumulated_pv_energy": "Energía FV acumulada de la instalación",
+          "sensor.sigen_plant_accumulated_consumed_energy": "Energía consumida acumulada de la instalación",
+          "sensor.sigen_plant_accumulated_grid_import_energy": "Energía acumulada importada de la red por la instalación",
+          "sensor.sigen_plant_accumulated_grid_export_energy": "Energía acumulada exportada a la red por la instalación"
+        }
+      },
+      "plant_config": {
+        "title": "Reconfigurar la instalación Sigenergy",
+        "description": "Actualice los datos de conexión y el intervalo de lectura de esta instalación.",
+        "data": {
+          "host": "Host (dirección IP)",
+          "port": "Puerto",
+          "read_only": "Modo de solo lectura",
+          "scan_interval": "Intervalo de lectura (segundos)",
+          "slave_id": "ID de la instalación"
+        },
+        "data_description": {
+          "read_only": "(Impide que Home Assistant realice cambios en el sistema Sigenergy. Recomendado para la configuración inicial. Se puede cambiar después en los ajustes del dispositivo.)"
+        }
+      },
+      "inverter_config": {
+        "title": "Reconfigurar el inversor Sigenergy",
+        "description": "Actualice los datos de conexión de este inversor o elimínelo de la instalación.",
+        "data": {
+          "remove_device": "Eliminar este inversor",
+          "host": "Host (dirección IP)",
+          "port": "Puerto",
+          "slave_id": "ID del dispositivo"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Reconfigurar el cargador CA Sigenergy",
+        "description": "Actualice los datos de conexión de este cargador CA o elimínelo de la instalación.",
+        "data": {
+          "remove_device": "Eliminar este cargador CA",
+          "host": "Host (dirección IP)",
+          "port": "Puerto",
+          "slave_id": "ID del dispositivo"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Reconfigurar el cargador CC Sigenergy",
+        "description": "Elimine este cargador CC de su inversor asociado.",
+        "data": {
+          "remove_device": "Eliminar este cargador CC"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurar el sistema Sigenergy",
+        "description": "Actualice la lista de ID de dispositivos de este sistema Sigenergy.",
+        "data": {
+          "inverter_slave_ids": "ID del inversor (1 de forma predeterminada)",
+          "ac_charger_slave_ids": "ID de los cargadores CA (separados por comas si hay varios; dejar vacío si no hay cargador CA)",
+          "dc_charger_slave_ids": "ID de los inversores con cargadores CC conectados (separados por comas si hay varios)"
+        }
+      }
+    },
+    "error": {
+      "invalid_integer_value": "Valor entero no válido.",
+      "each_id_must_be_between_1_and_246": "Cada ID debe estar entre 1 y 246.",
+      "duplicate_ids_found": "Se han encontrado ID duplicados.",
+      "dc_charger_requires_inverter": "Los ID de los cargadores CC deben corresponder a los ID de inversores configurados.",
+      "ac_charger_conflicts_inverter": "Los ID de los cargadores CA deben ser diferentes de los ID de los inversores.",
+      "invalid_host": "Dirección de host no válida.",
+      "invalid_port": "Número de puerto no válido. Debe estar entre 1 y 65535.",
+      "must_be_divisible_by_high": "Debe ser divisible por el intervalo alto.",
+      "cannot_be_lower_than_high": "No puede ser inferior al intervalo alto.",
+      "cannot_be_lower_than_medium": "No puede ser inferior al intervalo medio.",
+      "cannot_connect": "No se ha podido conectar al sistema Sigenergy. Compruebe el host y el puerto.",
+      "required_value": "Introduzca un valor.",
+      "must_be_number": "Introduzca un número.",
+      "must_be_at_least_1": "El intervalo de actualización debe ser de al menos 1 segundo."
+    },
+    "abort": {
+      "already_configured": "Este sistema Sigenergy ya está configurado.",
+      "no_plants_available": "No hay instalaciones disponibles. Añada primero una instalación.",
+      "no_inverters_available": "No hay inversores disponibles en la instalación seleccionada. Añada primero un inversor.",
+      "device_added": "El dispositivo se ha añadido a la configuración de la instalación.",
+      "parent_plant_not_found": "No se ha encontrado la configuración de la instalación principal.",
+      "parent_inverter_not_found": "No se ha encontrado la configuración del inversor principal.",
+      "parent_inverter_invalid": "La configuración del inversor principal no es válida.",
+      "unknown_device_type": "Tipo de dispositivo desconocido.",
+      "no_devices_available": "No se han encontrado dispositivos para reconfigurar.",
+      "invalid_device_selection": "Selección de dispositivo no válida.",
+      "device_removed": "El dispositivo se ha eliminado.",
+      "plants_exist": "Ya hay una instalación Sigenergy configurada.",
+      "legacy_energy_adjustment_removed": "El ajuste manual de los antiguos sensores de energía acumulada ya no es compatible. No se ha modificado ningún valor."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "plant_grid_sensor_status": {
+        "state": {
+          "offline": "Sin conexión",
+          "online": "En línea"
+        },
+        "name": "Estado del sensor de red"
+      },
+      "plant_on_off_grid_status": {
+        "state": {
+          "on_grid": "Conectado a la red",
+          "off_grid_auto": "Fuera de red (automático)",
+          "off_grid_manual": "Fuera de red (manual)"
+        },
+        "name": "Estado de conexión a la red"
+      },
+      "plant_running_state": {
+        "state": {
+          "standby": "En espera",
+          "running": "En funcionamiento",
+          "fault": "Fallo",
+          "shutdown": "Apagado",
+          "environmental_abnormality": "Condiciones ambientales anómalas"
+        },
+        "name": "Estado de funcionamiento"
+      },
+      "plant_ems_work_mode": {
+        "state": {
+          "max_self_consumption": "Autoconsumo máximo",
+          "ai_mode": "Modo IA",
+          "tou": "Tarifa por periodos",
+          "full_feed_in_to_grid": "Inyección total a la red",
+          "vpp_scheduling": "Programación VPP",
+          "remote_ems": "Control EMS remoto",
+          "custom": "Personalizado"
+        },
+        "name": "Modo de funcionamiento EMS"
+      },
+      "inverter_running_state": {
+        "state": {
+          "standby": "En espera",
+          "running": "En funcionamiento",
+          "fault": "Fallo",
+          "shutdown": "Apagado",
+          "environmental_abnormality": "Condiciones ambientales anómalas"
+        },
+        "name": "Estado de funcionamiento"
+      },
+      "inverter_output_type": {
+        "state": {
+          "l_n": "L/N",
+          "l1_l2_l3": "L1/L2/L3",
+          "l1_l2_l3_n": "L1/L2/L3/N",
+          "l1_l2_n": "L1/L2/N"
+        },
+        "name": "Tipo de salida"
+      },
+      "ac_charger_system_state": {
+        "state": {
+          "initializing": "Inicializando",
+          "not_connected": "No conectado",
+          "reserving": "Reservando",
+          "preparing": "Preparando",
+          "ev_ready": "Vehículo listo",
+          "charging": "Cargando",
+          "fault": "Fallo",
+          "error": "Error"
+        },
+        "name": "Estado del sistema"
+      },
+      "dc_charger_running_state": {
+        "state": {
+          "idle": "Inactivo",
+          "occupied": "Ocupado",
+          "preparing_comm": "Preparando la comunicación",
+          "charging": "Cargando",
+          "fault": "Fallo",
+          "scheduled": "Programado",
+          "ended": "Finalizado",
+          "charger_unavailable": "No disponible",
+          "discharging": "Descargando",
+          "alarm": "Alarma",
+          "preparing_insulation": "Preparando la prueba de aislamiento"
+        },
+        "name": "Estado de funcionamiento"
+      },
+      "plant_daily_grid_import_energy": {
+        "name": "Energía diaria importada de la red"
+      },
+      "plant_daily_grid_export_energy": {
+        "name": "Energía diaria exportada a la red"
+      },
+      "plant_daily_third_party_inverter_energy_from_lifetime": {
+        "name": "Energía diaria de inversores externos"
+      },
+      "power": {
+        "name": "Potencia"
+      },
+      "plant_system_time": {
+        "name": "Hora del sistema"
+      },
+      "plant_system_timezone": {
+        "name": "Zona horaria del sistema"
+      },
+      "plant_photovoltaic_power": {
+        "name": "Potencia FV"
+      },
+      "plant_grid_import_power": {
+        "name": "Potencia importada de la red"
+      },
+      "plant_grid_export_power": {
+        "name": "Potencia exportada a la red"
+      },
+      "plant_battery_time_remaining": {
+        "name": "Autonomía restante de la batería"
+      },
+      "plant_consumed_power": {
+        "name": "Potencia consumida"
+      },
+      "plant_daily_pv_energy": {
+        "name": "Energía FV diaria"
+      },
+      "plant_daily_battery_charge_energy": {
+        "name": "Energía diaria de carga de la batería"
+      },
+      "plant_daily_battery_discharge_energy": {
+        "name": "Energía diaria de descarga de la batería"
+      },
+      "inverter_startup_time": {
+        "name": "Hora de arranque"
+      },
+      "inverter_shutdown_time": {
+        "name": "Hora de apagado"
+      },
+      "inverter_ess_current": {
+        "name": "Corriente de la batería (estimada)"
+      },
+      "pv_string_accumulated_energy": {
+        "name": "Energía acumulada"
+      },
+      "pv_string_daily_energy": {
+        "name": "Energía diaria"
+      },
+      "modbus_max_data_fetch_time": {
+        "name": "Duración máxima de lectura Modbus desde el reinicio"
+      },
+      "modbus_latest_fetch_time_high": {
+        "name": "Duración de lectura Modbus"
+      },
+      "voltage": {
+        "name": "Tensión"
+      },
+      "current": {
+        "name": "Corriente"
+      },
+      "plant_grid_sensor_active_power": {
+        "name": "Potencia activa de la red"
+      },
+      "plant_grid_sensor_reactive_power": {
+        "name": "Potencia reactiva de la red"
+      },
+      "plant_max_active_power": {
+        "name": "Potencia activa máxima"
+      },
+      "plant_max_apparent_power": {
+        "name": "Potencia aparente máxima"
+      },
+      "plant_ess_soc": {
+        "name": "Estado de carga de la batería"
+      },
+      "plant_phase_a_active_power": {
+        "name": "Potencia activa fase A"
+      },
+      "plant_phase_b_active_power": {
+        "name": "Potencia activa fase B"
+      },
+      "plant_phase_c_active_power": {
+        "name": "Potencia activa fase C"
+      },
+      "plant_phase_a_reactive_power": {
+        "name": "Potencia reactiva fase A"
+      },
+      "plant_phase_b_reactive_power": {
+        "name": "Potencia reactiva fase B"
+      },
+      "plant_phase_c_reactive_power": {
+        "name": "Potencia reactiva fase C"
+      },
+      "plant_general_alarm1": {
+        "name": "Alarma general 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Las versiones de software no coinciden",
+              "bit_1": "Resistencia de aislamiento baja",
+              "bit_2": "Sobretemperatura",
+              "bit_3": "Fallo del equipo",
+              "bit_4": "Fallo de puesta a tierra del sistema",
+              "bit_5": "Sobretensión de la cadena FV",
+              "bit_6": "Cadena FV conectada con polaridad invertida",
+              "bit_7": "Corriente inversa en la cadena FV",
+              "bit_8": "Fallo AFCI",
+              "bit_9": "Corte del suministro de red",
+              "bit_10": "Sobretensión de la red",
+              "bit_11": "Subtensión de la red",
+              "bit_12": "Sobrefrecuencia de la red",
+              "bit_13": "Subfrecuencia de la red",
+              "bit_14": "Desequilibrio de tensión de la red",
+              "bit_15": "Componente continua de la corriente de salida fuera de límite",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "plant_general_alarm2": {
+        "name": "Alarma general 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Corriente de fuga fuera de límite",
+              "bit_1": "Anomalía de comunicación",
+              "bit_2": "Protección interna del sistema",
+              "bit_3": "Fallo del circuito de autocomprobación AFCI",
+              "bit_4": "Protección en funcionamiento fuera de red",
+              "bit_5": "Protección durante el funcionamiento manual",
+              "bit_6": "Alarma desconocida (bit 6)",
+              "bit_7": "Secuencia de fases anómala",
+              "bit_8": "Cortocircuito a PE",
+              "bit_9": "Fallo del arranque suave",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "plant_general_alarm3": {
+        "name": "Alarma general 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Las versiones de software no coinciden",
+              "bit_1": "Resistencia de aislamiento a tierra baja",
+              "bit_2": "Temperatura demasiado alta",
+              "bit_3": "Fallo del equipo",
+              "bit_4": "Temperatura demasiado baja",
+              "bit_5": "Protección interna",
+              "bit_6": "Fuga térmica",
+              "bit_7": "Alarma desconocida (bit 7)",
+              "bit_8": "Alarma desconocida (bit 8)",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "plant_general_alarm4": {
+        "name": "Alarma general 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Las versiones de software no coinciden",
+              "bit_1": "Temperatura demasiado alta",
+              "bit_2": "Fallo del equipo",
+              "bit_3": "Corriente de fuga excesiva en la salida fuera de red",
+              "bit_4": "Fallo de puesta a tierra del neutro",
+              "bit_5": "Secuencia de fases anómala en el cableado de red",
+              "bit_6": "Secuencia de fases anómala en el cableado del inversor",
+              "bit_7": "Pérdida de fase de la red",
+              "bit_8": "Alarma desconocida (bit 8)",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "plant_general_alarm5": {
+        "name": "Alarma general 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Las versiones de software no coinciden",
+              "bit_1": "Resistencia de aislamiento a tierra baja",
+              "bit_2": "Sobretemperatura",
+              "bit_3": "Fallo del equipo",
+              "bit_4": "Fallo de carga",
+              "bit_5": "Protección del equipo",
+              "bit_6": "Alarma desconocida (bit 6)",
+              "bit_7": "Alarma desconocida (bit 7)",
+              "bit_8": "Alarma desconocida (bit 8)",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "plant_general_alarm6": {
+        "name": "Alarma general 6",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Anomalía de comunicación con la pasarela",
+              "bit_1": "Anomalía de comunicación con el contador",
+              "bit_2": "Anomalía de comunicación con el sensor de potencia CA",
+              "bit_3": "Alarma desconocida (bit 3)",
+              "bit_4": "Alarma desconocida (bit 4)",
+              "bit_5": "Alarma desconocida (bit 5)",
+              "bit_6": "Protección estricta contra la superación del límite de potencia de inyección a la red",
+              "bit_7": "Alarma desconocida (bit 7)",
+              "bit_8": "Fallo de arranque del generador",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Fallo CLS",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "plant_general_alarm7": {
+        "name": "Alarma general 7",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Fallo OVGR",
+              "bit_1": "Fallo RPR",
+              "bit_2": "Alarma desconocida (bit 2)",
+              "bit_3": "Alarma desconocida (bit 3)",
+              "bit_4": "Alarma desconocida (bit 4)",
+              "bit_5": "Alarma desconocida (bit 5)",
+              "bit_6": "Alarma desconocida (bit 6)",
+              "bit_7": "Alarma desconocida (bit 7)",
+              "bit_8": "Alarma desconocida (bit 8)",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          },
+          "alarm_reason": {
+            "name": "Motivo",
+            "state": {
+              "all_bits_set": "Todos los bits están activados; se desconoce el significado de la alarma"
+            }
+          }
+        }
+      },
+      "plant_grid_code_rated_frequency": {
+        "name": "Frecuencia nominal del código de red"
+      },
+      "plant_grid_code_rated_voltage": {
+        "name": "Tensión nominal del código de red"
+      },
+      "plant_current_control_command_value": {
+        "name": "Valor actual de la consigna de control"
+      },
+      "plant_total_load_power": {
+        "name": "Potencia total de las cargas"
+      },
+      "plant_active_power": {
+        "name": "Potencia activa"
+      },
+      "plant_reactive_power": {
+        "name": "Potencia reactiva"
+      },
+      "plant_sigen_photovoltaic_power": {
+        "name": "Potencia FV Sigen"
+      },
+      "plant_third_party_photovoltaic_power": {
+        "name": "Potencia FV externa"
+      },
+      "plant_ess_power": {
+        "name": "Potencia de la batería"
+      },
+      "plant_available_max_active_power": {
+        "name": "Potencia activa máxima disponible"
+      },
+      "plant_available_min_active_power": {
+        "name": "Potencia activa mínima disponible"
+      },
+      "plant_available_max_reactive_power": {
+        "name": "Potencia reactiva máxima disponible"
+      },
+      "plant_available_min_reactive_power": {
+        "name": "Potencia reactiva mínima disponible"
+      },
+      "plant_ess_available_max_charging_power": {
+        "name": "Potencia máxima disponible de carga"
+      },
+      "plant_ess_available_max_discharging_power": {
+        "name": "Potencia máxima disponible de descarga"
+      },
+      "plant_grid_sensor_phase_a_active_power": {
+        "name": "Potencia activa fase de red A"
+      },
+      "plant_grid_sensor_phase_b_active_power": {
+        "name": "Potencia activa fase de red B"
+      },
+      "plant_grid_sensor_phase_c_active_power": {
+        "name": "Potencia activa fase de red C"
+      },
+      "plant_grid_sensor_phase_a_reactive_power": {
+        "name": "Potencia reactiva fase de red A"
+      },
+      "plant_grid_sensor_phase_b_reactive_power": {
+        "name": "Potencia reactiva fase de red B"
+      },
+      "plant_grid_sensor_phase_c_reactive_power": {
+        "name": "Potencia reactiva fase de red C"
+      },
+      "plant_ess_rated_charging_power": {
+        "name": "Potencia nominal de carga del ESS"
+      },
+      "plant_ess_rated_discharging_power": {
+        "name": "Potencia nominal de descarga del ESS"
+      },
+      "plant_ess_available_max_charging_capacity": {
+        "name": "Energía máxima disponible para carga"
+      },
+      "plant_ess_available_max_discharging_capacity": {
+        "name": "Energía máxima disponible para descarga"
+      },
+      "plant_ess_rated_energy_capacity": {
+        "name": "Capacidad energética nominal"
+      },
+      "plant_ess_charge_cut_off_soc": {
+        "name": "SOC de corte de carga"
+      },
+      "plant_ess_discharge_cut_off_soc": {
+        "name": "SOC de corte de descarga"
+      },
+      "plant_ess_soh": {
+        "name": "Estado de salud de la batería"
+      },
+      "plant_pv_total_daily_generation": {
+        "name": "Producción FV diaria"
+      },
+      "plant_pv_generation_previous_day": {
+        "name": "Producción FV del día anterior"
+      },
+      "plant_ess_average_cell_temperature": {
+        "name": "Temperatura media de las celdas del ESS"
+      },
+      "plant_accumulated_pv_energy": {
+        "name": "Producción FV total"
+      },
+      "plant_daily_consumed_energy": {
+        "name": "Consumo diario de las cargas"
+      },
+      "plant_accumulated_consumed_energy": {
+        "name": "Consumo total de las cargas"
+      },
+      "plant_smart_load_1_total_consumption": {
+        "name": "[Carga inteligente 1] consumo total"
+      },
+      "plant_smart_load_2_total_consumption": {
+        "name": "[Carga inteligente 2] consumo total"
+      },
+      "plant_smart_load_3_total_consumption": {
+        "name": "[Carga inteligente 3] consumo total"
+      },
+      "plant_smart_load_4_total_consumption": {
+        "name": "[Carga inteligente 4] consumo total"
+      },
+      "plant_smart_load_5_total_consumption": {
+        "name": "[Carga inteligente 5] consumo total"
+      },
+      "plant_smart_load_6_total_consumption": {
+        "name": "[Carga inteligente 6] consumo total"
+      },
+      "plant_smart_load_7_total_consumption": {
+        "name": "[Carga inteligente 7] consumo total"
+      },
+      "plant_smart_load_8_total_consumption": {
+        "name": "[Carga inteligente 8] consumo total"
+      },
+      "plant_smart_load_9_total_consumption": {
+        "name": "[Carga inteligente 9] consumo total"
+      },
+      "plant_smart_load_10_total_consumption": {
+        "name": "[Carga inteligente 10] consumo total"
+      },
+      "plant_smart_load_11_total_consumption": {
+        "name": "[Carga inteligente 11] consumo total"
+      },
+      "plant_smart_load_12_total_consumption": {
+        "name": "[Carga inteligente 12] consumo total"
+      },
+      "plant_smart_load_13_total_consumption": {
+        "name": "[Carga inteligente 13] consumo total"
+      },
+      "plant_smart_load_14_total_consumption": {
+        "name": "[Carga inteligente 14] consumo total"
+      },
+      "plant_smart_load_15_total_consumption": {
+        "name": "[Carga inteligente 15] consumo total"
+      },
+      "plant_smart_load_16_total_consumption": {
+        "name": "[Carga inteligente 16] consumo total"
+      },
+      "plant_smart_load_17_total_consumption": {
+        "name": "[Carga inteligente 17] consumo total"
+      },
+      "plant_smart_load_18_total_consumption": {
+        "name": "[Carga inteligente 18] consumo total"
+      },
+      "plant_smart_load_19_total_consumption": {
+        "name": "[Carga inteligente 19] consumo total"
+      },
+      "plant_smart_load_20_total_consumption": {
+        "name": "[Carga inteligente 20] consumo total"
+      },
+      "plant_smart_load_21_total_consumption": {
+        "name": "[Carga inteligente 21] consumo total"
+      },
+      "plant_smart_load_22_total_consumption": {
+        "name": "[Carga inteligente 22] consumo total"
+      },
+      "plant_smart_load_23_total_consumption": {
+        "name": "[Carga inteligente 23] consumo total"
+      },
+      "plant_smart_load_24_total_consumption": {
+        "name": "[Carga inteligente 24] consumo total"
+      },
+      "plant_smart_load_1_power": {
+        "name": "[Carga inteligente 1] potencia"
+      },
+      "plant_smart_load_2_power": {
+        "name": "[Carga inteligente 2] potencia"
+      },
+      "plant_smart_load_3_power": {
+        "name": "[Carga inteligente 3] potencia"
+      },
+      "plant_smart_load_4_power": {
+        "name": "[Carga inteligente 4] potencia"
+      },
+      "plant_smart_load_5_power": {
+        "name": "[Carga inteligente 5] potencia"
+      },
+      "plant_smart_load_6_power": {
+        "name": "[Carga inteligente 6] potencia"
+      },
+      "plant_smart_load_7_power": {
+        "name": "[Carga inteligente 7] potencia"
+      },
+      "plant_smart_load_8_power": {
+        "name": "[Carga inteligente 8] potencia"
+      },
+      "plant_smart_load_9_power": {
+        "name": "[Carga inteligente 9] potencia"
+      },
+      "plant_smart_load_10_power": {
+        "name": "[Carga inteligente 10] potencia"
+      },
+      "plant_smart_load_11_power": {
+        "name": "[Carga inteligente 11] potencia"
+      },
+      "plant_smart_load_12_power": {
+        "name": "[Carga inteligente 12] potencia"
+      },
+      "plant_smart_load_13_power": {
+        "name": "[Carga inteligente 13] potencia"
+      },
+      "plant_smart_load_14_power": {
+        "name": "[Carga inteligente 14] potencia"
+      },
+      "plant_smart_load_15_power": {
+        "name": "[Carga inteligente 15] potencia"
+      },
+      "plant_smart_load_16_power": {
+        "name": "[Carga inteligente 16] potencia"
+      },
+      "plant_smart_load_17_power": {
+        "name": "[Carga inteligente 17] potencia"
+      },
+      "plant_smart_load_18_power": {
+        "name": "[Carga inteligente 18] potencia"
+      },
+      "plant_smart_load_19_power": {
+        "name": "[Carga inteligente 19] potencia"
+      },
+      "plant_smart_load_20_power": {
+        "name": "[Carga inteligente 20] potencia"
+      },
+      "plant_smart_load_21_power": {
+        "name": "[Carga inteligente 21] potencia"
+      },
+      "plant_smart_load_22_power": {
+        "name": "[Carga inteligente 22] potencia"
+      },
+      "plant_smart_load_23_power": {
+        "name": "[Carga inteligente 23] potencia"
+      },
+      "plant_smart_load_24_power": {
+        "name": "[Carga inteligente 24] potencia"
+      },
+      "plant_total_generation_of_third_party_inverter": {
+        "name": "Producción total de inversores externos"
+      },
+      "plant_accumulated_battery_charge_energy": {
+        "name": "Energía total de carga del ESS"
+      },
+      "plant_accumulated_battery_discharge_energy": {
+        "name": "Energía total de descarga del ESS"
+      },
+      "plant_total_charged_energy_of_the_evdc": {
+        "name": "Energía total de carga del EVDC"
+      },
+      "plant_total_discharged_energy_of_the_evdc": {
+        "name": "Energía total de descarga del EVDC"
+      },
+      "plant_accumulated_grid_import_energy": {
+        "name": "Energía total importada de la red"
+      },
+      "plant_accumulated_grid_export_energy": {
+        "name": "Energía total exportada a la red"
+      },
+      "plant_total_energy_output_of_oil_fueled_generator": {
+        "name": "Energía total producida por el generador de combustible"
+      },
+      "plant_total_charged_energy_of_the_evac": {
+        "name": "Energía total de carga del EVAC"
+      },
+      "plant_total_generation_of_self_pv": {
+        "name": "Producción FV propia total"
+      },
+      "inverter_model_type": {
+        "name": "Tipo de modelo"
+      },
+      "inverter_serial_number": {
+        "name": "Número de serie"
+      },
+      "inverter_machine_firmware_version": {
+        "name": "Versión del firmware"
+      },
+      "inverter_rated_active_power": {
+        "name": "Potencia activa nominal"
+      },
+      "inverter_max_apparent_power": {
+        "name": "Potencia aparente máxima"
+      },
+      "inverter_max_active_power": {
+        "name": "Potencia activa máxima"
+      },
+      "inverter_max_absorption_power": {
+        "name": "Potencia máxima absorbida"
+      },
+      "inverter_rated_battery_capacity": {
+        "name": "Capacidad nominal de la batería"
+      },
+      "inverter_ess_rated_charge_power": {
+        "name": "Potencia nominal de carga del ESS"
+      },
+      "inverter_ess_rated_discharge_power": {
+        "name": "Potencia nominal de descarga del ESS"
+      },
+      "inverter_ess_daily_charge_energy": {
+        "name": "Energía diaria de carga"
+      },
+      "inverter_ess_accumulated_charge_energy": {
+        "name": "Energía total de carga"
+      },
+      "inverter_ess_daily_discharge_energy": {
+        "name": "Energía diaria de descarga"
+      },
+      "inverter_ess_accumulated_discharge_energy": {
+        "name": "Energía total de descarga"
+      },
+      "inverter_max_active_power_adjustment_value": {
+        "name": "Ajuste máximo de potencia activa"
+      },
+      "inverter_min_active_power_adjustment_value": {
+        "name": "Ajuste mínimo de potencia activa"
+      },
+      "inverter_max_reactive_power_adjustment_value_fed": {
+        "name": "Potencia reactiva máxima suministrada"
+      },
+      "inverter_max_reactive_power_adjustment_value_absorbed": {
+        "name": "Potencia reactiva máxima absorbida"
+      },
+      "inverter_active_power": {
+        "name": "Potencia activa"
+      },
+      "inverter_reactive_power": {
+        "name": "Potencia reactiva"
+      },
+      "inverter_ess_charge_discharge_power": {
+        "name": "Potencia de la batería"
+      },
+      "inverter_ess_max_battery_charge_power": {
+        "name": "Potencia máxima de carga de la batería"
+      },
+      "inverter_ess_max_battery_discharge_power": {
+        "name": "Potencia máxima de descarga de la batería"
+      },
+      "inverter_ess_available_battery_charge_energy": {
+        "name": "Energía de carga disponible de la batería"
+      },
+      "inverter_ess_available_battery_discharge_energy": {
+        "name": "Energía de descarga disponible de la batería"
+      },
+      "inverter_ess_battery_soc": {
+        "name": "Estado de carga de la batería"
+      },
+      "inverter_ess_battery_soh": {
+        "name": "Estado de salud de la batería"
+      },
+      "inverter_ess_average_cell_temperature": {
+        "name": "Temperatura media de las celdas de la batería"
+      },
+      "inverter_ess_average_cell_voltage": {
+        "name": "Tensión media de las celdas de la batería"
+      },
+      "inverter_ess_maximum_battery_temperature": {
+        "name": "Temperatura máxima de la batería"
+      },
+      "inverter_ess_minimum_battery_temperature": {
+        "name": "Temperatura mínima de la batería"
+      },
+      "inverter_ess_maximum_battery_cell_voltage": {
+        "name": "Tensión máxima de las celdas de la batería"
+      },
+      "inverter_ess_minimum_battery_cell_voltage": {
+        "name": "Tensión mínima de las celdas de la batería"
+      },
+      "inverter_alarm1": {
+        "name": "Alarma 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Las versiones de software no coinciden",
+              "bit_1": "Resistencia de aislamiento baja",
+              "bit_2": "Sobretemperatura",
+              "bit_3": "Fallo del equipo",
+              "bit_4": "Fallo de puesta a tierra del sistema",
+              "bit_5": "Sobretensión de la cadena FV",
+              "bit_6": "Cadena FV conectada con polaridad invertida",
+              "bit_7": "Corriente inversa en la cadena FV",
+              "bit_8": "Fallo AFCI",
+              "bit_9": "Corte del suministro de red",
+              "bit_10": "Sobretensión de la red",
+              "bit_11": "Subtensión de la red",
+              "bit_12": "Sobrefrecuencia de la red",
+              "bit_13": "Subfrecuencia de la red",
+              "bit_14": "Desequilibrio de tensión de la red",
+              "bit_15": "Componente continua de la corriente de salida fuera de límite",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "inverter_alarm2": {
+        "name": "Alarma 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Corriente de fuga fuera de límite",
+              "bit_1": "Anomalía de comunicación",
+              "bit_2": "Protección interna del sistema",
+              "bit_3": "Fallo del circuito de autocomprobación AFCI",
+              "bit_4": "Protección en funcionamiento fuera de red",
+              "bit_5": "Protección durante el funcionamiento manual",
+              "bit_6": "Alarma desconocida (bit 6)",
+              "bit_7": "Secuencia de fases anómala",
+              "bit_8": "Cortocircuito a PE",
+              "bit_9": "Fallo del arranque suave",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "inverter_alarm3": {
+        "name": "Alarma 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Las versiones de software no coinciden",
+              "bit_1": "Resistencia de aislamiento a tierra baja",
+              "bit_2": "Temperatura demasiado alta",
+              "bit_3": "Fallo del equipo",
+              "bit_4": "Temperatura demasiado baja",
+              "bit_5": "Protección interna",
+              "bit_6": "Fuga térmica",
+              "bit_7": "Alarma desconocida (bit 7)",
+              "bit_8": "Alarma desconocida (bit 8)",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "inverter_alarm4": {
+        "name": "Alarma 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Las versiones de software no coinciden",
+              "bit_1": "Temperatura demasiado alta",
+              "bit_2": "Fallo del equipo",
+              "bit_3": "Corriente de fuga excesiva en la salida fuera de red",
+              "bit_4": "Fallo de puesta a tierra del neutro",
+              "bit_5": "Secuencia de fases anómala en el cableado de red",
+              "bit_6": "Secuencia de fases anómala en el cableado del inversor",
+              "bit_7": "Pérdida de fase de la red",
+              "bit_8": "Alarma desconocida (bit 8)",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "inverter_alarm5": {
+        "name": "Alarma 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Las versiones de software no coinciden",
+              "bit_1": "Resistencia de aislamiento a tierra baja",
+              "bit_2": "Sobretemperatura",
+              "bit_3": "Fallo del equipo",
+              "bit_4": "Fallo de carga",
+              "bit_5": "Protección del equipo",
+              "bit_6": "Alarma desconocida (bit 6)",
+              "bit_7": "Alarma desconocida (bit 7)",
+              "bit_8": "Alarma desconocida (bit 8)",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "inverter_grid_frequency": {
+        "name": "Frecuencia de la red"
+      },
+      "inverter_pcs_internal_temperature": {
+        "name": "Temperatura interna del PCS"
+      },
+      "inverter_rated_grid_voltage": {
+        "name": "Tensión nominal de la red"
+      },
+      "inverter_rated_grid_frequency": {
+        "name": "Frecuencia nominal de la red"
+      },
+      "inverter_ab_line_voltage": {
+        "name": "Tensión entre fases A–B"
+      },
+      "inverter_bc_line_voltage": {
+        "name": "Tensión entre fases B–C"
+      },
+      "inverter_ca_line_voltage": {
+        "name": "Tensión entre fases C–A"
+      },
+      "inverter_phase_a_voltage": {
+        "name": "Tensión fase A"
+      },
+      "inverter_phase_b_voltage": {
+        "name": "Tensión fase B"
+      },
+      "inverter_phase_c_voltage": {
+        "name": "Tensión fase C"
+      },
+      "inverter_phase_a_current": {
+        "name": "Corriente fase A"
+      },
+      "inverter_phase_b_current": {
+        "name": "Corriente fase B"
+      },
+      "inverter_phase_c_current": {
+        "name": "Corriente fase C"
+      },
+      "inverter_power_factor": {
+        "name": "Factor de potencia"
+      },
+      "inverter_pack_count": {
+        "name": "Número de módulos de batería"
+      },
+      "inverter_pv_string_count": {
+        "name": "Número de cadenas FV"
+      },
+      "inverter_mppt_count": {
+        "name": "Número de MPPT"
+      },
+      "inverter_pv_power": {
+        "name": "Potencia FV"
+      },
+      "inverter_insulation_resistance": {
+        "name": "Resistencia de aislamiento"
+      },
+      "inverter_active_power_fixed_value_adjustment_feedback": {
+        "name": "Confirmación del ajuste fijo de potencia activa"
+      },
+      "inverter_reactive_power_fixed_value_adjustment_feedback": {
+        "name": "Confirmación del ajuste fijo de potencia reactiva"
+      },
+      "inverter_active_power_percentage_adjustment_feedback": {
+        "name": "Confirmación del ajuste porcentual de potencia activa"
+      },
+      "inverter_reactive_power_qs_adjustment_feedback": {
+        "name": "Confirmación del ajuste Q/S de potencia reactiva"
+      },
+      "inverter_power_factor_adjustment_feedback": {
+        "name": "Confirmación del ajuste del factor de potencia"
+      },
+      "inverter_daily_pv_energy": {
+        "name": "Energía FV diaria"
+      },
+      "inverter_accumulated_pv_energy": {
+        "name": "Energía FV total"
+      },
+      "ac_charger_total_energy_consumed": {
+        "name": "Energía total consumida"
+      },
+      "ac_charger_charging_power": {
+        "name": "Potencia de carga"
+      },
+      "ac_charger_rated_power": {
+        "name": "Potencia nominal"
+      },
+      "ac_charger_rated_current": {
+        "name": "Corriente nominal"
+      },
+      "ac_charger_rated_voltage": {
+        "name": "Tensión nominal"
+      },
+      "ac_charger_input_breaker_rated_current": {
+        "name": "Corriente nominal del interruptor de entrada"
+      },
+      "ac_charger_alarm1": {
+        "name": "Alarma 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Sobretensión de la red",
+              "bit_1": "Subtensión de la red",
+              "bit_2": "Sobrecarga",
+              "bit_3": "Cortocircuito",
+              "bit_4": "Sobrecorriente en la salida de carga",
+              "bit_5": "Corriente de fuga fuera de límite",
+              "bit_6": "Fallo de puesta a tierra",
+              "bit_7": "Secuencia de fases anómala en el cableado de red",
+              "bit_8": "Fallo PEN",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "ac_charger_alarm2": {
+        "name": "Alarma 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Fallo del circuito de detección de corriente de fuga",
+              "bit_1": "Relé bloqueado",
+              "bit_2": "Fallo del circuito piloto",
+              "bit_3": "Fallo del módulo de alimentación auxiliar",
+              "bit_4": "Fallo del bloqueo eléctrico",
+              "bit_5": "Fallo de comunicación del panel luminoso",
+              "bit_6": "Alarma desconocida (bit 6)",
+              "bit_7": "Alarma desconocida (bit 7)",
+              "bit_8": "Alarma desconocida (bit 8)",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "ac_charger_alarm3": {
+        "name": "Alarma 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Estado de las alarmas",
+            "state": {
+              "no_problem": "Sin problemas",
+              "active": "Alarma activa",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmas",
+            "state": {
+              "bit_0": "Temperatura interna demasiado alta",
+              "bit_1": "Fallo del cable de carga",
+              "bit_2": "Fallo de comunicación con el contador",
+              "bit_3": "Alarma desconocida (bit 3)",
+              "bit_4": "Alarma desconocida (bit 4)",
+              "bit_5": "Alarma desconocida (bit 5)",
+              "bit_6": "Alarma desconocida (bit 6)",
+              "bit_7": "Alarma desconocida (bit 7)",
+              "bit_8": "Alarma desconocida (bit 8)",
+              "bit_9": "Alarma desconocida (bit 9)",
+              "bit_10": "Alarma desconocida (bit 10)",
+              "bit_11": "Alarma desconocida (bit 11)",
+              "bit_12": "Alarma desconocida (bit 12)",
+              "bit_13": "Alarma desconocida (bit 13)",
+              "bit_14": "Alarma desconocida (bit 14)",
+              "bit_15": "Alarma desconocida (bit 15)",
+              "unknown": "Alarma desconocida"
+            }
+          },
+          "raw_value": {
+            "name": "Valor bruto"
+          }
+        }
+      },
+      "dc_charger_vehicle_battery_voltage": {
+        "name": "Tensión de la batería del vehículo"
+      },
+      "dc_charger_charging_current": {
+        "name": "Corriente de carga"
+      },
+      "dc_charger_output_power": {
+        "name": "Potencia de salida"
+      },
+      "dc_charger_vehicle_soc": {
+        "name": "SOC del vehículo"
+      },
+      "dc_charger_current_charging_capacity": {
+        "name": "Energía de carga de esta sesión"
+      },
+      "dc_charger_current_charging_duration": {
+        "name": "Duración de carga de esta sesión"
+      },
+      "dc_charger_discharging_current": {
+        "name": "Corriente de descarga"
+      },
+      "dc_charger_current_discharging_capacity": {
+        "name": "Energía de descarga de esta sesión"
+      },
+      "dc_charger_current_discharging_duration": {
+        "name": "Duración de descarga de esta sesión"
+      },
+      "dc_charger_total_charging_capacity": {
+        "name": "Energía total de carga"
+      },
+      "dc_charger_total_discharging_capacity": {
+        "name": "Energía total de descarga"
+      },
+      "dc_charger_rated_charging_power": {
+        "name": "Potencia nominal de carga"
+      },
+      "dc_charger_rated_discharging_power": {
+        "name": "Potencia nominal de descarga"
+      }
+    },
+    "binary_sensor": {
+      "plant_pv_generating": {
+        "name": "Producción FV activa"
+      },
+      "plant_battery_charging": {
+        "name": "Batería cargando"
+      },
+      "plant_battery_discharging": {
+        "name": "Batería descargando"
+      },
+      "plant_exporting_to_grid": {
+        "name": "Exportando a la red"
+      },
+      "plant_importing_from_grid": {
+        "name": "Importando de la red"
+      }
+    },
+    "button": {
+      "plant_grid_power_loss_lockout_alarm_clear": {
+        "name": "Borrar la alarma de bloqueo tras un corte de red"
+      },
+      "ac_charger_start": {
+        "name": "Iniciar la carga"
+      },
+      "ac_charger_stop": {
+        "name": "Detener la carga"
+      },
+      "dc_charger_start": {
+        "name": "Iniciar la carga"
+      },
+      "dc_charger_stop": {
+        "name": "Detener la carga"
+      }
+    },
+    "number": {
+      "plant_active_power_fixed_target": {
+        "name": "Ajuste fijo de potencia activa"
+      },
+      "plant_reactive_power_fixed_target": {
+        "name": "Ajuste fijo de potencia reactiva"
+      },
+      "plant_active_power_percentage_target": {
+        "name": "Ajuste porcentual de potencia activa"
+      },
+      "plant_qs_ratio_target": {
+        "name": "Ajuste Q/S"
+      },
+      "plant_power_factor_target": {
+        "name": "Ajuste del factor de potencia"
+      },
+      "plant_ess_max_charging_limit": {
+        "name": "Límite de potencia máxima de carga del ESS"
+      },
+      "plant_ess_max_discharging_limit": {
+        "name": "Límite de potencia máxima de descarga del ESS"
+      },
+      "plant_pv_max_power_limit": {
+        "name": "Límite de potencia FV máxima"
+      },
+      "plant_grid_point_maximum_export_limitation": {
+        "name": "Límite de potencia exportada a la red"
+      },
+      "plant_grid_maximum_import_limitation": {
+        "name": "Límite de potencia importada de la red"
+      },
+      "plant_pcs_maximum_export_limitation": {
+        "name": "Límite de potencia de exportación del PCS"
+      },
+      "plant_pcs_maximum_import_limitation": {
+        "name": "Límite de potencia de importación del PCS"
+      },
+      "plant_phase_a_active_power_fixed_target": {
+        "name": "Ajuste fijo de potencia activa fase A"
+      },
+      "plant_phase_b_active_power_fixed_target": {
+        "name": "Ajuste fijo de potencia activa fase B"
+      },
+      "plant_phase_c_active_power_fixed_target": {
+        "name": "Ajuste fijo de potencia activa fase C"
+      },
+      "plant_phase_a_reactive_power_fixed_target": {
+        "name": "Ajuste fijo de potencia reactiva fase A"
+      },
+      "plant_phase_b_reactive_power_fixed_target": {
+        "name": "Ajuste fijo de potencia reactiva fase B"
+      },
+      "plant_phase_c_reactive_power_fixed_target": {
+        "name": "Ajuste fijo de potencia reactiva fase C"
+      },
+      "plant_phase_a_active_power_percentage_target": {
+        "name": "Porcentaje de potencia activa fase A"
+      },
+      "plant_phase_b_active_power_percentage_target": {
+        "name": "Porcentaje de potencia activa fase B"
+      },
+      "plant_phase_c_active_power_percentage_target": {
+        "name": "Porcentaje de potencia activa fase C"
+      },
+      "plant_phase_a_qs_ratio_target": {
+        "name": "Relación Q/S fase A"
+      },
+      "plant_phase_b_qs_ratio_target": {
+        "name": "Relación Q/S fase B"
+      },
+      "plant_phase_c_qs_ratio_target": {
+        "name": "Relación Q/S fase C"
+      },
+      "plant_backup_soc": {
+        "name": "Estado de carga de reserva del ESS"
+      },
+      "plant_charge_cut_off_soc": {
+        "name": "Estado de carga de corte de carga del ESS"
+      },
+      "plant_discharge_cut_off_soc": {
+        "name": "Estado de carga de corte de descarga del ESS"
+      },
+      "plant_active_power_regulation_gradient": {
+        "name": "[Código de red] gradiente de regulación de potencia activa"
+      },
+      "plant_lvrt_reactive_power_comp_factor": {
+        "name": "[Código de red] factor de compensación de potencia reactiva LVRT"
+      },
+      "plant_lvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Código de red] factor de compensación de potencia reactiva de secuencia negativa LVRT"
+      },
+      "plant_hvrt_reactive_power_comp_factor": {
+        "name": "[Código de red] factor de compensación de potencia reactiva HVRT"
+      },
+      "plant_hvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Código de red] factor de compensación de potencia reactiva de secuencia negativa HVRT"
+      },
+      "plant_over_freq_derating_power_ramp_rate": {
+        "name": "[Código de red] rampa de potencia de reducción por sobrefrecuencia"
+      },
+      "plant_over_freq_derating_trigger_freq": {
+        "name": "[Código de red] frecuencia de activación de reducción por sobrefrecuencia"
+      },
+      "plant_over_freq_derating_cutoff_freq": {
+        "name": "[Código de red] frecuencia de corte de reducción por sobrefrecuencia"
+      },
+      "plant_under_freq_power_boost_power_ramp_rate": {
+        "name": "[Código de red] rampa de potencia de aumento por subfrecuencia"
+      },
+      "plant_under_freq_power_boost_trigger_freq": {
+        "name": "[Código de red] frecuencia de activación de aumento por subfrecuencia"
+      },
+      "plant_under_freq_power_boost_cutoff_freq": {
+        "name": "[Código de red] frecuencia de corte de aumento por subfrecuencia"
+      },
+      "plant_pcc_power_factor_grid_import": {
+        "name": "Ajuste del factor de potencia de importación de la red"
+      },
+      "plant_pcc_power_factor_grid_export": {
+        "name": "Ajuste del factor de potencia de exportación a la red"
+      },
+      "plant_ess_preheating_reserved_soc": {
+        "name": "SOC reservado para el precalentamiento del ESS"
+      },
+      "inverter_active_power_fixed_adjustment": {
+        "name": "Ajuste fijo de potencia activa"
+      },
+      "inverter_reactive_power_fixed_adjustment": {
+        "name": "Ajuste fijo de potencia reactiva"
+      },
+      "inverter_active_power_percentage_adjustment": {
+        "name": "Ajuste porcentual de potencia activa"
+      },
+      "inverter_reactive_power_qs_adjustment": {
+        "name": "Ajuste Q/S de potencia reactiva"
+      },
+      "inverter_power_factor_adjustment": {
+        "name": "Ajuste del factor de potencia"
+      },
+      "ac_charger_output_current": {
+        "name": "Corriente de salida del cargador"
+      },
+      "dc_charger_max_charging_power_limit": {
+        "name": "Límite de potencia máxima de carga"
+      },
+      "dc_charger_max_discharging_power_limit": {
+        "name": "Límite de potencia máxima de descarga"
+      },
+      "plant_ess_preheating_tou_start_time": {
+        "name": "Hora de inicio del periodo TOU {slot} de precalentamiento del ESS"
+      },
+      "plant_ess_preheating_tou_end_time": {
+        "name": "Hora de fin del periodo TOU {slot} de precalentamiento del ESS"
+      },
+      "plant_ess_preheating_tou_target_power": {
+        "name": "Potencia objetivo del periodo TOU {slot} de precalentamiento del ESS"
+      }
+    },
+    "select": {
+      "plant_remote_ems_control_mode": {
+        "name": "Modo de control EMS remoto"
+      },
+      "plant_ess_preheating_mode": {
+        "name": "Modo de precalentamiento del ESS"
+      },
+      "plant_lvrt_enable": {
+        "name": "[Código de red] activar LVRT"
+      },
+      "plant_lvrt_mode": {
+        "name": "[Código de red] modo LVRT"
+      },
+      "plant_lvrt_grid_voltage_protection_blocking": {
+        "name": "[Código de red] bloqueo de protección de tensión de red LVRT"
+      },
+      "plant_hvrt_enable": {
+        "name": "[Código de red] activar HVRT"
+      },
+      "plant_hvrt_mode": {
+        "name": "[Código de red] modo HVRT"
+      },
+      "plant_hvrt_grid_voltage_protection_blocking": {
+        "name": "[Código de red] bloqueo de protección de tensión de red HVRT"
+      },
+      "plant_over_freq_derating_enable": {
+        "name": "[Código de red] activar la reducción de potencia por sobrefrecuencia"
+      },
+      "plant_under_freq_power_boost_enable": {
+        "name": "[Código de red] activar el aumento de potencia por subfrecuencia"
+      }
+    },
+    "switch": {
+      "plant_start_stop": {
+        "name": "Encendido de la instalación"
+      },
+      "plant_remote_ems_enable": {
+        "name": "Control EMS remoto (mediante Home Assistant)"
+      },
+      "plant_independent_phase_power_control_enable": {
+        "name": "Control independiente de potencia por fase"
+      },
+      "plant_ess_preheating_enable": {
+        "name": "Activar el precalentamiento del ESS"
+      },
+      "plant_ess_preheating_advance_enable": {
+        "name": "Activar el precalentamiento anticipado del ESS"
+      },
+      "inverter_start_stop": {
+        "name": "Encendido del inversor"
+      },
+      "ac_charger_start_stop": {
+        "name": "Encendido del cargador CA (obsoleto)"
+      },
+      "dc_charging": {
+        "name": "Carga CC (obsoleto)"
+      }
+    }
+  },
+  "selector": {
+    "device_type": {
+      "options": {
+        "new_plant": "Nueva instalación",
+        "inverter": "Inversor",
+        "ac_charger": "Cargador CA",
+        "dc_charger": "Cargador CC"
+      }
+    },
+    "configured_device": {
+      "options": {
+        "accumulated_energy": "Cambiar los valores de energía acumulada"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_pcc_power_factor": {
+      "message": "No se puede establecer el factor de potencia PCC en {value}. Utilice un valor de -0.999 a -0.8 o de 0.8 a 1."
+    },
+    "coordinator_unavailable": {
+      "message": "No se puede controlar {entity_id}: los datos del dispositivo no están disponibles."
+    }
+  },
+  "services": {
+    "set_operation_mode": {
+      "name": "Establecer el modo de funcionamiento",
+      "description": "Establezca el modo de funcionamiento del sistema Sigenergy.",
+      "fields": {
+        "mode": {
+          "name": "Modo",
+          "description": "El modo de funcionamiento que se va a establecer."
+        }
+      }
+    },
+    "set_remote_ems_control_mode": {
+      "name": "Establecer el modo de control EMS remoto",
+      "description": "Establezca el modo de control EMS remoto del sistema Sigenergy.",
+      "fields": {
+        "mode": {
+          "name": "Modo",
+          "description": "El modo de control EMS remoto que se va a establecer."
+        }
+      }
+    },
+    "set_power_limit": {
+      "name": "Establecer el límite de potencia",
+      "description": "Establezca un límite de potencia para el sistema Sigenergy.",
+      "fields": {
+        "value": {
+          "name": "Valor",
+          "description": "El valor del límite de potencia que se va a establecer."
+        }
+      }
+    }
+  }
+}

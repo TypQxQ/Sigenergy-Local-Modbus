@@ -1,0 +1,1816 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Verbinding maken met het Sigenergy-energieopslagsysteem",
+        "description": "Stel een Sigenergy-energieopslagsysteem in om het via Home Assistant te bewaken en te bedienen.\n\nZorg dat het Sigenergy-systeem met hetzelfde netwerk als Home Assistant is verbonden en dat de installateur Modbus heeft ingeschakeld."
+      },
+      "dhcp_plant_config": {
+        "title": "Sigenergy-installatie configureren",
+        "description": "Er is een nieuw Sigenergy-apparaat gevonden op {ip_address}. Kies uw configuratieopties:",
+        "data": {
+          "read_only": "Alleen-lezenmodus"
+        },
+        "data_description": {
+          "read_only": "(Voorkomt dat Home Assistant wijzigingen aanbrengt in het Sigenergy-systeem. Aanbevolen voor de eerste installatie. Kan later worden gewijzigd in de apparaatinstellingen.)"
+        }
+      },
+      "device_type": {
+        "title": "Apparaattype selecteren",
+        "description": "Kies het type Sigenergy-apparaat dat u wilt toevoegen.",
+        "data": {
+          "device_type": "Apparaattype"
+        }
+      },
+      "plant_config": {
+        "title": "Sigenergy-installatie configureren",
+        "description": "Stel een nieuwe Sigenergy-installatie in om deze via Home Assistant te bewaken en te bedienen. De installatie-ID wordt automatisch ingesteld op 247.",
+        "data": {
+          "host": "Host (IP-adres van de hoofdomvormer van Sigenergy)",
+          "port": "Poort (standaard 502)",
+          "inverter_slave_ids": "Apparaat-ID van de omvormer (standaard 1)",
+          "ac_charger_slave_ids": "Apparaat-ID’s van AC-laders (meerdere scheiden met komma’s; leeg laten als er geen AC-lader is)",
+          "dc_charger_slave_ids": "ID’s van omvormers met aangesloten DC-laders (meerdere scheiden met komma’s)",
+          "scan_interval": "Uitleesinterval (seconden)",
+          "migrate_yaml": "Sensorwaarden uit oude YAML-configuratie overzetten",
+          "migrate_yaml_description": "Indien ingeschakeld, worden de beginwaarden van sensoren overgenomen uit de oude YAML-configuratie, indien aanwezig.",
+          "read_only": "Alleen-lezenmodus",
+          "slave_id": "Apparaat-ID van de installatie"
+        },
+        "data_description": {
+          "read_only": "(Voorkomt dat Home Assistant wijzigingen aanbrengt in het Sigenergy-systeem. Aanbevolen voor de eerste installatie. Kan later worden gewijzigd in de apparaatinstellingen.)"
+        }
+      },
+      "select_plant": {
+        "title": "Installatie selecteren",
+        "description": "Kies de Sigenergy-installatie waarmee dit apparaat wordt verbonden.",
+        "data": {
+          "parent_plant_id": "Installatie"
+        }
+      },
+      "select_inverter": {
+        "title": "Omvormer selecteren",
+        "description": "Kies de Sigenergy-omvormer waarmee deze DC-lader wordt verbonden.",
+        "data": {
+          "parent_inverter_id": "Omvormer"
+        }
+      },
+      "inverter_config": {
+        "title": "Sigenergy-omvormer configureren",
+        "description": "Stel een extra Sigenergy-omvormer in die met dezelfde installatie is verbonden.",
+        "data": {
+          "host": "Host (IP-adres van deze omvormer)",
+          "port": "Poort (standaard 502)",
+          "slave_id": "Apparaat-ID (tussen 1 en 246)"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Sigenergy-AC-lader configureren",
+        "description": "Stel een Sigenergy-AC-lader in. Voer het hostadres en de poort van de Modbus-server (hoofdomvormer) en de apparaat-ID van deze AC-lader in.",
+        "data": {
+          "host": "Host (IP-adres van deze AC-lader)",
+          "port": "Poort (standaard 502)",
+          "slave_id": "Apparaat-ID (tussen 1 en 246)"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Sigenergy-DC-lader configureren",
+        "description": "Stel een Sigenergy-DC-lader in die met de geselecteerde omvormer is verbonden."
+      },
+      "reconfigure": {
+        "title": "Sigenergy-systeem opnieuw configureren",
+        "description": "Werk de lijst met apparaat-ID’s voor dit Sigenergy-systeem bij.",
+        "data": {
+          "inverter_slave_ids": "Apparaat-ID van de omvormer (standaard 1)",
+          "ac_charger_slave_ids": "Apparaat-ID van de AC-lader (leeg laten als er geen AC-lader is)",
+          "dc_charger_slave_ids": "ID’s van omvormers met aangesloten DC-laders (meerdere scheiden met komma’s)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan geen verbinding maken met het Sigenergy-systeem. Controleer de host en de poort.",
+      "unknown": "Er is een onverwachte fout opgetreden.",
+      "invalid_integer_value": "Ongeldig geheel getal.",
+      "each_id_must_be_between_1_and_246": "Elke ID moet tussen 1 en 246 liggen.",
+      "duplicate_ids_found": "Dubbele ID’s gevonden.",
+      "dc_charger_requires_inverter": "ID’s van DC-laders moeten overeenkomen met ingestelde omvormer-ID’s.",
+      "ac_charger_conflicts_inverter": "ID’s van AC-laders moeten verschillen van omvormer-ID’s.",
+      "no_plants_available": "Er zijn geen installaties beschikbaar. Voeg eerst een installatie toe.",
+      "no_inverters_available": "Er zijn geen omvormers beschikbaar in de geselecteerde installatie. Voeg eerst een omvormer toe.",
+      "read_only_mode_error": "Schrijven naar het Sigenergy-systeem is niet mogelijk in de alleen-lezenmodus.",
+      "must_be_divisible_by_high": "Moet deelbaar zijn door het hoge interval.",
+      "cannot_be_lower_than_high": "Mag niet kleiner zijn dan het hoge interval.",
+      "cannot_be_lower_than_medium": "Mag niet kleiner zijn dan het middelste interval.",
+      "invalid_host": "Ongeldig hostadres.",
+      "invalid_port": "Ongeldig poortnummer. Moet tussen 1 en 65535 liggen.",
+      "required_value": "Voer een waarde in.",
+      "must_be_number": "Voer een getal in.",
+      "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn."
+    },
+    "abort": {
+      "already_configured": "Dit Sigenergy-systeem is al geconfigureerd.",
+      "no_plants_available": "Er zijn geen installaties beschikbaar. Voeg eerst een installatie toe.",
+      "no_inverters_available": "Er zijn geen omvormers beschikbaar in de geselecteerde installatie. Voeg eerst een omvormer toe.",
+      "device_added": "Het apparaat is toegevoegd aan de installatieconfiguratie.",
+      "parent_plant_not_found": "De configuratie van de bovenliggende installatie is niet gevonden.",
+      "parent_inverter_not_found": "De configuratie van de bovenliggende omvormer is niet gevonden.",
+      "parent_inverter_invalid": "De configuratie van de bovenliggende omvormer is ongeldig.",
+      "unknown_device_type": "Onbekend apparaattype.",
+      "no_devices_available": "Geen apparaten gevonden om opnieuw te configureren.",
+      "invalid_device_selection": "Ongeldige apparaatselectie.",
+      "device_removed": "Het apparaat is verwijderd.",
+      "plants_exist": "Er is al een Sigenergy-installatie geconfigureerd."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sigenergy-opties",
+        "description": "Configureer de opties van de Sigenergy-integratie."
+      },
+      "select_device": {
+        "title": "Apparaat selecteren om opnieuw te configureren",
+        "description": "Kies het Sigenergy-apparaat (installatie, omvormer, AC- of DC-lader) dat u opnieuw wilt configureren of verwijderen.",
+        "data": {
+          "selected_device": "Apparaat"
+        }
+      },
+      "accumulated_energy_config": {
+        "title": "Waarden van cumulatieve energiesensoren",
+        "description": "Bij VERZENDEN worden de cumulatieve energiewaarden (zoals energietotalen) opnieuw ingesteld.\n\nVoer waarden in kWh in.",
+        "data": {
+          "sensor.sigen_plant_accumulated_pv_energy": "Cumulatieve PV-energie van de installatie",
+          "sensor.sigen_plant_accumulated_consumed_energy": "Cumulatief energieverbruik van de installatie",
+          "sensor.sigen_plant_accumulated_grid_import_energy": "Cumulatieve netafname van de installatie",
+          "sensor.sigen_plant_accumulated_grid_export_energy": "Cumulatieve netteruglevering van de installatie"
+        }
+      },
+      "plant_config": {
+        "title": "Sigenergy-installatie opnieuw configureren",
+        "description": "Werk de verbindingsgegevens en het uitleesinterval van deze installatie bij.",
+        "data": {
+          "host": "Host (IP-adres)",
+          "port": "Poort",
+          "read_only": "Alleen-lezenmodus",
+          "scan_interval": "Uitleesinterval (seconden)",
+          "slave_id": "Apparaat-ID van de installatie"
+        },
+        "data_description": {
+          "read_only": "(Voorkomt dat Home Assistant wijzigingen aanbrengt in het Sigenergy-systeem. Aanbevolen voor de eerste installatie. Kan later worden gewijzigd in de apparaatinstellingen.)"
+        }
+      },
+      "inverter_config": {
+        "title": "Sigenergy-omvormer opnieuw configureren",
+        "description": "Werk de verbindingsgegevens van deze omvormer bij of verwijder deze uit de installatie.",
+        "data": {
+          "remove_device": "Deze omvormer verwijderen",
+          "host": "Host (IP-adres)",
+          "port": "Poort",
+          "slave_id": "Apparaat-ID"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Sigenergy-AC-lader opnieuw configureren",
+        "description": "Werk de verbindingsgegevens van deze AC-lader bij of verwijder deze uit de installatie.",
+        "data": {
+          "remove_device": "Deze AC-lader verwijderen",
+          "host": "Host (IP-adres)",
+          "port": "Poort",
+          "slave_id": "Apparaat-ID"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Sigenergy-DC-lader opnieuw configureren",
+        "description": "Verwijder deze DC-lader van de bijbehorende omvormer.",
+        "data": {
+          "remove_device": "Deze DC-lader verwijderen"
+        }
+      },
+      "reconfigure": {
+        "title": "Sigenergy-systeem opnieuw configureren",
+        "description": "Werk de lijst met apparaat-ID’s voor dit Sigenergy-systeem bij.",
+        "data": {
+          "inverter_slave_ids": "Apparaat-ID van de omvormer (standaard 1)",
+          "ac_charger_slave_ids": "Apparaat-ID’s van AC-laders (meerdere scheiden met komma’s; leeg laten als er geen AC-lader is)",
+          "dc_charger_slave_ids": "ID’s van omvormers met aangesloten DC-laders (meerdere scheiden met komma’s)"
+        }
+      }
+    },
+    "error": {
+      "invalid_integer_value": "Ongeldig geheel getal.",
+      "each_id_must_be_between_1_and_246": "Elke ID moet tussen 1 en 246 liggen.",
+      "duplicate_ids_found": "Dubbele ID’s gevonden.",
+      "dc_charger_requires_inverter": "ID’s van DC-laders moeten overeenkomen met ingestelde omvormer-ID’s.",
+      "ac_charger_conflicts_inverter": "ID’s van AC-laders moeten verschillen van omvormer-ID’s.",
+      "invalid_host": "Ongeldig hostadres.",
+      "invalid_port": "Ongeldig poortnummer. Moet tussen 1 en 65535 liggen.",
+      "must_be_divisible_by_high": "Moet deelbaar zijn door het hoge interval.",
+      "cannot_be_lower_than_high": "Mag niet kleiner zijn dan het hoge interval.",
+      "cannot_be_lower_than_medium": "Mag niet kleiner zijn dan het middelste interval.",
+      "cannot_connect": "Kan geen verbinding maken met het Sigenergy-systeem. Controleer de host en de poort.",
+      "required_value": "Voer een waarde in.",
+      "must_be_number": "Voer een getal in.",
+      "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn."
+    },
+    "abort": {
+      "already_configured": "Dit Sigenergy-systeem is al geconfigureerd.",
+      "no_plants_available": "Er zijn geen installaties beschikbaar. Voeg eerst een installatie toe.",
+      "no_inverters_available": "Er zijn geen omvormers beschikbaar in de geselecteerde installatie. Voeg eerst een omvormer toe.",
+      "device_added": "Het apparaat is toegevoegd aan de installatieconfiguratie.",
+      "parent_plant_not_found": "De configuratie van de bovenliggende installatie is niet gevonden.",
+      "parent_inverter_not_found": "De configuratie van de bovenliggende omvormer is niet gevonden.",
+      "parent_inverter_invalid": "De configuratie van de bovenliggende omvormer is ongeldig.",
+      "unknown_device_type": "Onbekend apparaattype.",
+      "no_devices_available": "Geen apparaten gevonden om opnieuw te configureren.",
+      "invalid_device_selection": "Ongeldige apparaatselectie.",
+      "device_removed": "Het apparaat is verwijderd.",
+      "plants_exist": "Er is al een Sigenergy-installatie geconfigureerd.",
+      "legacy_energy_adjustment_removed": "Handmatige aanpassing van de oude cumulatieve energiesensoren wordt niet meer ondersteund. Er zijn geen waarden gewijzigd."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "plant_grid_sensor_status": {
+        "state": {
+          "offline": "Offline",
+          "online": "Online"
+        },
+        "name": "Status van de netsensor"
+      },
+      "plant_on_off_grid_status": {
+        "state": {
+          "on_grid": "Netgekoppeld",
+          "off_grid_auto": "Eilandbedrijf (automatisch)",
+          "off_grid_manual": "Eilandbedrijf (handmatig)"
+        },
+        "name": "Status van de netverbinding"
+      },
+      "plant_running_state": {
+        "state": {
+          "standby": "Stand-by",
+          "running": "In bedrijf",
+          "fault": "Storing",
+          "shutdown": "Uitgeschakeld",
+          "environmental_abnormality": "Afwijkende omgevingsomstandigheden"
+        },
+        "name": "Bedrijfsstatus"
+      },
+      "plant_ems_work_mode": {
+        "state": {
+          "max_self_consumption": "Maximaal eigenverbruik",
+          "ai_mode": "AI-modus",
+          "tou": "Tijdafhankelijk tarief",
+          "full_feed_in_to_grid": "Volledige teruglevering aan het net",
+          "vpp_scheduling": "VPP-aansturing",
+          "remote_ems": "EMS-besturing op afstand",
+          "custom": "Aangepast"
+        },
+        "name": "EMS-bedrijfsmodus"
+      },
+      "inverter_running_state": {
+        "state": {
+          "standby": "Stand-by",
+          "running": "In bedrijf",
+          "fault": "Storing",
+          "shutdown": "Uitgeschakeld",
+          "environmental_abnormality": "Afwijkende omgevingsomstandigheden"
+        },
+        "name": "Bedrijfsstatus"
+      },
+      "inverter_output_type": {
+        "state": {
+          "l_n": "L/N",
+          "l1_l2_l3": "L1/L2/L3",
+          "l1_l2_l3_n": "L1/L2/L3/N",
+          "l1_l2_n": "L1/L2/N"
+        },
+        "name": "Uitgangstype"
+      },
+      "ac_charger_system_state": {
+        "state": {
+          "initializing": "Initialiseren",
+          "not_connected": "Niet verbonden",
+          "reserving": "Reserveren",
+          "preparing": "Voorbereiden",
+          "ev_ready": "Voertuig gereed",
+          "charging": "Laden",
+          "fault": "Storing",
+          "error": "Fout"
+        },
+        "name": "Systeemstatus"
+      },
+      "dc_charger_running_state": {
+        "state": {
+          "idle": "Inactief",
+          "occupied": "Bezet",
+          "preparing_comm": "Communicatie voorbereiden",
+          "charging": "Laden",
+          "fault": "Storing",
+          "scheduled": "Gepland",
+          "ended": "Beëindigd",
+          "charger_unavailable": "Niet beschikbaar",
+          "discharging": "Ontladen",
+          "alarm": "Alarm",
+          "preparing_insulation": "Isolatietest voorbereiden"
+        },
+        "name": "Bedrijfsstatus"
+      },
+      "plant_daily_grid_import_energy": {
+        "name": "Dagelijkse netafname"
+      },
+      "plant_daily_grid_export_energy": {
+        "name": "Dagelijkse netteruglevering"
+      },
+      "plant_daily_third_party_inverter_energy_from_lifetime": {
+        "name": "Dagelijkse energie van externe omvormers"
+      },
+      "power": {
+        "name": "Vermogen"
+      },
+      "plant_system_time": {
+        "name": "Systeemtijd"
+      },
+      "plant_system_timezone": {
+        "name": "Systeemtijdzone"
+      },
+      "plant_photovoltaic_power": {
+        "name": "PV-vermogen"
+      },
+      "plant_grid_import_power": {
+        "name": "Netafnamevermogen"
+      },
+      "plant_grid_export_power": {
+        "name": "Terugleververmogen"
+      },
+      "plant_battery_time_remaining": {
+        "name": "Resterende batterijduur"
+      },
+      "plant_consumed_power": {
+        "name": "Verbruiksvermogen"
+      },
+      "plant_daily_pv_energy": {
+        "name": "Dagelijkse PV-energie"
+      },
+      "plant_daily_battery_charge_energy": {
+        "name": "Dagelijkse laadenergie van de batterij"
+      },
+      "plant_daily_battery_discharge_energy": {
+        "name": "Dagelijkse ontlaadenergie van de batterij"
+      },
+      "inverter_startup_time": {
+        "name": "Opstarttijd"
+      },
+      "inverter_shutdown_time": {
+        "name": "Uitschakeltijd"
+      },
+      "inverter_ess_current": {
+        "name": "Batterijstroom (geschat)"
+      },
+      "pv_string_accumulated_energy": {
+        "name": "Cumulatieve energie"
+      },
+      "pv_string_daily_energy": {
+        "name": "Dagelijkse energie"
+      },
+      "modbus_max_data_fetch_time": {
+        "name": "Maximale Modbus-uitleestijd sinds herstart"
+      },
+      "modbus_latest_fetch_time_high": {
+        "name": "Modbus-uitleestijd"
+      },
+      "voltage": {
+        "name": "Spanning"
+      },
+      "current": {
+        "name": "Stroom"
+      },
+      "plant_grid_sensor_active_power": {
+        "name": "Actief netvermogen"
+      },
+      "plant_grid_sensor_reactive_power": {
+        "name": "Reactief netvermogen"
+      },
+      "plant_max_active_power": {
+        "name": "Maximaal actief vermogen"
+      },
+      "plant_max_apparent_power": {
+        "name": "Maximaal schijnbaar vermogen"
+      },
+      "plant_ess_soc": {
+        "name": "Laadstatus van de batterij"
+      },
+      "plant_phase_a_active_power": {
+        "name": "Actief vermogen fase A"
+      },
+      "plant_phase_b_active_power": {
+        "name": "Actief vermogen fase B"
+      },
+      "plant_phase_c_active_power": {
+        "name": "Actief vermogen fase C"
+      },
+      "plant_phase_a_reactive_power": {
+        "name": "Reactief vermogen fase A"
+      },
+      "plant_phase_b_reactive_power": {
+        "name": "Reactief vermogen fase B"
+      },
+      "plant_phase_c_reactive_power": {
+        "name": "Reactief vermogen fase C"
+      },
+      "plant_general_alarm1": {
+        "name": "Algemeen alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Softwareversies komen niet overeen",
+              "bit_1": "Lage isolatieweerstand",
+              "bit_2": "Te hoge temperatuur",
+              "bit_3": "Apparaatstoring",
+              "bit_4": "Aardingsfout van het systeem",
+              "bit_5": "Overspanning van de PV-string",
+              "bit_6": "PV-string omgepoold aangesloten",
+              "bit_7": "Terugstroom in de PV-string",
+              "bit_8": "AFCI-storing",
+              "bit_9": "Stroomuitval",
+              "bit_10": "Netoverspanning",
+              "bit_11": "Netonderspanning",
+              "bit_12": "Te hoge netfrequentie",
+              "bit_13": "Te lage netfrequentie",
+              "bit_14": "Onbalans in de netspanning",
+              "bit_15": "DC-component van de uitgangsstroom buiten de limiet",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "plant_general_alarm2": {
+        "name": "Algemeen alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Lekstroom buiten de limiet",
+              "bit_1": "Communicatiestoring",
+              "bit_2": "Interne systeembeveiliging",
+              "bit_3": "Storing in het AFCI-zelftestcircuit",
+              "bit_4": "Beveiliging tijdens eilandbedrijf",
+              "bit_5": "Beveiliging bij handmatige bediening",
+              "bit_6": "Onbekend alarm (bit 6)",
+              "bit_7": "Onjuiste fasevolgorde",
+              "bit_8": "Kortsluiting naar PE",
+              "bit_9": "Softstart mislukt",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "plant_general_alarm3": {
+        "name": "Algemeen alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Softwareversies komen niet overeen",
+              "bit_1": "Lage isolatieweerstand naar aarde",
+              "bit_2": "Temperatuur te hoog",
+              "bit_3": "Apparaatstoring",
+              "bit_4": "Te lage temperatuur",
+              "bit_5": "Interne beveiliging",
+              "bit_6": "Thermische runaway",
+              "bit_7": "Onbekend alarm (bit 7)",
+              "bit_8": "Onbekend alarm (bit 8)",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "plant_general_alarm4": {
+        "name": "Algemeen alarm 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Softwareversies komen niet overeen",
+              "bit_1": "Temperatuur te hoog",
+              "bit_2": "Apparaatstoring",
+              "bit_3": "Te hoge lekstroom aan de uitgang voor eilandbedrijf",
+              "bit_4": "Aardingsfout van de nulleider",
+              "bit_5": "Onjuiste fasevolgorde in de netbedrading",
+              "bit_6": "Onjuiste fasevolgorde in de omvormerbedrading",
+              "bit_7": "Fase-uitval van het net",
+              "bit_8": "Onbekend alarm (bit 8)",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "plant_general_alarm5": {
+        "name": "Algemeen alarm 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Softwareversies komen niet overeen",
+              "bit_1": "Lage isolatieweerstand naar aarde",
+              "bit_2": "Te hoge temperatuur",
+              "bit_3": "Apparaatstoring",
+              "bit_4": "Laadstoring",
+              "bit_5": "Apparaatbeveiliging",
+              "bit_6": "Onbekend alarm (bit 6)",
+              "bit_7": "Onbekend alarm (bit 7)",
+              "bit_8": "Onbekend alarm (bit 8)",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "plant_general_alarm6": {
+        "name": "Algemeen alarm 6",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Communicatiestoring met de gateway",
+              "bit_1": "Communicatiestoring met de meter",
+              "bit_2": "Communicatiestoring met de AC-vermogenssensor",
+              "bit_3": "Onbekend alarm (bit 3)",
+              "bit_4": "Onbekend alarm (bit 4)",
+              "bit_5": "Onbekend alarm (bit 5)",
+              "bit_6": "Harde beveiliging bij overschrijding van de terugleverlimiet",
+              "bit_7": "Onbekend alarm (bit 7)",
+              "bit_8": "Generator start niet",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "CLS-storing",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "plant_general_alarm7": {
+        "name": "Algemeen alarm 7",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "OVGR-storing",
+              "bit_1": "RPR-storing",
+              "bit_2": "Onbekend alarm (bit 2)",
+              "bit_3": "Onbekend alarm (bit 3)",
+              "bit_4": "Onbekend alarm (bit 4)",
+              "bit_5": "Onbekend alarm (bit 5)",
+              "bit_6": "Onbekend alarm (bit 6)",
+              "bit_7": "Onbekend alarm (bit 7)",
+              "bit_8": "Onbekend alarm (bit 8)",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          },
+          "alarm_reason": {
+            "name": "Reden",
+            "state": {
+              "all_bits_set": "Alle bits zijn ingesteld; de betekenis van het alarm is onbekend"
+            }
+          }
+        }
+      },
+      "plant_grid_code_rated_frequency": {
+        "name": "Nominale frequentie volgens de netcode"
+      },
+      "plant_grid_code_rated_voltage": {
+        "name": "Nominale spanning volgens de netcode"
+      },
+      "plant_current_control_command_value": {
+        "name": "Huidige waarde van het besturingscommando"
+      },
+      "plant_total_load_power": {
+        "name": "Totaal verbruiksvermogen"
+      },
+      "plant_active_power": {
+        "name": "Actief vermogen"
+      },
+      "plant_reactive_power": {
+        "name": "Reactief vermogen"
+      },
+      "plant_sigen_photovoltaic_power": {
+        "name": "Sigen-PV-vermogen"
+      },
+      "plant_third_party_photovoltaic_power": {
+        "name": "PV-vermogen van derden"
+      },
+      "plant_ess_power": {
+        "name": "Batterijvermogen"
+      },
+      "plant_available_max_active_power": {
+        "name": "Maximaal beschikbaar actief vermogen"
+      },
+      "plant_available_min_active_power": {
+        "name": "Minimaal beschikbaar actief vermogen"
+      },
+      "plant_available_max_reactive_power": {
+        "name": "Maximaal beschikbaar reactief vermogen"
+      },
+      "plant_available_min_reactive_power": {
+        "name": "Minimaal beschikbaar reactief vermogen"
+      },
+      "plant_ess_available_max_charging_power": {
+        "name": "Maximaal beschikbaar laadvermogen"
+      },
+      "plant_ess_available_max_discharging_power": {
+        "name": "Maximaal beschikbaar ontlaadvermogen"
+      },
+      "plant_grid_sensor_phase_a_active_power": {
+        "name": "Actief vermogen netfase A"
+      },
+      "plant_grid_sensor_phase_b_active_power": {
+        "name": "Actief vermogen netfase B"
+      },
+      "plant_grid_sensor_phase_c_active_power": {
+        "name": "Actief vermogen netfase C"
+      },
+      "plant_grid_sensor_phase_a_reactive_power": {
+        "name": "Reactief vermogen netfase A"
+      },
+      "plant_grid_sensor_phase_b_reactive_power": {
+        "name": "Reactief vermogen netfase B"
+      },
+      "plant_grid_sensor_phase_c_reactive_power": {
+        "name": "Reactief vermogen netfase C"
+      },
+      "plant_ess_rated_charging_power": {
+        "name": "Nominaal ESS-laadvermogen"
+      },
+      "plant_ess_rated_discharging_power": {
+        "name": "Nominaal ESS-ontlaadvermogen"
+      },
+      "plant_ess_available_max_charging_capacity": {
+        "name": "Maximaal beschikbare laadenergie"
+      },
+      "plant_ess_available_max_discharging_capacity": {
+        "name": "Maximaal beschikbare ontlaadenergie"
+      },
+      "plant_ess_rated_energy_capacity": {
+        "name": "Nominale energiecapaciteit"
+      },
+      "plant_ess_charge_cut_off_soc": {
+        "name": "SOC-grens voor stoppen met laden"
+      },
+      "plant_ess_discharge_cut_off_soc": {
+        "name": "SOC-grens voor stoppen met ontladen"
+      },
+      "plant_ess_soh": {
+        "name": "Gezondheid van de batterij"
+      },
+      "plant_pv_total_daily_generation": {
+        "name": "Dagelijkse PV-opbrengst"
+      },
+      "plant_pv_generation_previous_day": {
+        "name": "PV-opbrengst van de vorige dag"
+      },
+      "plant_ess_average_cell_temperature": {
+        "name": "Gemiddelde ESS-celtemperatuur"
+      },
+      "plant_accumulated_pv_energy": {
+        "name": "Totale PV-opbrengst"
+      },
+      "plant_daily_consumed_energy": {
+        "name": "Dagelijks energieverbruik"
+      },
+      "plant_accumulated_consumed_energy": {
+        "name": "Totaal energieverbruik"
+      },
+      "plant_smart_load_1_total_consumption": {
+        "name": "[Slimme verbruiker 1] totaal verbruik"
+      },
+      "plant_smart_load_2_total_consumption": {
+        "name": "[Slimme verbruiker 2] totaal verbruik"
+      },
+      "plant_smart_load_3_total_consumption": {
+        "name": "[Slimme verbruiker 3] totaal verbruik"
+      },
+      "plant_smart_load_4_total_consumption": {
+        "name": "[Slimme verbruiker 4] totaal verbruik"
+      },
+      "plant_smart_load_5_total_consumption": {
+        "name": "[Slimme verbruiker 5] totaal verbruik"
+      },
+      "plant_smart_load_6_total_consumption": {
+        "name": "[Slimme verbruiker 6] totaal verbruik"
+      },
+      "plant_smart_load_7_total_consumption": {
+        "name": "[Slimme verbruiker 7] totaal verbruik"
+      },
+      "plant_smart_load_8_total_consumption": {
+        "name": "[Slimme verbruiker 8] totaal verbruik"
+      },
+      "plant_smart_load_9_total_consumption": {
+        "name": "[Slimme verbruiker 9] totaal verbruik"
+      },
+      "plant_smart_load_10_total_consumption": {
+        "name": "[Slimme verbruiker 10] totaal verbruik"
+      },
+      "plant_smart_load_11_total_consumption": {
+        "name": "[Slimme verbruiker 11] totaal verbruik"
+      },
+      "plant_smart_load_12_total_consumption": {
+        "name": "[Slimme verbruiker 12] totaal verbruik"
+      },
+      "plant_smart_load_13_total_consumption": {
+        "name": "[Slimme verbruiker 13] totaal verbruik"
+      },
+      "plant_smart_load_14_total_consumption": {
+        "name": "[Slimme verbruiker 14] totaal verbruik"
+      },
+      "plant_smart_load_15_total_consumption": {
+        "name": "[Slimme verbruiker 15] totaal verbruik"
+      },
+      "plant_smart_load_16_total_consumption": {
+        "name": "[Slimme verbruiker 16] totaal verbruik"
+      },
+      "plant_smart_load_17_total_consumption": {
+        "name": "[Slimme verbruiker 17] totaal verbruik"
+      },
+      "plant_smart_load_18_total_consumption": {
+        "name": "[Slimme verbruiker 18] totaal verbruik"
+      },
+      "plant_smart_load_19_total_consumption": {
+        "name": "[Slimme verbruiker 19] totaal verbruik"
+      },
+      "plant_smart_load_20_total_consumption": {
+        "name": "[Slimme verbruiker 20] totaal verbruik"
+      },
+      "plant_smart_load_21_total_consumption": {
+        "name": "[Slimme verbruiker 21] totaal verbruik"
+      },
+      "plant_smart_load_22_total_consumption": {
+        "name": "[Slimme verbruiker 22] totaal verbruik"
+      },
+      "plant_smart_load_23_total_consumption": {
+        "name": "[Slimme verbruiker 23] totaal verbruik"
+      },
+      "plant_smart_load_24_total_consumption": {
+        "name": "[Slimme verbruiker 24] totaal verbruik"
+      },
+      "plant_smart_load_1_power": {
+        "name": "[Slimme verbruiker 1] vermogen"
+      },
+      "plant_smart_load_2_power": {
+        "name": "[Slimme verbruiker 2] vermogen"
+      },
+      "plant_smart_load_3_power": {
+        "name": "[Slimme verbruiker 3] vermogen"
+      },
+      "plant_smart_load_4_power": {
+        "name": "[Slimme verbruiker 4] vermogen"
+      },
+      "plant_smart_load_5_power": {
+        "name": "[Slimme verbruiker 5] vermogen"
+      },
+      "plant_smart_load_6_power": {
+        "name": "[Slimme verbruiker 6] vermogen"
+      },
+      "plant_smart_load_7_power": {
+        "name": "[Slimme verbruiker 7] vermogen"
+      },
+      "plant_smart_load_8_power": {
+        "name": "[Slimme verbruiker 8] vermogen"
+      },
+      "plant_smart_load_9_power": {
+        "name": "[Slimme verbruiker 9] vermogen"
+      },
+      "plant_smart_load_10_power": {
+        "name": "[Slimme verbruiker 10] vermogen"
+      },
+      "plant_smart_load_11_power": {
+        "name": "[Slimme verbruiker 11] vermogen"
+      },
+      "plant_smart_load_12_power": {
+        "name": "[Slimme verbruiker 12] vermogen"
+      },
+      "plant_smart_load_13_power": {
+        "name": "[Slimme verbruiker 13] vermogen"
+      },
+      "plant_smart_load_14_power": {
+        "name": "[Slimme verbruiker 14] vermogen"
+      },
+      "plant_smart_load_15_power": {
+        "name": "[Slimme verbruiker 15] vermogen"
+      },
+      "plant_smart_load_16_power": {
+        "name": "[Slimme verbruiker 16] vermogen"
+      },
+      "plant_smart_load_17_power": {
+        "name": "[Slimme verbruiker 17] vermogen"
+      },
+      "plant_smart_load_18_power": {
+        "name": "[Slimme verbruiker 18] vermogen"
+      },
+      "plant_smart_load_19_power": {
+        "name": "[Slimme verbruiker 19] vermogen"
+      },
+      "plant_smart_load_20_power": {
+        "name": "[Slimme verbruiker 20] vermogen"
+      },
+      "plant_smart_load_21_power": {
+        "name": "[Slimme verbruiker 21] vermogen"
+      },
+      "plant_smart_load_22_power": {
+        "name": "[Slimme verbruiker 22] vermogen"
+      },
+      "plant_smart_load_23_power": {
+        "name": "[Slimme verbruiker 23] vermogen"
+      },
+      "plant_smart_load_24_power": {
+        "name": "[Slimme verbruiker 24] vermogen"
+      },
+      "plant_total_generation_of_third_party_inverter": {
+        "name": "Totale opbrengst van externe omvormers"
+      },
+      "plant_accumulated_battery_charge_energy": {
+        "name": "Totale ESS-laadenergie"
+      },
+      "plant_accumulated_battery_discharge_energy": {
+        "name": "Totale ESS-ontlaadenergie"
+      },
+      "plant_total_charged_energy_of_the_evdc": {
+        "name": "Totale EVDC-laadenergie"
+      },
+      "plant_total_discharged_energy_of_the_evdc": {
+        "name": "Totale EVDC-ontlaadenergie"
+      },
+      "plant_accumulated_grid_import_energy": {
+        "name": "Totale netafname"
+      },
+      "plant_accumulated_grid_export_energy": {
+        "name": "Totale netteruglevering"
+      },
+      "plant_total_energy_output_of_oil_fueled_generator": {
+        "name": "Totale energieopbrengst van de brandstofgenerator"
+      },
+      "plant_total_charged_energy_of_the_evac": {
+        "name": "Totale EVAC-laadenergie"
+      },
+      "plant_total_generation_of_self_pv": {
+        "name": "Totale eigen PV-opbrengst"
+      },
+      "inverter_model_type": {
+        "name": "Modeltype"
+      },
+      "inverter_serial_number": {
+        "name": "Serienummer"
+      },
+      "inverter_machine_firmware_version": {
+        "name": "Firmwareversie"
+      },
+      "inverter_rated_active_power": {
+        "name": "Nominaal actief vermogen"
+      },
+      "inverter_max_apparent_power": {
+        "name": "Maximaal schijnbaar vermogen"
+      },
+      "inverter_max_active_power": {
+        "name": "Maximaal actief vermogen"
+      },
+      "inverter_max_absorption_power": {
+        "name": "Maximaal opgenomen vermogen"
+      },
+      "inverter_rated_battery_capacity": {
+        "name": "Nominale batterijcapaciteit"
+      },
+      "inverter_ess_rated_charge_power": {
+        "name": "Nominaal ESS-laadvermogen"
+      },
+      "inverter_ess_rated_discharge_power": {
+        "name": "Nominaal ESS-ontlaadvermogen"
+      },
+      "inverter_ess_daily_charge_energy": {
+        "name": "Dagelijkse laadenergie"
+      },
+      "inverter_ess_accumulated_charge_energy": {
+        "name": "Totale laadenergie"
+      },
+      "inverter_ess_daily_discharge_energy": {
+        "name": "Dagelijkse ontlaadenergie"
+      },
+      "inverter_ess_accumulated_discharge_energy": {
+        "name": "Totale ontlaadenergie"
+      },
+      "inverter_max_active_power_adjustment_value": {
+        "name": "Maximale aanpassing van het actieve vermogen"
+      },
+      "inverter_min_active_power_adjustment_value": {
+        "name": "Minimale aanpassing van het actieve vermogen"
+      },
+      "inverter_max_reactive_power_adjustment_value_fed": {
+        "name": "Maximaal geleverd reactief vermogen"
+      },
+      "inverter_max_reactive_power_adjustment_value_absorbed": {
+        "name": "Maximaal opgenomen reactief vermogen"
+      },
+      "inverter_active_power": {
+        "name": "Actief vermogen"
+      },
+      "inverter_reactive_power": {
+        "name": "Reactief vermogen"
+      },
+      "inverter_ess_charge_discharge_power": {
+        "name": "Batterijvermogen"
+      },
+      "inverter_ess_max_battery_charge_power": {
+        "name": "Maximaal laadvermogen van de batterij"
+      },
+      "inverter_ess_max_battery_discharge_power": {
+        "name": "Maximaal ontlaadvermogen van de batterij"
+      },
+      "inverter_ess_available_battery_charge_energy": {
+        "name": "Beschikbare laadenergie van de batterij"
+      },
+      "inverter_ess_available_battery_discharge_energy": {
+        "name": "Beschikbare ontlaadenergie van de batterij"
+      },
+      "inverter_ess_battery_soc": {
+        "name": "Laadstatus van de batterij"
+      },
+      "inverter_ess_battery_soh": {
+        "name": "Gezondheid van de batterij"
+      },
+      "inverter_ess_average_cell_temperature": {
+        "name": "Gemiddelde batterijceltemperatuur"
+      },
+      "inverter_ess_average_cell_voltage": {
+        "name": "Gemiddelde batterijcelspanning"
+      },
+      "inverter_ess_maximum_battery_temperature": {
+        "name": "Maximale batterijtemperatuur"
+      },
+      "inverter_ess_minimum_battery_temperature": {
+        "name": "Minimale batterijtemperatuur"
+      },
+      "inverter_ess_maximum_battery_cell_voltage": {
+        "name": "Maximale batterijcelspanning"
+      },
+      "inverter_ess_minimum_battery_cell_voltage": {
+        "name": "Minimale batterijcelspanning"
+      },
+      "inverter_alarm1": {
+        "name": "Alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Softwareversies komen niet overeen",
+              "bit_1": "Lage isolatieweerstand",
+              "bit_2": "Te hoge temperatuur",
+              "bit_3": "Apparaatstoring",
+              "bit_4": "Aardingsfout van het systeem",
+              "bit_5": "Overspanning van de PV-string",
+              "bit_6": "PV-string omgepoold aangesloten",
+              "bit_7": "Terugstroom in de PV-string",
+              "bit_8": "AFCI-storing",
+              "bit_9": "Stroomuitval",
+              "bit_10": "Netoverspanning",
+              "bit_11": "Netonderspanning",
+              "bit_12": "Te hoge netfrequentie",
+              "bit_13": "Te lage netfrequentie",
+              "bit_14": "Onbalans in de netspanning",
+              "bit_15": "DC-component van de uitgangsstroom buiten de limiet",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "inverter_alarm2": {
+        "name": "Alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Lekstroom buiten de limiet",
+              "bit_1": "Communicatiestoring",
+              "bit_2": "Interne systeembeveiliging",
+              "bit_3": "Storing in het AFCI-zelftestcircuit",
+              "bit_4": "Beveiliging tijdens eilandbedrijf",
+              "bit_5": "Beveiliging bij handmatige bediening",
+              "bit_6": "Onbekend alarm (bit 6)",
+              "bit_7": "Onjuiste fasevolgorde",
+              "bit_8": "Kortsluiting naar PE",
+              "bit_9": "Softstart mislukt",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "inverter_alarm3": {
+        "name": "Alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Softwareversies komen niet overeen",
+              "bit_1": "Lage isolatieweerstand naar aarde",
+              "bit_2": "Temperatuur te hoog",
+              "bit_3": "Apparaatstoring",
+              "bit_4": "Te lage temperatuur",
+              "bit_5": "Interne beveiliging",
+              "bit_6": "Thermische runaway",
+              "bit_7": "Onbekend alarm (bit 7)",
+              "bit_8": "Onbekend alarm (bit 8)",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "inverter_alarm4": {
+        "name": "Alarm 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Softwareversies komen niet overeen",
+              "bit_1": "Temperatuur te hoog",
+              "bit_2": "Apparaatstoring",
+              "bit_3": "Te hoge lekstroom aan de uitgang voor eilandbedrijf",
+              "bit_4": "Aardingsfout van de nulleider",
+              "bit_5": "Onjuiste fasevolgorde in de netbedrading",
+              "bit_6": "Onjuiste fasevolgorde in de omvormerbedrading",
+              "bit_7": "Fase-uitval van het net",
+              "bit_8": "Onbekend alarm (bit 8)",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "inverter_alarm5": {
+        "name": "Alarm 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Softwareversies komen niet overeen",
+              "bit_1": "Lage isolatieweerstand naar aarde",
+              "bit_2": "Te hoge temperatuur",
+              "bit_3": "Apparaatstoring",
+              "bit_4": "Laadstoring",
+              "bit_5": "Apparaatbeveiliging",
+              "bit_6": "Onbekend alarm (bit 6)",
+              "bit_7": "Onbekend alarm (bit 7)",
+              "bit_8": "Onbekend alarm (bit 8)",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "inverter_grid_frequency": {
+        "name": "Netfrequentie"
+      },
+      "inverter_pcs_internal_temperature": {
+        "name": "Interne PCS-temperatuur"
+      },
+      "inverter_rated_grid_voltage": {
+        "name": "Nominale netspanning"
+      },
+      "inverter_rated_grid_frequency": {
+        "name": "Nominale netfrequentie"
+      },
+      "inverter_ab_line_voltage": {
+        "name": "Lijnspanning A–B"
+      },
+      "inverter_bc_line_voltage": {
+        "name": "Lijnspanning B–C"
+      },
+      "inverter_ca_line_voltage": {
+        "name": "Lijnspanning C–A"
+      },
+      "inverter_phase_a_voltage": {
+        "name": "Spanning fase A"
+      },
+      "inverter_phase_b_voltage": {
+        "name": "Spanning fase B"
+      },
+      "inverter_phase_c_voltage": {
+        "name": "Spanning fase C"
+      },
+      "inverter_phase_a_current": {
+        "name": "Stroom fase A"
+      },
+      "inverter_phase_b_current": {
+        "name": "Stroom fase B"
+      },
+      "inverter_phase_c_current": {
+        "name": "Stroom fase C"
+      },
+      "inverter_power_factor": {
+        "name": "Arbeidsfactor"
+      },
+      "inverter_pack_count": {
+        "name": "Aantal batterijpakketten"
+      },
+      "inverter_pv_string_count": {
+        "name": "Aantal PV-strings"
+      },
+      "inverter_mppt_count": {
+        "name": "Aantal MPPT’s"
+      },
+      "inverter_pv_power": {
+        "name": "PV-vermogen"
+      },
+      "inverter_insulation_resistance": {
+        "name": "Isolatieweerstand"
+      },
+      "inverter_active_power_fixed_value_adjustment_feedback": {
+        "name": "Terugmelding van de vaste actiefvermogensinstelling"
+      },
+      "inverter_reactive_power_fixed_value_adjustment_feedback": {
+        "name": "Terugmelding van de vaste reactiefvermogensinstelling"
+      },
+      "inverter_active_power_percentage_adjustment_feedback": {
+        "name": "Terugmelding van de procentuele actiefvermogensinstelling"
+      },
+      "inverter_reactive_power_qs_adjustment_feedback": {
+        "name": "Terugmelding van de Q/S-instelling voor reactief vermogen"
+      },
+      "inverter_power_factor_adjustment_feedback": {
+        "name": "Terugmelding van de arbeidsfactorinstelling"
+      },
+      "inverter_daily_pv_energy": {
+        "name": "Dagelijkse PV-energie"
+      },
+      "inverter_accumulated_pv_energy": {
+        "name": "Totale PV-energie"
+      },
+      "ac_charger_total_energy_consumed": {
+        "name": "Totale verbruikte energie"
+      },
+      "ac_charger_charging_power": {
+        "name": "Laadvermogen"
+      },
+      "ac_charger_rated_power": {
+        "name": "Nominaal vermogen"
+      },
+      "ac_charger_rated_current": {
+        "name": "Nominale stroom"
+      },
+      "ac_charger_rated_voltage": {
+        "name": "Nominale spanning"
+      },
+      "ac_charger_input_breaker_rated_current": {
+        "name": "Nominale stroom van de ingangsautomaat"
+      },
+      "ac_charger_alarm1": {
+        "name": "Alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Netoverspanning",
+              "bit_1": "Netonderspanning",
+              "bit_2": "Overbelasting",
+              "bit_3": "Kortsluiting",
+              "bit_4": "Overstroom aan de laaduitgang",
+              "bit_5": "Lekstroom buiten de limiet",
+              "bit_6": "Aardingsfout",
+              "bit_7": "Onjuiste fasevolgorde in de netbedrading",
+              "bit_8": "PEN-fout",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "ac_charger_alarm2": {
+        "name": "Alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Storing in het lekstroomdetectiecircuit",
+              "bit_1": "Relais blijft hangen",
+              "bit_2": "Storing in het pilotcircuit",
+              "bit_3": "Storing in de hulpvoedingsmodule",
+              "bit_4": "Storing in de elektrische vergrendeling",
+              "bit_5": "Communicatiestoring met het indicatiepaneel",
+              "bit_6": "Onbekend alarm (bit 6)",
+              "bit_7": "Onbekend alarm (bit 7)",
+              "bit_8": "Onbekend alarm (bit 8)",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "ac_charger_alarm3": {
+        "name": "Alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Geen probleem",
+              "active": "Actief alarm",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmen",
+            "state": {
+              "bit_0": "Interne temperatuur te hoog",
+              "bit_1": "Storing in de laadkabel",
+              "bit_2": "Communicatiestoring met de meter",
+              "bit_3": "Onbekend alarm (bit 3)",
+              "bit_4": "Onbekend alarm (bit 4)",
+              "bit_5": "Onbekend alarm (bit 5)",
+              "bit_6": "Onbekend alarm (bit 6)",
+              "bit_7": "Onbekend alarm (bit 7)",
+              "bit_8": "Onbekend alarm (bit 8)",
+              "bit_9": "Onbekend alarm (bit 9)",
+              "bit_10": "Onbekend alarm (bit 10)",
+              "bit_11": "Onbekend alarm (bit 11)",
+              "bit_12": "Onbekend alarm (bit 12)",
+              "bit_13": "Onbekend alarm (bit 13)",
+              "bit_14": "Onbekend alarm (bit 14)",
+              "bit_15": "Onbekend alarm (bit 15)",
+              "unknown": "Onbekend alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Ruwe waarde"
+          }
+        }
+      },
+      "dc_charger_vehicle_battery_voltage": {
+        "name": "Spanning van de voertuigbatterij"
+      },
+      "dc_charger_charging_current": {
+        "name": "Laadstroom"
+      },
+      "dc_charger_output_power": {
+        "name": "Uitgangsvermogen"
+      },
+      "dc_charger_vehicle_soc": {
+        "name": "SOC van het voertuig"
+      },
+      "dc_charger_current_charging_capacity": {
+        "name": "Laadenergie van deze sessie"
+      },
+      "dc_charger_current_charging_duration": {
+        "name": "Laadduur van deze sessie"
+      },
+      "dc_charger_discharging_current": {
+        "name": "Ontlaadstroom"
+      },
+      "dc_charger_current_discharging_capacity": {
+        "name": "Ontlaadenergie van deze sessie"
+      },
+      "dc_charger_current_discharging_duration": {
+        "name": "Ontlaadduur van deze sessie"
+      },
+      "dc_charger_total_charging_capacity": {
+        "name": "Totale laadenergie"
+      },
+      "dc_charger_total_discharging_capacity": {
+        "name": "Totale ontlaadenergie"
+      },
+      "dc_charger_rated_charging_power": {
+        "name": "Nominaal laadvermogen"
+      },
+      "dc_charger_rated_discharging_power": {
+        "name": "Nominaal ontlaadvermogen"
+      }
+    },
+    "binary_sensor": {
+      "plant_pv_generating": {
+        "name": "PV-productie actief"
+      },
+      "plant_battery_charging": {
+        "name": "Batterij wordt geladen"
+      },
+      "plant_battery_discharging": {
+        "name": "Batterij wordt ontladen"
+      },
+      "plant_exporting_to_grid": {
+        "name": "Teruglevering aan het net actief"
+      },
+      "plant_importing_from_grid": {
+        "name": "Afname van het net actief"
+      }
+    },
+    "button": {
+      "plant_grid_power_loss_lockout_alarm_clear": {
+        "name": "Vergrendelingsalarm na stroomuitval wissen"
+      },
+      "ac_charger_start": {
+        "name": "Laden starten"
+      },
+      "ac_charger_stop": {
+        "name": "Laden stoppen"
+      },
+      "dc_charger_start": {
+        "name": "Laden starten"
+      },
+      "dc_charger_stop": {
+        "name": "Laden stoppen"
+      }
+    },
+    "number": {
+      "plant_active_power_fixed_target": {
+        "name": "Vaste instelling van actief vermogen"
+      },
+      "plant_reactive_power_fixed_target": {
+        "name": "Vaste instelling van reactief vermogen"
+      },
+      "plant_active_power_percentage_target": {
+        "name": "Procentuele instelling van actief vermogen"
+      },
+      "plant_qs_ratio_target": {
+        "name": "Q/S-instelling"
+      },
+      "plant_power_factor_target": {
+        "name": "Arbeidsfactorinstelling"
+      },
+      "plant_ess_max_charging_limit": {
+        "name": "Limiet voor maximaal ESS-laadvermogen"
+      },
+      "plant_ess_max_discharging_limit": {
+        "name": "Limiet voor maximaal ESS-ontlaadvermogen"
+      },
+      "plant_pv_max_power_limit": {
+        "name": "Limiet voor maximaal PV-vermogen"
+      },
+      "plant_grid_point_maximum_export_limitation": {
+        "name": "Vermogenslimiet voor teruglevering"
+      },
+      "plant_grid_maximum_import_limitation": {
+        "name": "Vermogenslimiet voor netafname"
+      },
+      "plant_pcs_maximum_export_limitation": {
+        "name": "PCS-terugleververmogenslimiet"
+      },
+      "plant_pcs_maximum_import_limitation": {
+        "name": "PCS-afnamevermogenslimiet"
+      },
+      "plant_phase_a_active_power_fixed_target": {
+        "name": "Vaste instelling van actief vermogen fase A"
+      },
+      "plant_phase_b_active_power_fixed_target": {
+        "name": "Vaste instelling van actief vermogen fase B"
+      },
+      "plant_phase_c_active_power_fixed_target": {
+        "name": "Vaste instelling van actief vermogen fase C"
+      },
+      "plant_phase_a_reactive_power_fixed_target": {
+        "name": "Vaste instelling van reactief vermogen fase A"
+      },
+      "plant_phase_b_reactive_power_fixed_target": {
+        "name": "Vaste instelling van reactief vermogen fase B"
+      },
+      "plant_phase_c_reactive_power_fixed_target": {
+        "name": "Vaste instelling van reactief vermogen fase C"
+      },
+      "plant_phase_a_active_power_percentage_target": {
+        "name": "Percentage actief vermogen fase A"
+      },
+      "plant_phase_b_active_power_percentage_target": {
+        "name": "Percentage actief vermogen fase B"
+      },
+      "plant_phase_c_active_power_percentage_target": {
+        "name": "Percentage actief vermogen fase C"
+      },
+      "plant_phase_a_qs_ratio_target": {
+        "name": "Q/S-verhouding fase A"
+      },
+      "plant_phase_b_qs_ratio_target": {
+        "name": "Q/S-verhouding fase B"
+      },
+      "plant_phase_c_qs_ratio_target": {
+        "name": "Q/S-verhouding fase C"
+      },
+      "plant_backup_soc": {
+        "name": "ESS-reservelaadstatus"
+      },
+      "plant_charge_cut_off_soc": {
+        "name": "ESS-laadstatusgrens voor stoppen met laden"
+      },
+      "plant_discharge_cut_off_soc": {
+        "name": "ESS-laadstatusgrens voor stoppen met ontladen"
+      },
+      "plant_active_power_regulation_gradient": {
+        "name": "[Netcode] regelgradiënt voor actief vermogen"
+      },
+      "plant_lvrt_reactive_power_comp_factor": {
+        "name": "[Netcode] LVRT-compensatiefactor voor reactief vermogen"
+      },
+      "plant_lvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Netcode] LVRT-compensatiefactor voor reactief vermogen van het tegenstelsel"
+      },
+      "plant_hvrt_reactive_power_comp_factor": {
+        "name": "[Netcode] HVRT-compensatiefactor voor reactief vermogen"
+      },
+      "plant_hvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Netcode] HVRT-compensatiefactor voor reactief vermogen van het tegenstelsel"
+      },
+      "plant_over_freq_derating_power_ramp_rate": {
+        "name": "[Netcode] vermogensgradiënt voor vermogensreductie bij overfrequentie"
+      },
+      "plant_over_freq_derating_trigger_freq": {
+        "name": "[Netcode] activeringsfrequentie voor vermogensreductie bij overfrequentie"
+      },
+      "plant_over_freq_derating_cutoff_freq": {
+        "name": "[Netcode] afschakelfrequentie voor vermogensreductie bij overfrequentie"
+      },
+      "plant_under_freq_power_boost_power_ramp_rate": {
+        "name": "[Netcode] vermogensgradiënt voor vermogensverhoging bij onderfrequentie"
+      },
+      "plant_under_freq_power_boost_trigger_freq": {
+        "name": "[Netcode] activeringsfrequentie voor vermogensverhoging bij onderfrequentie"
+      },
+      "plant_under_freq_power_boost_cutoff_freq": {
+        "name": "[Netcode] afschakelfrequentie voor vermogensverhoging bij onderfrequentie"
+      },
+      "plant_pcc_power_factor_grid_import": {
+        "name": "Arbeidsfactorinstelling voor netafname"
+      },
+      "plant_pcc_power_factor_grid_export": {
+        "name": "Arbeidsfactorinstelling voor teruglevering"
+      },
+      "plant_ess_preheating_reserved_soc": {
+        "name": "Gereserveerde SOC voor ESS-voorverwarming"
+      },
+      "inverter_active_power_fixed_adjustment": {
+        "name": "Vaste instelling van actief vermogen"
+      },
+      "inverter_reactive_power_fixed_adjustment": {
+        "name": "Vaste instelling van reactief vermogen"
+      },
+      "inverter_active_power_percentage_adjustment": {
+        "name": "Procentuele instelling van actief vermogen"
+      },
+      "inverter_reactive_power_qs_adjustment": {
+        "name": "Q/S-instelling voor reactief vermogen"
+      },
+      "inverter_power_factor_adjustment": {
+        "name": "Arbeidsfactorinstelling"
+      },
+      "ac_charger_output_current": {
+        "name": "Uitgangsstroom van de lader"
+      },
+      "dc_charger_max_charging_power_limit": {
+        "name": "Limiet voor maximaal laadvermogen"
+      },
+      "dc_charger_max_discharging_power_limit": {
+        "name": "Limiet voor maximaal ontlaadvermogen"
+      },
+      "plant_ess_preheating_tou_start_time": {
+        "name": "ESS-voorverwarming TOU-tijdvak {slot} begintijd"
+      },
+      "plant_ess_preheating_tou_end_time": {
+        "name": "ESS-voorverwarming TOU-tijdvak {slot} eindtijd"
+      },
+      "plant_ess_preheating_tou_target_power": {
+        "name": "ESS-voorverwarming TOU-tijdvak {slot} doelvermogen"
+      }
+    },
+    "select": {
+      "plant_remote_ems_control_mode": {
+        "name": "EMS-besturingsmodus op afstand"
+      },
+      "plant_ess_preheating_mode": {
+        "name": "ESS-voorverwarmingsmodus"
+      },
+      "plant_lvrt_enable": {
+        "name": "[Netcode] LVRT inschakelen"
+      },
+      "plant_lvrt_mode": {
+        "name": "[Netcode] LVRT-modus"
+      },
+      "plant_lvrt_grid_voltage_protection_blocking": {
+        "name": "[Netcode] blokkering van netspanningsbeveiliging bij LVRT"
+      },
+      "plant_hvrt_enable": {
+        "name": "[Netcode] HVRT inschakelen"
+      },
+      "plant_hvrt_mode": {
+        "name": "[Netcode] HVRT-modus"
+      },
+      "plant_hvrt_grid_voltage_protection_blocking": {
+        "name": "[Netcode] blokkering van netspanningsbeveiliging bij HVRT"
+      },
+      "plant_over_freq_derating_enable": {
+        "name": "[Netcode] vermogensreductie bij overfrequentie inschakelen"
+      },
+      "plant_under_freq_power_boost_enable": {
+        "name": "[Netcode] vermogensverhoging bij onderfrequentie inschakelen"
+      }
+    },
+    "switch": {
+      "plant_start_stop": {
+        "name": "Installatie aan/uit"
+      },
+      "plant_remote_ems_enable": {
+        "name": "EMS-besturing op afstand (via Home Assistant)"
+      },
+      "plant_independent_phase_power_control_enable": {
+        "name": "Onafhankelijke vermogensregeling per fase"
+      },
+      "plant_ess_preheating_enable": {
+        "name": "ESS-voorverwarming inschakelen"
+      },
+      "plant_ess_preheating_advance_enable": {
+        "name": "Vervroegde ESS-voorverwarming inschakelen"
+      },
+      "inverter_start_stop": {
+        "name": "Omvormer aan/uit"
+      },
+      "ac_charger_start_stop": {
+        "name": "AC-lader aan/uit (verouderd)"
+      },
+      "dc_charging": {
+        "name": "DC-laden (verouderd)"
+      }
+    }
+  },
+  "selector": {
+    "device_type": {
+      "options": {
+        "new_plant": "Nieuwe installatie",
+        "inverter": "Omvormer",
+        "ac_charger": "AC-lader",
+        "dc_charger": "DC-lader"
+      }
+    },
+    "configured_device": {
+      "options": {
+        "accumulated_energy": "Cumulatieve energiewaarden wijzigen"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_pcc_power_factor": {
+      "message": "De PCC-arbeidsfactor kan niet worden ingesteld op {value}. Gebruik -0.999 tot -0.8 of 0.8 tot 1."
+    },
+    "coordinator_unavailable": {
+      "message": "Kan {entity_id} niet bedienen: apparaatgegevens zijn niet beschikbaar."
+    }
+  },
+  "services": {
+    "set_operation_mode": {
+      "name": "Bedrijfsmodus instellen",
+      "description": "Stel de bedrijfsmodus van het Sigenergy-systeem in.",
+      "fields": {
+        "mode": {
+          "name": "Modus",
+          "description": "De bedrijfsmodus die moet worden ingesteld."
+        }
+      }
+    },
+    "set_remote_ems_control_mode": {
+      "name": "EMS-besturingsmodus op afstand instellen",
+      "description": "Stel de EMS-besturingsmodus op afstand van het Sigenergy-systeem in.",
+      "fields": {
+        "mode": {
+          "name": "Modus",
+          "description": "De EMS-besturingsmodus op afstand die moet worden ingesteld."
+        }
+      }
+    },
+    "set_power_limit": {
+      "name": "Vermogenslimiet instellen",
+      "description": "Stel een vermogenslimiet voor het Sigenergy-systeem in.",
+      "fields": {
+        "value": {
+          "name": "Waarde",
+          "description": "De waarde van de vermogenslimiet die moet worden ingesteld."
+        }
+      }
+    }
+  }
+}
