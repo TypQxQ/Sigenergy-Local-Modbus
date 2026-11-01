@@ -1,11 +1,9 @@
 # <img src="https://brands.home-assistant.io/sigen/dark_icon.png" alt="Sigenergy" width="50" /> Sigenergy ESS for Home Assistant
 
-[![Stable][releases-shield]][releases] [![Marketplace / HACS][store-shield]][store] ![Project Maintenance][maintenance-shield] [![GitHub Activity][commits-shield]][commits] [![License][license-shield]](LICENSE)
+[![Stable][releases-shield]][releases] ![Project Maintenance][maintenance-shield] [![GitHub Activity][commits-shield]][commits] [![License][license-shield]](LICENSE)
 
 [releases-shield]: https://img.shields.io/github/release/TypQxQ/Sigenergy-Local-Modbus.svg
 [releases]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/releases/latest
-[store-shield]: https://img.shields.io/badge/Marketplace%20%2F%20HACS-Default-41BDF5.svg
-[store]: https://my.home-assistant.io/redirect/hacs_repository/?owner=TypQxQ&repository=Sigenergy-Local-Modbus&category=integration
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
 [commits-shield]: https://img.shields.io/github/commit-activity/y/TypQxQ/Sigenergy-Local-Modbus.svg
 [commits]: https://github.com/TypQxQ/Sigenergy-Local-Modbus/commits/main
