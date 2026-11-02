@@ -358,7 +358,24 @@
         "name": "Effekt til strømnettet"
       },
       "plant_battery_time_remaining": {
-        "name": "Gjenværende batteritid"
+        "name": "Gjenværende batteritid",
+        "state_attributes": {
+          "battery_soc_percent": {
+            "name": "Batteriets ladenivå (%)"
+          },
+          "backup_soc_percent": {
+            "name": "Reserveladenivå (%)"
+          },
+          "rated_capacity_kwh": {
+            "name": "Nominell batterikapasitet (kWh)"
+          },
+          "consumed_power_kw": {
+            "name": "Husets forbruk (kW)"
+          },
+          "usable_energy_kwh": {
+            "name": "Tilgjengelig energi over reserven (kWh)"
+          }
+        }
       },
       "plant_consumed_power": {
         "name": "Forbrukseffekt"

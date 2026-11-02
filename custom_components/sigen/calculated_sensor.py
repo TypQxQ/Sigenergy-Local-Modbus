@@ -423,47 +423,80 @@ class SigenergyCalculations:
         return consumed_power
 
     @staticmethod
+    def battery_time_remaining_inputs(
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> dict[str, Decimal | None]:
+        """Share validated cached inputs between the estimate and its attributes."""
+        inputs: dict[str, Decimal | None] = {
+            "battery_soc_percent": None,
+            "backup_soc_percent": None,
+            "rated_capacity_kwh": None,
+            "consumed_power_kw": None,
+            "usable_energy_kwh": None,
+        }
+        plant = (coordinator_data or {}).get("plant")
+        if not isinstance(plant, dict):
+            return inputs
+
+        fields = (
+            ("plant_ess_soc", "battery_soc_percent"),
+            ("plant_backup_soc", "backup_soc_percent"),
+            ("plant_ess_rated_energy_capacity", "rated_capacity_kwh"),
+        )
+        for key, attribute in fields:
+            raw = plant.get(key)
+            # safe_decimal(None) is zero for other callers; missing data must
+            # remain unknown here instead of implying a depleted battery.
+            if raw is None or isinstance(raw, bool):
+                continue
+            number = safe_decimal(raw)
+            if number is None or not number.is_finite():
+                continue
+            if attribute == "rated_capacity_kwh":
+                if number <= 0:
+                    continue
+            elif not 0 <= number <= 100:
+                continue
+            inputs[attribute] = number
+
+        soc = inputs["battery_soc_percent"]
+        reserve = inputs["backup_soc_percent"]
+        capacity = inputs["rated_capacity_kwh"]
+        if soc is not None and reserve is not None and capacity is not None:
+            inputs["usable_energy_kwh"] = max(soc - reserve, Decimal(0)) / Decimal(100) * capacity
+
+        consumed_power = SigenergyCalculations.calculate_plant_consumed_power(
+            None, coordinator_data, extra_params
+        )
+        if consumed_power is not None and not isinstance(consumed_power, bool):
+            consumption = safe_decimal(consumed_power)
+            if consumption is not None and consumption.is_finite():
+                inputs["consumed_power_kw"] = consumption
+        return inputs
+
+    @staticmethod
     def calculate_battery_time_remaining(
         value,
         coordinator_data: Optional[Dict[str, Any]] = None,
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[Decimal]:
-        """Estimate hours above backup reserve at current household consumption.
+        """Estimate hours above reserve using current household consumption.
 
         This is battery-only autonomy, independent of current battery charging
         or discharging power and future solar/grid contributions. All inputs
         use coordinator-native units (percent, kWh and kW).
         """
-        plant = (coordinator_data or {}).get("plant")
-        if not isinstance(plant, dict):
+        inputs = SigenergyCalculations.battery_time_remaining_inputs(coordinator_data, extra_params)
+        energy = inputs["usable_energy_kwh"]
+        if energy is None:
             return None
-
-        values = []
-        for key in ("plant_ess_soc", "plant_backup_soc", "plant_ess_rated_energy_capacity"):
-            raw = plant.get(key)
-            # safe_decimal(None) is zero for other callers; missing data must
-            # remain unknown here instead of implying a depleted battery.
-            if raw is None or isinstance(raw, bool):
-                return None
-            number = safe_decimal(raw)
-            if number is None or not number.is_finite():
-                return None
-            values.append(number)
-        soc, reserve, capacity = values
-        if not (0 <= soc <= 100 and 0 <= reserve <= 100) or capacity <= 0:
-            return None
-        if soc <= reserve:
+        if energy == 0:
             return Decimal(0)
-
-        consumed_power = SigenergyCalculations.calculate_plant_consumed_power(
-            None, coordinator_data, extra_params
-        )
-        if consumed_power is None or isinstance(consumed_power, bool):
+        consumption = inputs["consumed_power_kw"]
+        if consumption is None or consumption <= 0:
             return None
-        consumption = safe_decimal(consumed_power)
-        if consumption is None or not consumption.is_finite() or consumption <= 0:
-            return None
-        return (soc - reserve) / Decimal(100) * capacity / consumption
+        return energy / consumption
 
     @staticmethod
     def _calculate_total_inverter_energy(

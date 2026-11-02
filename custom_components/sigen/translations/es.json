@@ -358,7 +358,24 @@
         "name": "Potencia exportada a la red"
       },
       "plant_battery_time_remaining": {
-        "name": "Autonomía restante de la batería"
+        "name": "Autonomía restante de la batería",
+        "state_attributes": {
+          "battery_soc_percent": {
+            "name": "Estado de carga de la batería (%)"
+          },
+          "backup_soc_percent": {
+            "name": "Estado de carga de reserva (%)"
+          },
+          "rated_capacity_kwh": {
+            "name": "Capacidad nominal de la batería (kWh)"
+          },
+          "consumed_power_kw": {
+            "name": "Consumo del hogar (kW)"
+          },
+          "usable_energy_kwh": {
+            "name": "Energía utilizable por encima de la reserva (kWh)"
+          }
+        }
       },
       "plant_consumed_power": {
         "name": "Potencia consumida"

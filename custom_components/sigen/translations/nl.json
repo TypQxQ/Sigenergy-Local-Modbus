@@ -358,7 +358,24 @@
         "name": "Terugleververmogen"
       },
       "plant_battery_time_remaining": {
-        "name": "Resterende batterijduur"
+        "name": "Resterende batterijduur",
+        "state_attributes": {
+          "battery_soc_percent": {
+            "name": "Laadniveau batterij (%)"
+          },
+          "backup_soc_percent": {
+            "name": "Reservelaadniveau (%)"
+          },
+          "rated_capacity_kwh": {
+            "name": "Nominale batterijcapaciteit (kWh)"
+          },
+          "consumed_power_kw": {
+            "name": "Huishoudelijk verbruik (kW)"
+          },
+          "usable_energy_kwh": {
+            "name": "Bruikbare energie boven de reserve (kWh)"
+          }
+        }
       },
       "plant_consumed_power": {
         "name": "Verbruiksvermogen"

@@ -37,6 +37,22 @@ or missing consumption reports `unknown`. Missing/invalid SOC, reserve or
 capacity also reports `unknown`. This is an estimate, not a guaranteed backup
 duration; rated capacity does not account for all losses or battery ageing.
 
+From B4, its attributes show the inputs used in the calculation:
+
+| Attribute | Meaning |
+|---|---|
+| `battery_soc_percent` | Current battery state of charge (%) |
+| `backup_soc_percent` | Configured backup reserve (%) |
+| `rated_capacity_kwh` | Rated battery capacity (kWh) |
+| `consumed_power_kw` | Current household consumption (kW), using the same calculation as **Consumed power** |
+| `usable_energy_kwh` | Energy above the reserve: `max(SOC − backup SOC, 0) / 100 × rated capacity` |
+
+The attributes use the existing cached readings and make no additional Modbus
+requests. Missing or invalid inputs are `null`, rather than an assumed zero.
+Other valid inputs remain visible when the estimate is unknown. A valid zero
+consumption is shown as `0`, while the estimate remains unknown above reserve.
+Attribute labels follow the interface language.
+
 The native unit is **hours**. Existing dashboard templates such as
 `sensor.available_battery_minutes` and user-created helpers are retained. When
 switching a dashboard or automation to the new sensor, check its entity ID and
