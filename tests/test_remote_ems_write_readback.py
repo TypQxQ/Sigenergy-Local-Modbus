@@ -34,6 +34,7 @@ class _UpdateFailed(Exception):
 class _CoordinatorBase:
     def __init__(self, hass, logger, **kwargs):
         self.hass = hass
+        self.update_interval = kwargs["update_interval"]
         self.last_update_success = True
         self.last_exception = None
         self.refresh_lock = asyncio.Lock()
@@ -131,6 +132,7 @@ def _make_coordinator():
         "SigenergyModbusError": _ModbusError,
         "dt_util": SimpleNamespace(utcnow=lambda: datetime.now(timezone.utc)),
         "DEFAULT_SCAN_INTERVAL": 5,
+        "MIN_SCAN_INTERVAL": 1,
         "CONF_INVERTER_HAS_DCCHARGER": "has_dc_charger",
         "_LOGGER": Mock(),
     }

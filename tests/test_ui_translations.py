@@ -4,7 +4,9 @@ from __future__ import annotations
 import __future__
 import ast
 import asyncio
+from collections import Counter
 import json
+import re
 from pathlib import Path
 from string import Formatter
 from types import SimpleNamespace
@@ -14,6 +16,7 @@ from unittest.mock import AsyncMock
 from test_alarm7_unknown_value import alarm, sensor_class
 
 P = Path(__file__).resolve().parents[1] / "custom_components" / "sigen"
+LANGUAGES = {"da", "de", "en", "es", "fi", "fr", "it", "nb", "nl", "pl", "sv"}
 
 
 def leaves(tree, prefix=()):
@@ -28,19 +31,73 @@ class TestUICatalogues(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.en = json.loads((P / "strings.json").read_text(encoding="utf-8"))
-        cls.sv = json.loads((P / "translations/sv.json").read_text(encoding="utf-8"))
+        cls.catalogues = {path.stem: json.loads(path.read_text(encoding="utf-8"))
+                          for path in (P / "translations").glob("*.json")}
+        cls.sv = cls.catalogues["sv"]
 
-    def test_all_ui_strings_have_swedish_and_matching_placeholders(self):
+    def test_all_ui_strings_have_all_supported_languages_and_matching_placeholders(self):
         english = dict(leaves(self.en))
-        swedish = dict(leaves(self.sv))
-        self.assertEqual(set(english), set(swedish))
-        self.assertEqual(self.en, json.loads((P / "translations/en.json").read_text(encoding="utf-8")))
-        for path, source in english.items():
-            with self.subTest(path=path):
-                translated = swedish[path]
-                self.assertTrue(translated.strip())
-                self.assertEqual({name for _, name, _, _ in Formatter().parse(source) if name},
-                                 {name for _, name, _, _ in Formatter().parse(translated) if name})
+        self.assertEqual(LANGUAGES, set(self.catalogues))
+        self.assertEqual(self.en, self.catalogues["en"])
+        placeholders = lambda text: Counter((name, spec, conversion)
+            for _, name, spec, conversion in Formatter().parse(text) if name is not None)
+        for language, catalogue in self.catalogues.items():
+            translated_leaves = dict(leaves(catalogue))
+            self.assertEqual(set(english), set(translated_leaves), language)
+            for path, source in english.items():
+                with self.subTest(language=language, path=path):
+                    translated = translated_leaves[path]
+                    self.assertIsInstance(translated, str)
+                    self.assertTrue(translated.strip())
+                    self.assertNotIn("\ufffd", translated)
+                    self.assertEqual(placeholders(source), placeholders(translated))
+
+    def test_new_languages_keep_numbers_and_electrical_channel_identifiers(self):
+        english = dict(leaves(self.en))
+        numbers = lambda text: re.findall(r"(?<!\w)-?\d+(?:\.\d+)?", text)
+        for language in sorted(LANGUAGES - {"en", "sv"}):
+            for path, translated in leaves(self.catalogues[language]):
+                with self.subTest(language=language, path=path):
+                    self.assertEqual(numbers(english[path]), numbers(translated))
+            self.assertEqual(self.en["entity"]["sensor"]["inverter_output_type"]["state"],
+                             self.catalogues[language]["entity"]["sensor"]["inverter_output_type"]["state"])
+
+    def test_new_languages_localize_each_ui_section(self):
+        for language in sorted(LANGUAGES - {"en", "sv"}):
+            translated = dict(leaves(self.catalogues[language]))
+            english = dict(leaves(self.en))
+            paths = (("config", "step", "user", "title"),
+                     ("options", "abort", "legacy_energy_adjustment_removed"),
+                     ("entity", "sensor", "plant_battery_time_remaining", "name"),
+                     ("entity", "sensor", "plant_running_state", "state", "running"),
+                     ("entity", "sensor", "plant_general_alarm1", "state_attributes", "alarm_codes", "state", "bit_1"),
+                     ("selector", "device_type", "options", "new_plant"),
+                     ("exceptions", "invalid_pcc_power_factor", "message"),
+                     ("services", "set_power_limit", "description"))
+            for path in paths:
+                with self.subTest(language=language, path=path):
+                    self.assertNotEqual(english[path], translated[path])
+
+    def test_catalogues_have_no_duplicate_json_keys(self):
+        def unique_object(pairs):
+            result = {}
+            for key, value in pairs:
+                self.assertNotIn(key, result, f"Duplicate JSON key: {key}")
+                result[key] = value
+            return result
+
+        for path in (P / "strings.json", *(P / "translations").glob("*.json")):
+            with self.subTest(catalogue=path.name):
+                json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
+
+    def test_language_selector_and_configure_menu_cover_every_choice(self):
+        for language, catalogue in self.catalogues.items():
+            with self.subTest(language=language):
+                self.assertEqual(LANGUAGES | {"auto"},
+                                 set(catalogue["selector"]["entity_name_language"]["options"]))
+                self.assertEqual({"select_device", "display_settings"},
+                                 set(catalogue["options"]["step"]["init"]["menu_options"]))
+                self.assertIn("entity_name_language", catalogue["options"]["step"]["display_settings"]["data"])
 
     def test_flow_errors_and_abort_reasons_are_translation_keys(self):
         tree = ast.parse((P / "config_flow.py").read_text(encoding="utf-8"))
@@ -72,6 +129,7 @@ class TestUICatalogues(unittest.TestCase):
         scope = {**constants, "_LOGGER": SimpleNamespace(debug=lambda *args: None),
                  "vol": SimpleNamespace(Required=lambda key, **kwargs: key,
                                         Schema=lambda data: data, All=lambda *args: None,
+                                        Range=lambda **kwargs: None,
                                         Coerce=lambda value: value)}
         tree = ast.parse((P / "config_flow.py").read_text(encoding="utf-8"))
         node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "generate_plant_schema")
@@ -82,14 +140,14 @@ class TestUICatalogues(unittest.TestCase):
         for new_installation, category in ((True, "config"), (False, "options")):
             fields = scope["generate_plant_schema"](values, use_inverter_device_id=new_installation,
                                                      display_update_frq=True)
-            for catalogue in (self.en, self.sv):
+            for catalogue in self.catalogues.values():
                 self.assertLessEqual(set(fields), set(catalogue[category]["step"]["plant_config"]["data"]))
 
     def test_alarm_bits_and_reserved_bits_have_labels_in_each_language(self):
         for key in alarm.ALARM_REGISTER_GROUPS:
             if key not in self.en["entity"]["sensor"]:
                 continue
-            for doc in (self.en, self.sv):
+            for doc in self.catalogues.values():
                 attrs = doc["entity"]["sensor"][key]["state_attributes"]
                 self.assertEqual({f"bit_{bit}" for bit in range(16)} | {"unknown"},
                                  set(attrs["alarm_codes"]["state"]))

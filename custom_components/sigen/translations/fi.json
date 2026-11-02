@@ -1,0 +1,1847 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Yhdistä Sigenergy-energianvarastointijärjestelmään",
+        "description": "Määritä Sigenergy-energianvarastointijärjestelmä, jotta voit valvoa ja ohjata sitä Home Assistantilla.\n\nVarmista, että Sigenergy-järjestelmä on yhdistetty samaan verkkoon kuin Home Assistant ja että asentaja on ottanut Modbusin käyttöön."
+      },
+      "dhcp_plant_config": {
+        "title": "Määritä Sigenergy-laitteisto",
+        "description": "Uusi Sigenergy-laite löytyi osoitteesta {ip_address}. Valitse määritysasetukset:",
+        "data": {
+          "read_only": "Vain luku -tila"
+        },
+        "data_description": {
+          "read_only": "(Estää Home Assistantia tekemästä muutoksia Sigenergy-järjestelmään. Suositellaan ensimmäisellä määrityskerralla. Voidaan muuttaa myöhemmin laitteen asetuksissa.)"
+        }
+      },
+      "device_type": {
+        "title": "Valitse laitetyyppi",
+        "description": "Valitse lisättävän Sigenergy-laitteen tyyppi.",
+        "data": {
+          "device_type": "Laitetyyppi"
+        }
+      },
+      "plant_config": {
+        "title": "Määritä Sigenergy-laitteisto",
+        "description": "Määritä uusi Sigenergy-laitteisto, jotta voit valvoa ja ohjata sitä Home Assistantilla. Laitteiston tunnukseksi asetetaan automaattisesti 247.",
+        "data": {
+          "host": "Isäntä (Sigenergy-pääinvertterin IP-osoite)",
+          "port": "Portti (oletus 502)",
+          "inverter_slave_ids": "Invertterin laitetunnus (oletus 1)",
+          "ac_charger_slave_ids": "AC-laturien laitetunnukset (erota useat pilkuilla; jätä tyhjäksi, jos AC-laturia ei ole)",
+          "dc_charger_slave_ids": "Invertterien tunnukset, joihin on liitetty DC-latureita (erota useat pilkuilla)",
+          "scan_interval": "Lukuväli (sekuntia)",
+          "migrate_yaml": "Siirrä anturiarvot vanhasta YAML-määrityksestä",
+          "migrate_yaml_description": "Jos käytössä, anturien alkuarvot tuodaan vanhasta YAML-määrityksestä, jos se on olemassa.",
+          "read_only": "Vain luku -tila",
+          "slave_id": "Laitteiston laitetunnus"
+        },
+        "data_description": {
+          "read_only": "(Estää Home Assistantia tekemästä muutoksia Sigenergy-järjestelmään. Suositellaan ensimmäisellä määrityskerralla. Voidaan muuttaa myöhemmin laitteen asetuksissa.)"
+        }
+      },
+      "select_plant": {
+        "title": "Valitse laitteisto",
+        "description": "Valitse Sigenergy-laitteisto, johon tämä laite yhdistetään.",
+        "data": {
+          "parent_plant_id": "Laitteisto"
+        }
+      },
+      "select_inverter": {
+        "title": "Valitse invertteri",
+        "description": "Valitse Sigenergy-invertteri, johon tämä DC-laturi yhdistetään.",
+        "data": {
+          "parent_inverter_id": "Invertteri"
+        }
+      },
+      "inverter_config": {
+        "title": "Määritä Sigenergy-invertteri",
+        "description": "Määritä samaan laitteistoon liitetty Sigenergy-lisäinvertteri.",
+        "data": {
+          "host": "Isäntä (tämän invertterin IP-osoite)",
+          "port": "Portti (oletus 502)",
+          "slave_id": "Laitetunnus (1–246)"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Määritä Sigenergy-AC-laturi",
+        "description": "Määritä Sigenergy-AC-laturi. Anna Modbus-palvelimen (pääinvertterin) isäntäosoite ja portti sekä tämän AC-laturin laitetunnus.",
+        "data": {
+          "host": "Isäntä (tämän AC-laturin IP-osoite)",
+          "port": "Portti (oletus 502)",
+          "slave_id": "Laitetunnus (1–246)"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Määritä Sigenergy-DC-laturi",
+        "description": "Määritä valittuun invertteriin liitetty Sigenergy-DC-laturi."
+      },
+      "reconfigure": {
+        "title": "Määritä Sigenergy-järjestelmä uudelleen",
+        "description": "Päivitä tämän Sigenergy-järjestelmän laitetunnusten luettelo.",
+        "data": {
+          "inverter_slave_ids": "Invertterin laitetunnus (oletus 1)",
+          "ac_charger_slave_ids": "AC-laturin laitetunnus (jätä tyhjäksi, jos AC-laturia ei ole)",
+          "dc_charger_slave_ids": "Invertterien tunnukset, joihin on liitetty DC-latureita (erota useat pilkuilla)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Yhteys Sigenergy-järjestelmään epäonnistui. Tarkista isäntä ja portti.",
+      "unknown": "Tapahtui odottamaton virhe.",
+      "invalid_integer_value": "Virheellinen kokonaisluku.",
+      "each_id_must_be_between_1_and_246": "Jokaisen tunnuksen on oltava välillä 1–246.",
+      "duplicate_ids_found": "Löytyi päällekkäisiä tunnuksia.",
+      "dc_charger_requires_inverter": "DC-laturien tunnusten on vastattava määritettyjen invertterien tunnuksia.",
+      "ac_charger_conflicts_inverter": "AC-laturien tunnusten on oltava eri kuin invertterien tunnukset.",
+      "no_plants_available": "Laitteistoja ei ole saatavilla. Lisää ensin laitteisto.",
+      "no_inverters_available": "Valitussa laitteistossa ei ole inverttereitä. Lisää ensin invertteri.",
+      "read_only_mode_error": "Sigenergy-järjestelmään ei voi kirjoittaa vain luku -tilassa.",
+      "must_be_divisible_by_high": "On oltava jaollinen korkealla aikavälillä.",
+      "cannot_be_lower_than_high": "Ei voi olla pienempi kuin korkea aikaväli.",
+      "cannot_be_lower_than_medium": "Ei voi olla pienempi kuin keskimmäinen aikaväli.",
+      "invalid_host": "Virheellinen isäntäosoite.",
+      "invalid_port": "Virheellinen portin numero. Sen on oltava välillä 1–65535.",
+      "required_value": "Anna arvo.",
+      "must_be_number": "Anna numero.",
+      "must_be_at_least_1": "Päivitysvälin on oltava vähintään 1 sekunti."
+    },
+    "abort": {
+      "already_configured": "Tämä Sigenergy-järjestelmä on jo määritetty.",
+      "no_plants_available": "Laitteistoja ei ole saatavilla. Lisää ensin laitteisto.",
+      "no_inverters_available": "Valitussa laitteistossa ei ole inverttereitä. Lisää ensin invertteri.",
+      "device_added": "Laite lisättiin laitteiston määritykseen.",
+      "parent_plant_not_found": "Ylemmän tason laitteiston määritystä ei löytynyt.",
+      "parent_inverter_not_found": "Ylemmän tason invertterin määritystä ei löytynyt.",
+      "parent_inverter_invalid": "Ylemmän tason invertterin määritys on virheellinen.",
+      "unknown_device_type": "Tuntematon laitetyyppi.",
+      "no_devices_available": "Uudelleen määritettäviä laitteita ei löytynyt.",
+      "invalid_device_selection": "Virheellinen laitevalinta.",
+      "device_removed": "Laite poistettiin.",
+      "plants_exist": "Sigenergy-laitteisto on jo määritetty."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sigenergy-asetukset",
+        "description": "Määritä Sigenergy-integraation asetukset.",
+        "menu_options": {
+          "select_device": "Laitteiden asetukset",
+          "display_settings": "Näyttöasetukset"
+        }
+      },
+      "select_device": {
+        "title": "Valitse uudelleen määritettävä laite",
+        "description": "Valitse Sigenergy-laite (laitteisto, invertteri, AC- tai DC-laturi), jonka haluat määrittää uudelleen tai poistaa.",
+        "data": {
+          "selected_device": "Laite"
+        }
+      },
+      "accumulated_energy_config": {
+        "title": "Kertyneen energian anturiarvot",
+        "description": "Nollaa kertyneen energian anturiarvot (esimerkiksi energian kokonaismäärät) LÄHETÄ-painikkeella.\n\nAnna arvot kilowattitunteina (kWh).",
+        "data": {
+          "sensor.sigen_plant_accumulated_pv_energy": "Laitteiston kertynyt aurinkosähköenergia",
+          "sensor.sigen_plant_accumulated_consumed_energy": "Laitteiston kertynyt energiankulutus",
+          "sensor.sigen_plant_accumulated_grid_import_energy": "Laitteiston verkosta ottama kertynyt energia",
+          "sensor.sigen_plant_accumulated_grid_export_energy": "Laitteiston verkkoon syöttämä kertynyt energia"
+        }
+      },
+      "plant_config": {
+        "title": "Määritä Sigenergy-laitteisto uudelleen",
+        "description": "Päivitä tämän laitteiston yhteystiedot ja lukuväli.",
+        "data": {
+          "host": "Isäntä (IP-osoite)",
+          "port": "Portti",
+          "read_only": "Vain luku -tila",
+          "scan_interval": "Lukuväli (sekuntia)",
+          "slave_id": "Laitteiston laitetunnus"
+        },
+        "data_description": {
+          "read_only": "(Estää Home Assistantia tekemästä muutoksia Sigenergy-järjestelmään. Suositellaan ensimmäisellä määrityskerralla. Voidaan muuttaa myöhemmin laitteen asetuksissa.)"
+        }
+      },
+      "inverter_config": {
+        "title": "Määritä Sigenergy-invertteri uudelleen",
+        "description": "Päivitä tämän invertterin yhteystiedot tai poista se laitteistosta.",
+        "data": {
+          "remove_device": "Poista tämä invertteri",
+          "host": "Isäntä (IP-osoite)",
+          "port": "Portti",
+          "slave_id": "Laitetunnus"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Määritä Sigenergy-AC-laturi uudelleen",
+        "description": "Päivitä tämän AC-laturin yhteystiedot tai poista se laitteistosta.",
+        "data": {
+          "remove_device": "Poista tämä AC-laturi",
+          "host": "Isäntä (IP-osoite)",
+          "port": "Portti",
+          "slave_id": "Laitetunnus"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Määritä Sigenergy-DC-laturi uudelleen",
+        "description": "Poista tämä DC-laturi siihen liitetystä invertteristä.",
+        "data": {
+          "remove_device": "Poista tämä DC-laturi"
+        }
+      },
+      "reconfigure": {
+        "title": "Määritä Sigenergy-järjestelmä uudelleen",
+        "description": "Päivitä tämän Sigenergy-järjestelmän laitetunnusten luettelo.",
+        "data": {
+          "inverter_slave_ids": "Invertterin laitetunnus (oletus 1)",
+          "ac_charger_slave_ids": "AC-laturien laitetunnukset (erota useat pilkuilla; jätä tyhjäksi, jos AC-laturia ei ole)",
+          "dc_charger_slave_ids": "Invertterien tunnukset, joihin on liitetty DC-latureita (erota useat pilkuilla)"
+        }
+      },
+      "display_settings": {
+        "title": "Näyttöasetukset",
+        "description": "Valitse entiteettien oletusnimien kieli. Valintaikkunat, tilatekstit ja hälytystiedot noudattavat Home Assistantin käyttöliittymän kieltä.",
+        "data": {
+          "entity_name_language": "Entiteettien nimien kieli"
+        },
+        "data_description": {
+          "entity_name_language": "Automaattinen käyttää Home Assistantin palvelimen kieltä. Omat nimet, entiteettitunnukset ja historia säilyvät. Kielen vaihtaminen lataa integraation uudelleen."
+        }
+      }
+    },
+    "error": {
+      "invalid_integer_value": "Virheellinen kokonaisluku.",
+      "each_id_must_be_between_1_and_246": "Jokaisen tunnuksen on oltava välillä 1–246.",
+      "duplicate_ids_found": "Löytyi päällekkäisiä tunnuksia.",
+      "dc_charger_requires_inverter": "DC-laturien tunnusten on vastattava määritettyjen invertterien tunnuksia.",
+      "ac_charger_conflicts_inverter": "AC-laturien tunnusten on oltava eri kuin invertterien tunnukset.",
+      "invalid_host": "Virheellinen isäntäosoite.",
+      "invalid_port": "Virheellinen portin numero. Sen on oltava välillä 1–65535.",
+      "must_be_divisible_by_high": "On oltava jaollinen korkealla aikavälillä.",
+      "cannot_be_lower_than_high": "Ei voi olla pienempi kuin korkea aikaväli.",
+      "cannot_be_lower_than_medium": "Ei voi olla pienempi kuin keskimmäinen aikaväli.",
+      "cannot_connect": "Yhteys Sigenergy-järjestelmään epäonnistui. Tarkista isäntä ja portti.",
+      "required_value": "Anna arvo.",
+      "must_be_number": "Anna numero.",
+      "must_be_at_least_1": "Päivitysvälin on oltava vähintään 1 sekunti.",
+      "invalid_entity_name_language": "Valitse tuettu kieli tai Automaattinen."
+    },
+    "abort": {
+      "already_configured": "Tämä Sigenergy-järjestelmä on jo määritetty.",
+      "no_plants_available": "Laitteistoja ei ole saatavilla. Lisää ensin laitteisto.",
+      "no_inverters_available": "Valitussa laitteistossa ei ole inverttereitä. Lisää ensin invertteri.",
+      "device_added": "Laite lisättiin laitteiston määritykseen.",
+      "parent_plant_not_found": "Ylemmän tason laitteiston määritystä ei löytynyt.",
+      "parent_inverter_not_found": "Ylemmän tason invertterin määritystä ei löytynyt.",
+      "parent_inverter_invalid": "Ylemmän tason invertterin määritys on virheellinen.",
+      "unknown_device_type": "Tuntematon laitetyyppi.",
+      "no_devices_available": "Uudelleen määritettäviä laitteita ei löytynyt.",
+      "invalid_device_selection": "Virheellinen laitevalinta.",
+      "device_removed": "Laite poistettiin.",
+      "plants_exist": "Sigenergy-laitteisto on jo määritetty.",
+      "legacy_energy_adjustment_removed": "Vanhojen kertyneen energian anturien manuaalista säätöä ei enää tueta. Arvoja ei muutettu."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "plant_grid_sensor_status": {
+        "state": {
+          "offline": "Ei yhteyttä",
+          "online": "Yhteydessä"
+        },
+        "name": "Verkkoanturin tila"
+      },
+      "plant_on_off_grid_status": {
+        "state": {
+          "on_grid": "Verkkokäyttö",
+          "off_grid_auto": "Saarekekäyttö (automaattinen)",
+          "off_grid_manual": "Saarekekäyttö (manuaalinen)"
+        },
+        "name": "Verkkoyhteyden tila"
+      },
+      "plant_running_state": {
+        "state": {
+          "standby": "Valmiustila",
+          "running": "Käynnissä",
+          "fault": "Vika",
+          "shutdown": "Sammutettu",
+          "environmental_abnormality": "Poikkeavat ympäristöolosuhteet"
+        },
+        "name": "Käyntitila"
+      },
+      "plant_ems_work_mode": {
+        "state": {
+          "max_self_consumption": "Maksimaalinen oma kulutus",
+          "ai_mode": "Tekoälytila",
+          "tou": "Aikaperusteinen tariffi",
+          "full_feed_in_to_grid": "Täysi syöttö sähköverkkoon",
+          "vpp_scheduling": "VPP-ohjaus",
+          "remote_ems": "EMS-etäohjaus",
+          "custom": "Mukautettu"
+        },
+        "name": "EMS-käyttötila"
+      },
+      "inverter_running_state": {
+        "state": {
+          "standby": "Valmiustila",
+          "running": "Käynnissä",
+          "fault": "Vika",
+          "shutdown": "Sammutettu",
+          "environmental_abnormality": "Poikkeavat ympäristöolosuhteet"
+        },
+        "name": "Käyntitila"
+      },
+      "inverter_output_type": {
+        "state": {
+          "l_n": "L/N",
+          "l1_l2_l3": "L1/L2/L3",
+          "l1_l2_l3_n": "L1/L2/L3/N",
+          "l1_l2_n": "L1/L2/N"
+        },
+        "name": "Lähtötyyppi"
+      },
+      "ac_charger_system_state": {
+        "state": {
+          "initializing": "Alustetaan",
+          "not_connected": "Ei yhdistetty",
+          "reserving": "Varataan",
+          "preparing": "Valmistellaan",
+          "ev_ready": "Sähköauto valmis",
+          "charging": "Ladataan",
+          "fault": "Vika",
+          "error": "Virhe"
+        },
+        "name": "Järjestelmän tila"
+      },
+      "dc_charger_running_state": {
+        "state": {
+          "idle": "Lepotila",
+          "occupied": "Varattu",
+          "preparing_comm": "Valmistellaan tiedonsiirtoa",
+          "charging": "Ladataan",
+          "fault": "Vika",
+          "scheduled": "Ajastettu",
+          "ended": "Päättynyt",
+          "charger_unavailable": "Ei käytettävissä",
+          "discharging": "Puretaan",
+          "alarm": "Hälytys",
+          "preparing_insulation": "Valmistellaan eristystestiä"
+        },
+        "name": "Käyntitila"
+      },
+      "plant_daily_grid_import_energy": {
+        "name": "Päivittäinen verkosta otettu energia"
+      },
+      "plant_daily_grid_export_energy": {
+        "name": "Päivittäinen verkkoon syötetty energia"
+      },
+      "plant_daily_third_party_inverter_energy_from_lifetime": {
+        "name": "Ulkopuolisten invertterien päivittäinen energia"
+      },
+      "power": {
+        "name": "Teho"
+      },
+      "plant_system_time": {
+        "name": "Järjestelmän aika"
+      },
+      "plant_system_timezone": {
+        "name": "Järjestelmän aikavyöhyke"
+      },
+      "plant_photovoltaic_power": {
+        "name": "Aurinkosähköteho"
+      },
+      "plant_grid_import_power": {
+        "name": "Verkosta otettu teho"
+      },
+      "plant_grid_export_power": {
+        "name": "Verkkoon syötetty teho"
+      },
+      "plant_battery_time_remaining": {
+        "name": "Akun jäljellä oleva käyttöaika"
+      },
+      "plant_consumed_power": {
+        "name": "Kulutusteho"
+      },
+      "plant_daily_pv_energy": {
+        "name": "Päivittäinen aurinkosähköenergia"
+      },
+      "plant_daily_battery_charge_energy": {
+        "name": "Akun päivittäinen latausenergia"
+      },
+      "plant_daily_battery_discharge_energy": {
+        "name": "Akun päivittäinen purkuenergia"
+      },
+      "inverter_startup_time": {
+        "name": "Käynnistysaika"
+      },
+      "inverter_shutdown_time": {
+        "name": "Sammutusaika"
+      },
+      "inverter_ess_current": {
+        "name": "Akun virta (arvio)"
+      },
+      "pv_string_accumulated_energy": {
+        "name": "Kertynyt energia"
+      },
+      "pv_string_daily_energy": {
+        "name": "Päivittäinen energia"
+      },
+      "modbus_max_data_fetch_time": {
+        "name": "Modbus-luvun enimmäiskesto uudelleenkäynnistyksen jälkeen"
+      },
+      "modbus_latest_fetch_time_high": {
+        "name": "Modbus-luvun kesto"
+      },
+      "voltage": {
+        "name": "Jännite"
+      },
+      "current": {
+        "name": "Virta"
+      },
+      "plant_grid_sensor_active_power": {
+        "name": "Verkon pätöteho"
+      },
+      "plant_grid_sensor_reactive_power": {
+        "name": "Verkon loisteho"
+      },
+      "plant_max_active_power": {
+        "name": "Suurin pätöteho"
+      },
+      "plant_max_apparent_power": {
+        "name": "Suurin näennäisteho"
+      },
+      "plant_ess_soc": {
+        "name": "Akun varaustila"
+      },
+      "plant_phase_a_active_power": {
+        "name": "Vaiheen A pätöteho"
+      },
+      "plant_phase_b_active_power": {
+        "name": "Vaiheen B pätöteho"
+      },
+      "plant_phase_c_active_power": {
+        "name": "Vaiheen C pätöteho"
+      },
+      "plant_phase_a_reactive_power": {
+        "name": "Vaiheen A loisteho"
+      },
+      "plant_phase_b_reactive_power": {
+        "name": "Vaiheen B loisteho"
+      },
+      "plant_phase_c_reactive_power": {
+        "name": "Vaiheen C loisteho"
+      },
+      "plant_general_alarm1": {
+        "name": "Yleinen hälytys 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Ohjelmistoversiot eivät täsmää",
+              "bit_1": "Pieni eristysresistanssi",
+              "bit_2": "Ylilämpötila",
+              "bit_3": "Laitevika",
+              "bit_4": "Järjestelmän maadoitusvika",
+              "bit_5": "Aurinkopaneeliketjun ylijännite",
+              "bit_6": "Aurinkopaneeliketjun käänteinen napaisuus",
+              "bit_7": "Aurinkopaneeliketjun takavirta",
+              "bit_8": "AFCI-vika",
+              "bit_9": "Sähkökatko",
+              "bit_10": "Verkon ylijännite",
+              "bit_11": "Verkon alijännite",
+              "bit_12": "Verkon ylitaajuus",
+              "bit_13": "Verkon alitaajuus",
+              "bit_14": "Verkkojännitteen epätasapaino",
+              "bit_15": "Lähtövirran tasavirtakomponentti ylittää rajan",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "plant_general_alarm2": {
+        "name": "Yleinen hälytys 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Vuotovirta ylittää rajan",
+              "bit_1": "Tiedonsiirtohäiriö",
+              "bit_2": "Järjestelmän sisäinen suojaus",
+              "bit_3": "AFCI-itsetestipiirin vika",
+              "bit_4": "Saarekekäytön suojaus",
+              "bit_5": "Manuaalisen käytön suojaus",
+              "bit_6": "Tuntematon hälytys (bitti 6)",
+              "bit_7": "Virheellinen vaihejärjestys",
+              "bit_8": "Oikosulku PE-johtimeen",
+              "bit_9": "Pehmokäynnistys epäonnistui",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "plant_general_alarm3": {
+        "name": "Yleinen hälytys 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Ohjelmistoversiot eivät täsmää",
+              "bit_1": "Pieni eristysresistanssi maahan",
+              "bit_2": "Liian korkea lämpötila",
+              "bit_3": "Laitevika",
+              "bit_4": "Alilämpötila",
+              "bit_5": "Sisäinen suojaus",
+              "bit_6": "Lämpökarkaaminen",
+              "bit_7": "Tuntematon hälytys (bitti 7)",
+              "bit_8": "Tuntematon hälytys (bitti 8)",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "plant_general_alarm4": {
+        "name": "Yleinen hälytys 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Ohjelmistoversiot eivät täsmää",
+              "bit_1": "Liian korkea lämpötila",
+              "bit_2": "Laitevika",
+              "bit_3": "Liian suuri vuotovirta saarekekäytön lähdössä",
+              "bit_4": "Nollajohtimen maadoitusvika",
+              "bit_5": "Verkkokaapeloinnin virheellinen vaihejärjestys",
+              "bit_6": "Invertterikaapeloinnin virheellinen vaihejärjestys",
+              "bit_7": "Verkon vaiheen puuttuminen",
+              "bit_8": "Tuntematon hälytys (bitti 8)",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "plant_general_alarm5": {
+        "name": "Yleinen hälytys 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Ohjelmistoversiot eivät täsmää",
+              "bit_1": "Pieni eristysresistanssi maahan",
+              "bit_2": "Ylilämpötila",
+              "bit_3": "Laitevika",
+              "bit_4": "Latausvika",
+              "bit_5": "Laitteen suojaus",
+              "bit_6": "Tuntematon hälytys (bitti 6)",
+              "bit_7": "Tuntematon hälytys (bitti 7)",
+              "bit_8": "Tuntematon hälytys (bitti 8)",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "plant_general_alarm6": {
+        "name": "Yleinen hälytys 6",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Yhdyskäytävän tiedonsiirtohäiriö",
+              "bit_1": "Mittarin tiedonsiirtohäiriö",
+              "bit_2": "AC-tehoanturin tiedonsiirtohäiriö",
+              "bit_3": "Tuntematon hälytys (bitti 3)",
+              "bit_4": "Tuntematon hälytys (bitti 4)",
+              "bit_5": "Tuntematon hälytys (bitti 5)",
+              "bit_6": "Verkkoon syöttötehon rajan ylityksen pakkosuojaus",
+              "bit_7": "Tuntematon hälytys (bitti 7)",
+              "bit_8": "Generaattorin käynnistys epäonnistui",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "CLS-vika",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "plant_general_alarm7": {
+        "name": "Yleinen hälytys 7",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "OVGR-vika",
+              "bit_1": "RPR-vika",
+              "bit_2": "Tuntematon hälytys (bitti 2)",
+              "bit_3": "Tuntematon hälytys (bitti 3)",
+              "bit_4": "Tuntematon hälytys (bitti 4)",
+              "bit_5": "Tuntematon hälytys (bitti 5)",
+              "bit_6": "Tuntematon hälytys (bitti 6)",
+              "bit_7": "Tuntematon hälytys (bitti 7)",
+              "bit_8": "Tuntematon hälytys (bitti 8)",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          },
+          "alarm_reason": {
+            "name": "Syy",
+            "state": {
+              "all_bits_set": "Kaikki bitit on asetettu; hälytyksen merkitys on tuntematon"
+            }
+          }
+        }
+      },
+      "plant_grid_code_rated_frequency": {
+        "name": "Verkkokoodin nimellistaajuus"
+      },
+      "plant_grid_code_rated_voltage": {
+        "name": "Verkkokoodin nimellisjännite"
+      },
+      "plant_current_control_command_value": {
+        "name": "Nykyinen ohjauskomennon arvo"
+      },
+      "plant_total_load_power": {
+        "name": "Kuormien kokonaisteho"
+      },
+      "plant_active_power": {
+        "name": "Pätöteho"
+      },
+      "plant_reactive_power": {
+        "name": "Loisteho"
+      },
+      "plant_sigen_photovoltaic_power": {
+        "name": "Sigen-aurinkosähköteho"
+      },
+      "plant_third_party_photovoltaic_power": {
+        "name": "Ulkopuolinen aurinkosähköteho"
+      },
+      "plant_ess_power": {
+        "name": "Akun teho"
+      },
+      "plant_available_max_active_power": {
+        "name": "Suurin käytettävissä oleva pätöteho"
+      },
+      "plant_available_min_active_power": {
+        "name": "Pienin käytettävissä oleva pätöteho"
+      },
+      "plant_available_max_reactive_power": {
+        "name": "Suurin käytettävissä oleva loisteho"
+      },
+      "plant_available_min_reactive_power": {
+        "name": "Pienin käytettävissä oleva loisteho"
+      },
+      "plant_ess_available_max_charging_power": {
+        "name": "Suurin käytettävissä oleva latausteho"
+      },
+      "plant_ess_available_max_discharging_power": {
+        "name": "Suurin käytettävissä oleva purkuteho"
+      },
+      "plant_grid_sensor_phase_a_active_power": {
+        "name": "Verkon vaiheen A pätöteho"
+      },
+      "plant_grid_sensor_phase_b_active_power": {
+        "name": "Verkon vaiheen B pätöteho"
+      },
+      "plant_grid_sensor_phase_c_active_power": {
+        "name": "Verkon vaiheen C pätöteho"
+      },
+      "plant_grid_sensor_phase_a_reactive_power": {
+        "name": "Verkon vaiheen A loisteho"
+      },
+      "plant_grid_sensor_phase_b_reactive_power": {
+        "name": "Verkon vaiheen B loisteho"
+      },
+      "plant_grid_sensor_phase_c_reactive_power": {
+        "name": "Verkon vaiheen C loisteho"
+      },
+      "plant_ess_rated_charging_power": {
+        "name": "ESS:n nimellislatausteho"
+      },
+      "plant_ess_rated_discharging_power": {
+        "name": "ESS:n nimellispurkuteho"
+      },
+      "plant_ess_available_max_charging_capacity": {
+        "name": "Suurin käytettävissä oleva latausenergia"
+      },
+      "plant_ess_available_max_discharging_capacity": {
+        "name": "Suurin käytettävissä oleva purkuenergia"
+      },
+      "plant_ess_rated_energy_capacity": {
+        "name": "Nimellisenergiakapasiteetti"
+      },
+      "plant_ess_charge_cut_off_soc": {
+        "name": "Latauksen lopetus-SOC"
+      },
+      "plant_ess_discharge_cut_off_soc": {
+        "name": "Purkamisen lopetus-SOC"
+      },
+      "plant_ess_soh": {
+        "name": "Akun kuntotila"
+      },
+      "plant_pv_total_daily_generation": {
+        "name": "Päivittäinen aurinkosähkötuotanto"
+      },
+      "plant_pv_generation_previous_day": {
+        "name": "Edellisen päivän aurinkosähkötuotanto"
+      },
+      "plant_ess_average_cell_temperature": {
+        "name": "ESS:n kennojen keskilämpötila"
+      },
+      "plant_accumulated_pv_energy": {
+        "name": "Aurinkosähkön kokonaistuotanto"
+      },
+      "plant_daily_consumed_energy": {
+        "name": "Päivittäinen kuormien energiankulutus"
+      },
+      "plant_accumulated_consumed_energy": {
+        "name": "Kuormien kokonaisenergiankulutus"
+      },
+      "plant_smart_load_1_total_consumption": {
+        "name": "[Älykäs kuorma 1] kokonaiskulutus"
+      },
+      "plant_smart_load_2_total_consumption": {
+        "name": "[Älykäs kuorma 2] kokonaiskulutus"
+      },
+      "plant_smart_load_3_total_consumption": {
+        "name": "[Älykäs kuorma 3] kokonaiskulutus"
+      },
+      "plant_smart_load_4_total_consumption": {
+        "name": "[Älykäs kuorma 4] kokonaiskulutus"
+      },
+      "plant_smart_load_5_total_consumption": {
+        "name": "[Älykäs kuorma 5] kokonaiskulutus"
+      },
+      "plant_smart_load_6_total_consumption": {
+        "name": "[Älykäs kuorma 6] kokonaiskulutus"
+      },
+      "plant_smart_load_7_total_consumption": {
+        "name": "[Älykäs kuorma 7] kokonaiskulutus"
+      },
+      "plant_smart_load_8_total_consumption": {
+        "name": "[Älykäs kuorma 8] kokonaiskulutus"
+      },
+      "plant_smart_load_9_total_consumption": {
+        "name": "[Älykäs kuorma 9] kokonaiskulutus"
+      },
+      "plant_smart_load_10_total_consumption": {
+        "name": "[Älykäs kuorma 10] kokonaiskulutus"
+      },
+      "plant_smart_load_11_total_consumption": {
+        "name": "[Älykäs kuorma 11] kokonaiskulutus"
+      },
+      "plant_smart_load_12_total_consumption": {
+        "name": "[Älykäs kuorma 12] kokonaiskulutus"
+      },
+      "plant_smart_load_13_total_consumption": {
+        "name": "[Älykäs kuorma 13] kokonaiskulutus"
+      },
+      "plant_smart_load_14_total_consumption": {
+        "name": "[Älykäs kuorma 14] kokonaiskulutus"
+      },
+      "plant_smart_load_15_total_consumption": {
+        "name": "[Älykäs kuorma 15] kokonaiskulutus"
+      },
+      "plant_smart_load_16_total_consumption": {
+        "name": "[Älykäs kuorma 16] kokonaiskulutus"
+      },
+      "plant_smart_load_17_total_consumption": {
+        "name": "[Älykäs kuorma 17] kokonaiskulutus"
+      },
+      "plant_smart_load_18_total_consumption": {
+        "name": "[Älykäs kuorma 18] kokonaiskulutus"
+      },
+      "plant_smart_load_19_total_consumption": {
+        "name": "[Älykäs kuorma 19] kokonaiskulutus"
+      },
+      "plant_smart_load_20_total_consumption": {
+        "name": "[Älykäs kuorma 20] kokonaiskulutus"
+      },
+      "plant_smart_load_21_total_consumption": {
+        "name": "[Älykäs kuorma 21] kokonaiskulutus"
+      },
+      "plant_smart_load_22_total_consumption": {
+        "name": "[Älykäs kuorma 22] kokonaiskulutus"
+      },
+      "plant_smart_load_23_total_consumption": {
+        "name": "[Älykäs kuorma 23] kokonaiskulutus"
+      },
+      "plant_smart_load_24_total_consumption": {
+        "name": "[Älykäs kuorma 24] kokonaiskulutus"
+      },
+      "plant_smart_load_1_power": {
+        "name": "[Älykäs kuorma 1] teho"
+      },
+      "plant_smart_load_2_power": {
+        "name": "[Älykäs kuorma 2] teho"
+      },
+      "plant_smart_load_3_power": {
+        "name": "[Älykäs kuorma 3] teho"
+      },
+      "plant_smart_load_4_power": {
+        "name": "[Älykäs kuorma 4] teho"
+      },
+      "plant_smart_load_5_power": {
+        "name": "[Älykäs kuorma 5] teho"
+      },
+      "plant_smart_load_6_power": {
+        "name": "[Älykäs kuorma 6] teho"
+      },
+      "plant_smart_load_7_power": {
+        "name": "[Älykäs kuorma 7] teho"
+      },
+      "plant_smart_load_8_power": {
+        "name": "[Älykäs kuorma 8] teho"
+      },
+      "plant_smart_load_9_power": {
+        "name": "[Älykäs kuorma 9] teho"
+      },
+      "plant_smart_load_10_power": {
+        "name": "[Älykäs kuorma 10] teho"
+      },
+      "plant_smart_load_11_power": {
+        "name": "[Älykäs kuorma 11] teho"
+      },
+      "plant_smart_load_12_power": {
+        "name": "[Älykäs kuorma 12] teho"
+      },
+      "plant_smart_load_13_power": {
+        "name": "[Älykäs kuorma 13] teho"
+      },
+      "plant_smart_load_14_power": {
+        "name": "[Älykäs kuorma 14] teho"
+      },
+      "plant_smart_load_15_power": {
+        "name": "[Älykäs kuorma 15] teho"
+      },
+      "plant_smart_load_16_power": {
+        "name": "[Älykäs kuorma 16] teho"
+      },
+      "plant_smart_load_17_power": {
+        "name": "[Älykäs kuorma 17] teho"
+      },
+      "plant_smart_load_18_power": {
+        "name": "[Älykäs kuorma 18] teho"
+      },
+      "plant_smart_load_19_power": {
+        "name": "[Älykäs kuorma 19] teho"
+      },
+      "plant_smart_load_20_power": {
+        "name": "[Älykäs kuorma 20] teho"
+      },
+      "plant_smart_load_21_power": {
+        "name": "[Älykäs kuorma 21] teho"
+      },
+      "plant_smart_load_22_power": {
+        "name": "[Älykäs kuorma 22] teho"
+      },
+      "plant_smart_load_23_power": {
+        "name": "[Älykäs kuorma 23] teho"
+      },
+      "plant_smart_load_24_power": {
+        "name": "[Älykäs kuorma 24] teho"
+      },
+      "plant_total_generation_of_third_party_inverter": {
+        "name": "Ulkopuolisten invertterien kokonaistuotanto"
+      },
+      "plant_accumulated_battery_charge_energy": {
+        "name": "ESS:n kokonaislatausenergia"
+      },
+      "plant_accumulated_battery_discharge_energy": {
+        "name": "ESS:n kokonaispurkuenergia"
+      },
+      "plant_total_charged_energy_of_the_evdc": {
+        "name": "EVDC:n kokonaislatausenergia"
+      },
+      "plant_total_discharged_energy_of_the_evdc": {
+        "name": "EVDC:n kokonaispurkuenergia"
+      },
+      "plant_accumulated_grid_import_energy": {
+        "name": "Verkosta otettu kokonaisenergia"
+      },
+      "plant_accumulated_grid_export_energy": {
+        "name": "Verkkoon syötetty kokonaisenergia"
+      },
+      "plant_total_energy_output_of_oil_fueled_generator": {
+        "name": "Polttoainegeneraattorin kokonaisenergiantuotanto"
+      },
+      "plant_total_charged_energy_of_the_evac": {
+        "name": "EVAC:n kokonaislatausenergia"
+      },
+      "plant_total_generation_of_self_pv": {
+        "name": "Oman aurinkosähkön kokonaistuotanto"
+      },
+      "inverter_model_type": {
+        "name": "Mallityyppi"
+      },
+      "inverter_serial_number": {
+        "name": "Sarjanumero"
+      },
+      "inverter_machine_firmware_version": {
+        "name": "Laiteohjelmistoversio"
+      },
+      "inverter_rated_active_power": {
+        "name": "Nimellispätöteho"
+      },
+      "inverter_max_apparent_power": {
+        "name": "Suurin näennäisteho"
+      },
+      "inverter_max_active_power": {
+        "name": "Suurin pätöteho"
+      },
+      "inverter_max_absorption_power": {
+        "name": "Suurin otettu teho"
+      },
+      "inverter_rated_battery_capacity": {
+        "name": "Akun nimelliskapasiteetti"
+      },
+      "inverter_ess_rated_charge_power": {
+        "name": "ESS:n nimellislatausteho"
+      },
+      "inverter_ess_rated_discharge_power": {
+        "name": "ESS:n nimellispurkuteho"
+      },
+      "inverter_ess_daily_charge_energy": {
+        "name": "Päivittäinen latausenergia"
+      },
+      "inverter_ess_accumulated_charge_energy": {
+        "name": "Kokonaislatausenergia"
+      },
+      "inverter_ess_daily_discharge_energy": {
+        "name": "Päivittäinen purkuenergia"
+      },
+      "inverter_ess_accumulated_discharge_energy": {
+        "name": "Kokonaispurkuenergia"
+      },
+      "inverter_max_active_power_adjustment_value": {
+        "name": "Suurin pätötehon säätö"
+      },
+      "inverter_min_active_power_adjustment_value": {
+        "name": "Pienin pätötehon säätö"
+      },
+      "inverter_max_reactive_power_adjustment_value_fed": {
+        "name": "Suurin syötetty loisteho"
+      },
+      "inverter_max_reactive_power_adjustment_value_absorbed": {
+        "name": "Suurin otettu loisteho"
+      },
+      "inverter_active_power": {
+        "name": "Pätöteho"
+      },
+      "inverter_reactive_power": {
+        "name": "Loisteho"
+      },
+      "inverter_ess_charge_discharge_power": {
+        "name": "Akun teho"
+      },
+      "inverter_ess_max_battery_charge_power": {
+        "name": "Akun suurin latausteho"
+      },
+      "inverter_ess_max_battery_discharge_power": {
+        "name": "Akun suurin purkuteho"
+      },
+      "inverter_ess_available_battery_charge_energy": {
+        "name": "Akun käytettävissä oleva latausenergia"
+      },
+      "inverter_ess_available_battery_discharge_energy": {
+        "name": "Akun käytettävissä oleva purkuenergia"
+      },
+      "inverter_ess_battery_soc": {
+        "name": "Akun varaustila"
+      },
+      "inverter_ess_battery_soh": {
+        "name": "Akun kuntotila"
+      },
+      "inverter_ess_average_cell_temperature": {
+        "name": "Akkukennojen keskilämpötila"
+      },
+      "inverter_ess_average_cell_voltage": {
+        "name": "Akkukennojen keskijännite"
+      },
+      "inverter_ess_maximum_battery_temperature": {
+        "name": "Akun enimmäislämpötila"
+      },
+      "inverter_ess_minimum_battery_temperature": {
+        "name": "Akun vähimmäislämpötila"
+      },
+      "inverter_ess_maximum_battery_cell_voltage": {
+        "name": "Akkukennon enimmäisjännite"
+      },
+      "inverter_ess_minimum_battery_cell_voltage": {
+        "name": "Akkukennon vähimmäisjännite"
+      },
+      "inverter_alarm1": {
+        "name": "Hälytys 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Ohjelmistoversiot eivät täsmää",
+              "bit_1": "Pieni eristysresistanssi",
+              "bit_2": "Ylilämpötila",
+              "bit_3": "Laitevika",
+              "bit_4": "Järjestelmän maadoitusvika",
+              "bit_5": "Aurinkopaneeliketjun ylijännite",
+              "bit_6": "Aurinkopaneeliketjun käänteinen napaisuus",
+              "bit_7": "Aurinkopaneeliketjun takavirta",
+              "bit_8": "AFCI-vika",
+              "bit_9": "Sähkökatko",
+              "bit_10": "Verkon ylijännite",
+              "bit_11": "Verkon alijännite",
+              "bit_12": "Verkon ylitaajuus",
+              "bit_13": "Verkon alitaajuus",
+              "bit_14": "Verkkojännitteen epätasapaino",
+              "bit_15": "Lähtövirran tasavirtakomponentti ylittää rajan",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "inverter_alarm2": {
+        "name": "Hälytys 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Vuotovirta ylittää rajan",
+              "bit_1": "Tiedonsiirtohäiriö",
+              "bit_2": "Järjestelmän sisäinen suojaus",
+              "bit_3": "AFCI-itsetestipiirin vika",
+              "bit_4": "Saarekekäytön suojaus",
+              "bit_5": "Manuaalisen käytön suojaus",
+              "bit_6": "Tuntematon hälytys (bitti 6)",
+              "bit_7": "Virheellinen vaihejärjestys",
+              "bit_8": "Oikosulku PE-johtimeen",
+              "bit_9": "Pehmokäynnistys epäonnistui",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "inverter_alarm3": {
+        "name": "Hälytys 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Ohjelmistoversiot eivät täsmää",
+              "bit_1": "Pieni eristysresistanssi maahan",
+              "bit_2": "Liian korkea lämpötila",
+              "bit_3": "Laitevika",
+              "bit_4": "Alilämpötila",
+              "bit_5": "Sisäinen suojaus",
+              "bit_6": "Lämpökarkaaminen",
+              "bit_7": "Tuntematon hälytys (bitti 7)",
+              "bit_8": "Tuntematon hälytys (bitti 8)",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "inverter_alarm4": {
+        "name": "Hälytys 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Ohjelmistoversiot eivät täsmää",
+              "bit_1": "Liian korkea lämpötila",
+              "bit_2": "Laitevika",
+              "bit_3": "Liian suuri vuotovirta saarekekäytön lähdössä",
+              "bit_4": "Nollajohtimen maadoitusvika",
+              "bit_5": "Verkkokaapeloinnin virheellinen vaihejärjestys",
+              "bit_6": "Invertterikaapeloinnin virheellinen vaihejärjestys",
+              "bit_7": "Verkon vaiheen puuttuminen",
+              "bit_8": "Tuntematon hälytys (bitti 8)",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "inverter_alarm5": {
+        "name": "Hälytys 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Ohjelmistoversiot eivät täsmää",
+              "bit_1": "Pieni eristysresistanssi maahan",
+              "bit_2": "Ylilämpötila",
+              "bit_3": "Laitevika",
+              "bit_4": "Latausvika",
+              "bit_5": "Laitteen suojaus",
+              "bit_6": "Tuntematon hälytys (bitti 6)",
+              "bit_7": "Tuntematon hälytys (bitti 7)",
+              "bit_8": "Tuntematon hälytys (bitti 8)",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "inverter_grid_frequency": {
+        "name": "Verkon taajuus"
+      },
+      "inverter_pcs_internal_temperature": {
+        "name": "PCS:n sisäinen lämpötila"
+      },
+      "inverter_rated_grid_voltage": {
+        "name": "Verkon nimellisjännite"
+      },
+      "inverter_rated_grid_frequency": {
+        "name": "Verkon nimellistaajuus"
+      },
+      "inverter_ab_line_voltage": {
+        "name": "Pääjännite A–B"
+      },
+      "inverter_bc_line_voltage": {
+        "name": "Pääjännite B–C"
+      },
+      "inverter_ca_line_voltage": {
+        "name": "Pääjännite C–A"
+      },
+      "inverter_phase_a_voltage": {
+        "name": "Vaiheen A jännite"
+      },
+      "inverter_phase_b_voltage": {
+        "name": "Vaiheen B jännite"
+      },
+      "inverter_phase_c_voltage": {
+        "name": "Vaiheen C jännite"
+      },
+      "inverter_phase_a_current": {
+        "name": "Vaiheen A virta"
+      },
+      "inverter_phase_b_current": {
+        "name": "Vaiheen B virta"
+      },
+      "inverter_phase_c_current": {
+        "name": "Vaiheen C virta"
+      },
+      "inverter_power_factor": {
+        "name": "Tehokerroin"
+      },
+      "inverter_pack_count": {
+        "name": "Akkupakettien määrä"
+      },
+      "inverter_pv_string_count": {
+        "name": "Aurinkopaneeliketjujen määrä"
+      },
+      "inverter_mppt_count": {
+        "name": "MPPT-seuraimien määrä"
+      },
+      "inverter_pv_power": {
+        "name": "Aurinkosähköteho"
+      },
+      "inverter_insulation_resistance": {
+        "name": "Eristysresistanssi"
+      },
+      "inverter_active_power_fixed_value_adjustment_feedback": {
+        "name": "Kiinteän pätötehosäädön palaute"
+      },
+      "inverter_reactive_power_fixed_value_adjustment_feedback": {
+        "name": "Kiinteän loistehosäädön palaute"
+      },
+      "inverter_active_power_percentage_adjustment_feedback": {
+        "name": "Pätötehon prosenttisäädön palaute"
+      },
+      "inverter_reactive_power_qs_adjustment_feedback": {
+        "name": "Loistehon Q/S-säädön palaute"
+      },
+      "inverter_power_factor_adjustment_feedback": {
+        "name": "Tehokertoimen säädön palaute"
+      },
+      "inverter_daily_pv_energy": {
+        "name": "Päivittäinen aurinkosähköenergia"
+      },
+      "inverter_accumulated_pv_energy": {
+        "name": "Aurinkosähkön kokonaisenergia"
+      },
+      "ac_charger_total_energy_consumed": {
+        "name": "Kulutettu kokonaisenergia"
+      },
+      "ac_charger_charging_power": {
+        "name": "Latausteho"
+      },
+      "ac_charger_rated_power": {
+        "name": "Nimellisteho"
+      },
+      "ac_charger_rated_current": {
+        "name": "Nimellisvirta"
+      },
+      "ac_charger_rated_voltage": {
+        "name": "Nimellisjännite"
+      },
+      "ac_charger_input_breaker_rated_current": {
+        "name": "Tulokatkaisijan nimellisvirta"
+      },
+      "ac_charger_alarm1": {
+        "name": "Hälytys 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Verkon ylijännite",
+              "bit_1": "Verkon alijännite",
+              "bit_2": "Ylikuormitus",
+              "bit_3": "Oikosulku",
+              "bit_4": "Latauslähdön ylivirta",
+              "bit_5": "Vuotovirta ylittää rajan",
+              "bit_6": "Maadoitusvika",
+              "bit_7": "Verkkokaapeloinnin virheellinen vaihejärjestys",
+              "bit_8": "PEN-vika",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "ac_charger_alarm2": {
+        "name": "Hälytys 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Vuotovirran tunnistuspiirin vika",
+              "bit_1": "Rele jumittunut",
+              "bit_2": "Ohjauspiirin vika",
+              "bit_3": "Apuvirtalähdemoduulin vika",
+              "bit_4": "Sähkölukon vika",
+              "bit_5": "Merkkivalopaneelin tiedonsiirtovika",
+              "bit_6": "Tuntematon hälytys (bitti 6)",
+              "bit_7": "Tuntematon hälytys (bitti 7)",
+              "bit_8": "Tuntematon hälytys (bitti 8)",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "ac_charger_alarm3": {
+        "name": "Hälytys 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Hälytystila",
+            "state": {
+              "no_problem": "Ei ongelmia",
+              "active": "Aktiivinen hälytys",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "alarm_codes": {
+            "name": "Hälytykset",
+            "state": {
+              "bit_0": "Liian korkea sisäinen lämpötila",
+              "bit_1": "Latauskaapelin vika",
+              "bit_2": "Mittarin tiedonsiirtovika",
+              "bit_3": "Tuntematon hälytys (bitti 3)",
+              "bit_4": "Tuntematon hälytys (bitti 4)",
+              "bit_5": "Tuntematon hälytys (bitti 5)",
+              "bit_6": "Tuntematon hälytys (bitti 6)",
+              "bit_7": "Tuntematon hälytys (bitti 7)",
+              "bit_8": "Tuntematon hälytys (bitti 8)",
+              "bit_9": "Tuntematon hälytys (bitti 9)",
+              "bit_10": "Tuntematon hälytys (bitti 10)",
+              "bit_11": "Tuntematon hälytys (bitti 11)",
+              "bit_12": "Tuntematon hälytys (bitti 12)",
+              "bit_13": "Tuntematon hälytys (bitti 13)",
+              "bit_14": "Tuntematon hälytys (bitti 14)",
+              "bit_15": "Tuntematon hälytys (bitti 15)",
+              "unknown": "Tuntematon hälytys"
+            }
+          },
+          "raw_value": {
+            "name": "Raaka-arvo"
+          }
+        }
+      },
+      "dc_charger_vehicle_battery_voltage": {
+        "name": "Ajoneuvon akun jännite"
+      },
+      "dc_charger_charging_current": {
+        "name": "Latausvirta"
+      },
+      "dc_charger_output_power": {
+        "name": "Lähtöteho"
+      },
+      "dc_charger_vehicle_soc": {
+        "name": "Ajoneuvon SOC"
+      },
+      "dc_charger_current_charging_capacity": {
+        "name": "Tämän latauskerran latausenergia"
+      },
+      "dc_charger_current_charging_duration": {
+        "name": "Tämän latauskerran latausaika"
+      },
+      "dc_charger_discharging_current": {
+        "name": "Purkamisvirta"
+      },
+      "dc_charger_current_discharging_capacity": {
+        "name": "Tämän latauskerran purkuenergia"
+      },
+      "dc_charger_current_discharging_duration": {
+        "name": "Tämän latauskerran purkuaika"
+      },
+      "dc_charger_total_charging_capacity": {
+        "name": "Kokonaislatausenergia"
+      },
+      "dc_charger_total_discharging_capacity": {
+        "name": "Kokonaispurkuenergia"
+      },
+      "dc_charger_rated_charging_power": {
+        "name": "Nimellislatausteho"
+      },
+      "dc_charger_rated_discharging_power": {
+        "name": "Nimellispurkuteho"
+      }
+    },
+    "binary_sensor": {
+      "plant_pv_generating": {
+        "name": "Aurinkosähkötuotanto käynnissä"
+      },
+      "plant_battery_charging": {
+        "name": "Akkua ladataan"
+      },
+      "plant_battery_discharging": {
+        "name": "Akkua puretaan"
+      },
+      "plant_exporting_to_grid": {
+        "name": "Syöttää sähköverkkoon"
+      },
+      "plant_importing_from_grid": {
+        "name": "Ottaa sähköverkosta"
+      }
+    },
+    "button": {
+      "plant_grid_power_loss_lockout_alarm_clear": {
+        "name": "Kuittaa sähkökatkon lukitushälytys"
+      },
+      "ac_charger_start": {
+        "name": "Aloita lataus"
+      },
+      "ac_charger_stop": {
+        "name": "Lopeta lataus"
+      },
+      "dc_charger_start": {
+        "name": "Aloita lataus"
+      },
+      "dc_charger_stop": {
+        "name": "Lopeta lataus"
+      }
+    },
+    "number": {
+      "plant_active_power_fixed_target": {
+        "name": "Kiinteä pätötehoasetus"
+      },
+      "plant_reactive_power_fixed_target": {
+        "name": "Kiinteä loistehoasetus"
+      },
+      "plant_active_power_percentage_target": {
+        "name": "Pätötehon prosenttiasetus"
+      },
+      "plant_qs_ratio_target": {
+        "name": "Q/S-asetus"
+      },
+      "plant_power_factor_target": {
+        "name": "Tehokerroinasetus"
+      },
+      "plant_ess_max_charging_limit": {
+        "name": "ESS:n lataustehon enimmäisraja"
+      },
+      "plant_ess_max_discharging_limit": {
+        "name": "ESS:n purkutehon enimmäisraja"
+      },
+      "plant_pv_max_power_limit": {
+        "name": "Aurinkosähkötehon enimmäisraja"
+      },
+      "plant_grid_point_maximum_export_limitation": {
+        "name": "Verkkoon syötettävän tehon raja"
+      },
+      "plant_grid_maximum_import_limitation": {
+        "name": "Verkosta otettavan tehon raja"
+      },
+      "plant_pcs_maximum_export_limitation": {
+        "name": "PCS:n vientitehon raja"
+      },
+      "plant_pcs_maximum_import_limitation": {
+        "name": "PCS:n tuontitehon raja"
+      },
+      "plant_phase_a_active_power_fixed_target": {
+        "name": "Vaiheen A kiinteä pätötehoasetus"
+      },
+      "plant_phase_b_active_power_fixed_target": {
+        "name": "Vaiheen B kiinteä pätötehoasetus"
+      },
+      "plant_phase_c_active_power_fixed_target": {
+        "name": "Vaiheen C kiinteä pätötehoasetus"
+      },
+      "plant_phase_a_reactive_power_fixed_target": {
+        "name": "Vaiheen A kiinteä loistehoasetus"
+      },
+      "plant_phase_b_reactive_power_fixed_target": {
+        "name": "Vaiheen B kiinteä loistehoasetus"
+      },
+      "plant_phase_c_reactive_power_fixed_target": {
+        "name": "Vaiheen C kiinteä loistehoasetus"
+      },
+      "plant_phase_a_active_power_percentage_target": {
+        "name": "Vaiheen A pätötehoprosentti"
+      },
+      "plant_phase_b_active_power_percentage_target": {
+        "name": "Vaiheen B pätötehoprosentti"
+      },
+      "plant_phase_c_active_power_percentage_target": {
+        "name": "Vaiheen C pätötehoprosentti"
+      },
+      "plant_phase_a_qs_ratio_target": {
+        "name": "Vaiheen A Q/S-suhde"
+      },
+      "plant_phase_b_qs_ratio_target": {
+        "name": "Vaiheen B Q/S-suhde"
+      },
+      "plant_phase_c_qs_ratio_target": {
+        "name": "Vaiheen C Q/S-suhde"
+      },
+      "plant_backup_soc": {
+        "name": "ESS:n varavoiman varaustaso"
+      },
+      "plant_charge_cut_off_soc": {
+        "name": "ESS:n latauksen lopetusvaraustaso"
+      },
+      "plant_discharge_cut_off_soc": {
+        "name": "ESS:n purkamisen lopetusvaraustaso"
+      },
+      "plant_active_power_regulation_gradient": {
+        "name": "[Verkkokoodi] pätötehon säätögradientti"
+      },
+      "plant_lvrt_reactive_power_comp_factor": {
+        "name": "[Verkkokoodi] LVRT-loistehon kompensointikerroin"
+      },
+      "plant_lvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Verkkokoodi] LVRT-vastakomponentin loistehon kompensointikerroin"
+      },
+      "plant_hvrt_reactive_power_comp_factor": {
+        "name": "[Verkkokoodi] HVRT-loistehon kompensointikerroin"
+      },
+      "plant_hvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Verkkokoodi] HVRT-vastakomponentin loistehon kompensointikerroin"
+      },
+      "plant_over_freq_derating_power_ramp_rate": {
+        "name": "[Verkkokoodi] ylitaajuuden tehonrajoituksen tehoramppi"
+      },
+      "plant_over_freq_derating_trigger_freq": {
+        "name": "[Verkkokoodi] ylitaajuuden tehonrajoituksen aktivointitaajuus"
+      },
+      "plant_over_freq_derating_cutoff_freq": {
+        "name": "[Verkkokoodi] ylitaajuuden tehonrajoituksen katkaisutaajuus"
+      },
+      "plant_under_freq_power_boost_power_ramp_rate": {
+        "name": "[Verkkokoodi] alitaajuuden tehonlisäyksen tehoramppi"
+      },
+      "plant_under_freq_power_boost_trigger_freq": {
+        "name": "[Verkkokoodi] alitaajuuden tehonlisäyksen aktivointitaajuus"
+      },
+      "plant_under_freq_power_boost_cutoff_freq": {
+        "name": "[Verkkokoodi] alitaajuuden tehonlisäyksen katkaisutaajuus"
+      },
+      "plant_pcc_power_factor_grid_import": {
+        "name": "Verkosta oton tehokertoimen asetus"
+      },
+      "plant_pcc_power_factor_grid_export": {
+        "name": "Verkkoon syötön tehokertoimen asetus"
+      },
+      "plant_ess_preheating_reserved_soc": {
+        "name": "ESS:n esilämmitykselle varattu SOC"
+      },
+      "inverter_active_power_fixed_adjustment": {
+        "name": "Kiinteä pätötehoasetus"
+      },
+      "inverter_reactive_power_fixed_adjustment": {
+        "name": "Kiinteä loistehoasetus"
+      },
+      "inverter_active_power_percentage_adjustment": {
+        "name": "Pätötehon prosenttiasetus"
+      },
+      "inverter_reactive_power_qs_adjustment": {
+        "name": "Loistehon Q/S-asetus"
+      },
+      "inverter_power_factor_adjustment": {
+        "name": "Tehokerroinasetus"
+      },
+      "ac_charger_output_current": {
+        "name": "Laturin lähtövirta"
+      },
+      "dc_charger_max_charging_power_limit": {
+        "name": "Lataustehon enimmäisraja"
+      },
+      "dc_charger_max_discharging_power_limit": {
+        "name": "Purkutehon enimmäisraja"
+      },
+      "plant_ess_preheating_tou_start_time": {
+        "name": "ESS:n esilämmityksen TOU-jakson {slot} aloitusaika"
+      },
+      "plant_ess_preheating_tou_end_time": {
+        "name": "ESS:n esilämmityksen TOU-jakson {slot} lopetusaika"
+      },
+      "plant_ess_preheating_tou_target_power": {
+        "name": "ESS:n esilämmityksen TOU-jakson {slot} tavoiteteho"
+      }
+    },
+    "select": {
+      "plant_remote_ems_control_mode": {
+        "name": "EMS-etäohjaustila"
+      },
+      "plant_ess_preheating_mode": {
+        "name": "ESS:n esilämmitystila"
+      },
+      "plant_lvrt_enable": {
+        "name": "[Verkkokoodi] LVRT-käyttöönotto"
+      },
+      "plant_lvrt_mode": {
+        "name": "[Verkkokoodi] LVRT-tila"
+      },
+      "plant_lvrt_grid_voltage_protection_blocking": {
+        "name": "[Verkkokoodi] LVRT-verkkojännitesuojan esto"
+      },
+      "plant_hvrt_enable": {
+        "name": "[Verkkokoodi] HVRT-käyttöönotto"
+      },
+      "plant_hvrt_mode": {
+        "name": "[Verkkokoodi] HVRT-tila"
+      },
+      "plant_hvrt_grid_voltage_protection_blocking": {
+        "name": "[Verkkokoodi] HVRT-verkkojännitesuojan esto"
+      },
+      "plant_over_freq_derating_enable": {
+        "name": "[Verkkokoodi] ylitaajuuden tehonrajoituksen käyttöönotto"
+      },
+      "plant_under_freq_power_boost_enable": {
+        "name": "[Verkkokoodi] alitaajuuden tehonlisäyksen käyttöönotto"
+      }
+    },
+    "switch": {
+      "plant_start_stop": {
+        "name": "Laitteisto päälle/pois"
+      },
+      "plant_remote_ems_enable": {
+        "name": "EMS-etäohjaus (Home Assistantin ohjaama)"
+      },
+      "plant_independent_phase_power_control_enable": {
+        "name": "Vaihekohtainen riippumaton tehonsäätö"
+      },
+      "plant_ess_preheating_enable": {
+        "name": "ESS:n esilämmityksen käyttöönotto"
+      },
+      "plant_ess_preheating_advance_enable": {
+        "name": "ESS:n ennakoivan esilämmityksen käyttöönotto"
+      },
+      "inverter_start_stop": {
+        "name": "Invertteri päälle/pois"
+      },
+      "ac_charger_start_stop": {
+        "name": "AC-laturi päälle/pois (vanhentunut)"
+      },
+      "dc_charging": {
+        "name": "DC-lataus (vanhentunut)"
+      }
+    }
+  },
+  "selector": {
+    "device_type": {
+      "options": {
+        "new_plant": "Uusi laitteisto",
+        "inverter": "Invertteri",
+        "ac_charger": "AC-laturi",
+        "dc_charger": "DC-laturi"
+      }
+    },
+    "configured_device": {
+      "options": {
+        "accumulated_energy": "Muuta kertyneen energian arvoja"
+      }
+    },
+    "entity_name_language": {
+      "options": {
+        "auto": "Automaattinen (Home Assistantin palvelimen kieli)",
+        "da": "Dansk",
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fi": "Suomi",
+        "fr": "Français",
+        "it": "Italiano",
+        "nb": "Norsk Bokmål",
+        "nl": "Nederlands",
+        "pl": "Polski",
+        "sv": "Svenska"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_pcc_power_factor": {
+      "message": "PCC-tehokerrointa ei voi asettaa arvoon {value}. Käytä arvoa -0.999–-0.8 tai 0.8–1."
+    },
+    "coordinator_unavailable": {
+      "message": "Kohdetta {entity_id} ei voi ohjata: laitteen tiedot eivät ole saatavilla."
+    }
+  },
+  "services": {
+    "set_operation_mode": {
+      "name": "Aseta käyttötila",
+      "description": "Aseta Sigenergy-järjestelmän käyttötila.",
+      "fields": {
+        "mode": {
+          "name": "Tila",
+          "description": "Asetettava käyttötila."
+        }
+      }
+    },
+    "set_remote_ems_control_mode": {
+      "name": "Aseta EMS-etäohjaustila",
+      "description": "Aseta Sigenergy-järjestelmän EMS-etäohjaustila.",
+      "fields": {
+        "mode": {
+          "name": "Tila",
+          "description": "Asetettava EMS-etäohjaustila."
+        }
+      }
+    },
+    "set_power_limit": {
+      "name": "Aseta tehoraja",
+      "description": "Aseta Sigenergy-järjestelmän tehoraja.",
+      "fields": {
+        "value": {
+          "name": "Arvo",
+          "description": "Asetettava tehorajan arvo."
+        }
+      }
+    }
+  }
+}

@@ -391,7 +391,8 @@ class TestStartupRecovery(unittest.IsolatedAsyncioTestCase):
             "DEFAULT_SCAN_INTERVAL": 5, "CONF_HOST": "host", "CONF_PORT": "port",
             "CONF_NAME": "name", "DOMAIN": "sigen", "PLATFORMS": ["sensor"],
             "register_parent_devices": Mock(), "generate_device_id": Mock(),
-            "async_update_options": Mock()}
+            "async_update_options": Mock(),
+            "async_load_entity_name_translations": AsyncMock(return_value=None)}
         exec(compile(ast.Module(body=[setup], type_ignores=[]), "__init__.py", "exec",
                      flags=__future__.annotations.compiler_flag), namespace)
         return namespace

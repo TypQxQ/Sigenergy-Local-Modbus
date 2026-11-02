@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=syntax-error
 
 from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
-from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL
+from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL, MIN_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,10 +46,12 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.latest_update_timing: dict[str, Any] = {}
         self._degraded_devices: set[str] = set()
         self.pv_restore_states: dict[str, dict[str, Any]] = {}
+        self.entity_name_translations: dict[str, str] | None = None
 
-        if scan_interval <= 1:
+        if scan_interval < MIN_SCAN_INTERVAL:
             scan_interval = DEFAULT_SCAN_INTERVAL
-            logger.warning("Invalid scan_interval <= 1, defaulting to %s", DEFAULT_SCAN_INTERVAL)
+            logger.warning("Invalid scan_interval below %s, defaulting to %s",
+                           MIN_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
         super().__init__(
             hass,

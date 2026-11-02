@@ -1,0 +1,1847 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Koble til Sigenergy-energilagringssystem",
+        "description": "Sett opp et Sigenergy-energilagringssystem for å overvåke og styre det via Home Assistant.\n\nKontroller at Sigenergy-systemet er koblet til samme nettverk som Home Assistant, og at installatøren har aktivert Modbus."
+      },
+      "dhcp_plant_config": {
+        "title": "Konfigurer Sigenergy-anlegg",
+        "description": "En ny Sigenergy-enhet ble funnet på {ip_address}. Velg konfigurasjonsalternativer:",
+        "data": {
+          "read_only": "Skrivebeskyttet modus"
+        },
+        "data_description": {
+          "read_only": "(Hindrer Home Assistant i å gjøre endringer i Sigenergy-systemet. Anbefales ved første oppsett. Kan endres senere i enhetsinnstillingene.)"
+        }
+      },
+      "device_type": {
+        "title": "Velg enhetstype",
+        "description": "Velg typen Sigenergy-enhet du vil legge til.",
+        "data": {
+          "device_type": "Enhetstype"
+        }
+      },
+      "plant_config": {
+        "title": "Konfigurer Sigenergy-anlegg",
+        "description": "Sett opp et nytt Sigenergy-anlegg for å overvåke og styre det via Home Assistant. Anleggs-ID settes automatisk til 247.",
+        "data": {
+          "host": "Vert (IP-adressen til hovedvekselretteren fra Sigenergy)",
+          "port": "Port (standard er 502)",
+          "inverter_slave_ids": "Enhets-ID for vekselretter (standard er 1)",
+          "ac_charger_slave_ids": "Enhets-ID-er for AC-ladere (kommaseparert ved flere; la stå tomt hvis det ikke finnes en AC-lader)",
+          "dc_charger_slave_ids": "ID-er for vekselrettere med tilkoblede DC-ladere (kommaseparert ved flere)",
+          "scan_interval": "Avlesningsintervall (sekunder)",
+          "migrate_yaml": "Overfør sensorverdier fra eldre YAML-konfigurasjon",
+          "migrate_yaml_description": "Hvis aktivert, importeres sensorenes startverdier fra den eldre YAML-konfigurasjonen, hvis den finnes.",
+          "read_only": "Skrivebeskyttet modus",
+          "slave_id": "Anleggets enhets-ID"
+        },
+        "data_description": {
+          "read_only": "(Hindrer Home Assistant i å gjøre endringer i Sigenergy-systemet. Anbefales ved første oppsett. Kan endres senere i enhetsinnstillingene.)"
+        }
+      },
+      "select_plant": {
+        "title": "Velg anlegg",
+        "description": "Velg Sigenergy-anlegget som denne enheten skal kobles til.",
+        "data": {
+          "parent_plant_id": "Anlegg"
+        }
+      },
+      "select_inverter": {
+        "title": "Velg vekselretter",
+        "description": "Velg Sigenergy-vekselretteren som denne DC-laderen skal kobles til.",
+        "data": {
+          "parent_inverter_id": "Vekselretter"
+        }
+      },
+      "inverter_config": {
+        "title": "Konfigurer Sigenergy-vekselretter",
+        "description": "Sett opp en ekstra Sigenergy-vekselretter som er koblet til samme anlegg.",
+        "data": {
+          "host": "Vert (IP-adressen til denne vekselretteren)",
+          "port": "Port (standard er 502)",
+          "slave_id": "Enhets-ID (mellom 1 og 246)"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Konfigurer Sigenergy-AC-lader",
+        "description": "Sett opp en Sigenergy-AC-lader. Angi vertsadresse og port for Modbus-serveren (hovedvekselretteren) og enhets-ID for denne AC-laderen.",
+        "data": {
+          "host": "Vert (IP-adressen til denne AC-laderen)",
+          "port": "Port (standard er 502)",
+          "slave_id": "Enhets-ID (mellom 1 og 246)"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Konfigurer Sigenergy-DC-lader",
+        "description": "Sett opp en Sigenergy-DC-lader som er koblet til den valgte vekselretteren."
+      },
+      "reconfigure": {
+        "title": "Konfigurer Sigenergy-systemet på nytt",
+        "description": "Oppdater listen over enhets-ID-er for dette Sigenergy-systemet.",
+        "data": {
+          "inverter_slave_ids": "Enhets-ID for vekselretter (standard er 1)",
+          "ac_charger_slave_ids": "Enhets-ID for AC-lader (la stå tomt hvis det ikke finnes en AC-lader)",
+          "dc_charger_slave_ids": "ID-er for vekselrettere med tilkoblede DC-ladere (kommaseparert ved flere)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kunne ikke koble til Sigenergy-systemet. Kontroller vert og port.",
+      "unknown": "Det oppsto en uventet feil.",
+      "invalid_integer_value": "Ugyldig heltallsverdi.",
+      "each_id_must_be_between_1_and_246": "Hver ID må være mellom 1 og 246.",
+      "duplicate_ids_found": "Fant dupliserte ID-er.",
+      "dc_charger_requires_inverter": "ID-er for DC-ladere må samsvare med konfigurerte vekselretter-ID-er.",
+      "ac_charger_conflicts_inverter": "ID-er for AC-ladere må være forskjellige fra vekselretter-ID-er.",
+      "no_plants_available": "Ingen anlegg er tilgjengelige. Legg til et anlegg først.",
+      "no_inverters_available": "Ingen vekselrettere er tilgjengelige på det valgte anlegget. Legg til en vekselretter først.",
+      "read_only_mode_error": "Kan ikke skrive til Sigenergy-systemet i skrivebeskyttet modus.",
+      "must_be_divisible_by_high": "Må være delelig med det høye intervallet.",
+      "cannot_be_lower_than_high": "Kan ikke være lavere enn det høye intervallet.",
+      "cannot_be_lower_than_medium": "Kan ikke være lavere enn det midtre intervallet.",
+      "invalid_host": "Ugyldig vertsadresse.",
+      "invalid_port": "Ugyldig portnummer. Må være mellom 1 og 65535.",
+      "required_value": "Angi en verdi.",
+      "must_be_number": "Angi et tall.",
+      "must_be_at_least_1": "Oppdateringsintervallet må være minst 1 sekund."
+    },
+    "abort": {
+      "already_configured": "Dette Sigenergy-systemet er allerede konfigurert.",
+      "no_plants_available": "Ingen anlegg er tilgjengelige. Legg til et anlegg først.",
+      "no_inverters_available": "Ingen vekselrettere er tilgjengelige på det valgte anlegget. Legg til en vekselretter først.",
+      "device_added": "Enheten ble lagt til i anleggskonfigurasjonen.",
+      "parent_plant_not_found": "Fant ikke konfigurasjonen til det overordnede anlegget.",
+      "parent_inverter_not_found": "Fant ikke konfigurasjonen til den overordnede vekselretteren.",
+      "parent_inverter_invalid": "Konfigurasjonen til den overordnede vekselretteren er ugyldig.",
+      "unknown_device_type": "Ukjent enhetstype.",
+      "no_devices_available": "Fant ingen enheter som kan konfigureres på nytt.",
+      "invalid_device_selection": "Ugyldig enhetsvalg.",
+      "device_removed": "Enheten ble fjernet.",
+      "plants_exist": "Et Sigenergy-anlegg er allerede konfigurert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sigenergy-alternativer",
+        "description": "Konfigurer alternativene for Sigenergy-integrasjonen.",
+        "menu_options": {
+          "select_device": "Enhetsinnstillinger",
+          "display_settings": "Visningsinnstillinger"
+        }
+      },
+      "select_device": {
+        "title": "Velg enhet som skal konfigureres på nytt",
+        "description": "Velg Sigenergy-enheten (anlegg, vekselretter, AC- eller DC-lader) du vil konfigurere på nytt eller fjerne.",
+        "data": {
+          "selected_device": "Enhet"
+        }
+      },
+      "accumulated_energy_config": {
+        "title": "Verdier for akkumulerte energisensorer",
+        "description": "Nullstill de akkumulerte energiverdiene (for eksempel energitotaler) ved å SENDE INN.\n\nAngi verdier i kWh.",
+        "data": {
+          "sensor.sigen_plant_accumulated_pv_energy": "Anleggets akkumulerte PV-energi",
+          "sensor.sigen_plant_accumulated_consumed_energy": "Anleggets akkumulerte energiforbruk",
+          "sensor.sigen_plant_accumulated_grid_import_energy": "Anleggets akkumulerte energi fra strømnettet",
+          "sensor.sigen_plant_accumulated_grid_export_energy": "Anleggets akkumulerte energi til strømnettet"
+        }
+      },
+      "plant_config": {
+        "title": "Konfigurer Sigenergy-anlegget på nytt",
+        "description": "Oppdater tilkoblingsopplysninger og avlesningsintervall for dette anlegget.",
+        "data": {
+          "host": "Vert (IP-adresse)",
+          "port": "Port",
+          "read_only": "Skrivebeskyttet modus",
+          "scan_interval": "Avlesningsintervall (sekunder)",
+          "slave_id": "Anleggets enhets-ID"
+        },
+        "data_description": {
+          "read_only": "(Hindrer Home Assistant i å gjøre endringer i Sigenergy-systemet. Anbefales ved første oppsett. Kan endres senere i enhetsinnstillingene.)"
+        }
+      },
+      "inverter_config": {
+        "title": "Konfigurer Sigenergy-vekselretteren på nytt",
+        "description": "Oppdater tilkoblingsopplysningene for denne vekselretteren, eller fjern den fra anlegget.",
+        "data": {
+          "remove_device": "Fjern denne vekselretteren",
+          "host": "Vert (IP-adresse)",
+          "port": "Port",
+          "slave_id": "Enhets-ID"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Konfigurer Sigenergy-AC-laderen på nytt",
+        "description": "Oppdater tilkoblingsopplysningene for denne AC-laderen, eller fjern den fra anlegget.",
+        "data": {
+          "remove_device": "Fjern denne AC-laderen",
+          "host": "Vert (IP-adresse)",
+          "port": "Port",
+          "slave_id": "Enhets-ID"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Konfigurer Sigenergy-DC-laderen på nytt",
+        "description": "Fjern denne DC-laderen fra den tilknyttede vekselretteren.",
+        "data": {
+          "remove_device": "Fjern denne DC-laderen"
+        }
+      },
+      "reconfigure": {
+        "title": "Konfigurer Sigenergy-systemet på nytt",
+        "description": "Oppdater listen over enhets-ID-er for dette Sigenergy-systemet.",
+        "data": {
+          "inverter_slave_ids": "Enhets-ID for vekselretter (standard er 1)",
+          "ac_charger_slave_ids": "Enhets-ID-er for AC-ladere (kommaseparert ved flere; la stå tomt hvis det ikke finnes en AC-lader)",
+          "dc_charger_slave_ids": "ID-er for vekselrettere med tilkoblede DC-ladere (kommaseparert ved flere)"
+        }
+      },
+      "display_settings": {
+        "title": "Visningsinnstillinger",
+        "description": "Velg språket for entitetenes standardnavn. Dialoger, statusetiketter og alarmdetaljer følger grensesnittspråket i Home Assistant.",
+        "data": {
+          "entity_name_language": "Språk for entitetsnavn"
+        },
+        "data_description": {
+          "entity_name_language": "Automatisk bruker Home Assistants serverspråk. Egne navn, entitets-ID-er og historikk bevares. Endring av språket laster integrasjonen på nytt."
+        }
+      }
+    },
+    "error": {
+      "invalid_integer_value": "Ugyldig heltallsverdi.",
+      "each_id_must_be_between_1_and_246": "Hver ID må være mellom 1 og 246.",
+      "duplicate_ids_found": "Fant dupliserte ID-er.",
+      "dc_charger_requires_inverter": "ID-er for DC-ladere må samsvare med konfigurerte vekselretter-ID-er.",
+      "ac_charger_conflicts_inverter": "ID-er for AC-ladere må være forskjellige fra vekselretter-ID-er.",
+      "invalid_host": "Ugyldig vertsadresse.",
+      "invalid_port": "Ugyldig portnummer. Må være mellom 1 og 65535.",
+      "must_be_divisible_by_high": "Må være delelig med det høye intervallet.",
+      "cannot_be_lower_than_high": "Kan ikke være lavere enn det høye intervallet.",
+      "cannot_be_lower_than_medium": "Kan ikke være lavere enn det midtre intervallet.",
+      "cannot_connect": "Kunne ikke koble til Sigenergy-systemet. Kontroller vert og port.",
+      "required_value": "Angi en verdi.",
+      "must_be_number": "Angi et tall.",
+      "must_be_at_least_1": "Oppdateringsintervallet må være minst 1 sekund.",
+      "invalid_entity_name_language": "Velg et støttet språk eller Automatisk."
+    },
+    "abort": {
+      "already_configured": "Dette Sigenergy-systemet er allerede konfigurert.",
+      "no_plants_available": "Ingen anlegg er tilgjengelige. Legg til et anlegg først.",
+      "no_inverters_available": "Ingen vekselrettere er tilgjengelige på det valgte anlegget. Legg til en vekselretter først.",
+      "device_added": "Enheten ble lagt til i anleggskonfigurasjonen.",
+      "parent_plant_not_found": "Fant ikke konfigurasjonen til det overordnede anlegget.",
+      "parent_inverter_not_found": "Fant ikke konfigurasjonen til den overordnede vekselretteren.",
+      "parent_inverter_invalid": "Konfigurasjonen til den overordnede vekselretteren er ugyldig.",
+      "unknown_device_type": "Ukjent enhetstype.",
+      "no_devices_available": "Fant ingen enheter som kan konfigureres på nytt.",
+      "invalid_device_selection": "Ugyldig enhetsvalg.",
+      "device_removed": "Enheten ble fjernet.",
+      "plants_exist": "Et Sigenergy-anlegg er allerede konfigurert.",
+      "legacy_energy_adjustment_removed": "Manuell justering av de eldre akkumulerte energisensorene støttes ikke lenger. Ingen verdier ble endret."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "plant_grid_sensor_status": {
+        "state": {
+          "offline": "Frakoblet",
+          "online": "Tilkoblet"
+        },
+        "name": "Status for nettsensor"
+      },
+      "plant_on_off_grid_status": {
+        "state": {
+          "on_grid": "Tilkoblet strømnettet",
+          "off_grid_auto": "Øydrift (automatisk)",
+          "off_grid_manual": "Øydrift (manuell)"
+        },
+        "name": "Status for nettilkobling"
+      },
+      "plant_running_state": {
+        "state": {
+          "standby": "Beredskap",
+          "running": "I drift",
+          "fault": "Feil",
+          "shutdown": "Avslått",
+          "environmental_abnormality": "Unormale miljøforhold"
+        },
+        "name": "Driftsstatus"
+      },
+      "plant_ems_work_mode": {
+        "state": {
+          "max_self_consumption": "Maksimalt egetforbruk",
+          "ai_mode": "KI-modus",
+          "tou": "Tidsavhengig tariff",
+          "full_feed_in_to_grid": "Full innmating til strømnettet",
+          "vpp_scheduling": "VPP-planlegging",
+          "remote_ems": "Fjernstyrt EMS",
+          "custom": "Egendefinert"
+        },
+        "name": "EMS-driftsmodus"
+      },
+      "inverter_running_state": {
+        "state": {
+          "standby": "Beredskap",
+          "running": "I drift",
+          "fault": "Feil",
+          "shutdown": "Avslått",
+          "environmental_abnormality": "Unormale miljøforhold"
+        },
+        "name": "Driftsstatus"
+      },
+      "inverter_output_type": {
+        "state": {
+          "l_n": "L/N",
+          "l1_l2_l3": "L1/L2/L3",
+          "l1_l2_l3_n": "L1/L2/L3/N",
+          "l1_l2_n": "L1/L2/N"
+        },
+        "name": "Utgangstype"
+      },
+      "ac_charger_system_state": {
+        "state": {
+          "initializing": "Initialiserer",
+          "not_connected": "Ikke tilkoblet",
+          "reserving": "Reserverer",
+          "preparing": "Forbereder",
+          "ev_ready": "Elbil klar",
+          "charging": "Lader",
+          "fault": "Feil",
+          "error": "Feil"
+        },
+        "name": "Systemstatus"
+      },
+      "dc_charger_running_state": {
+        "state": {
+          "idle": "Inaktiv",
+          "occupied": "Opptatt",
+          "preparing_comm": "Forbereder kommunikasjon",
+          "charging": "Lader",
+          "fault": "Feil",
+          "scheduled": "Planlagt",
+          "ended": "Avsluttet",
+          "charger_unavailable": "Utilgjengelig",
+          "discharging": "Lader ut",
+          "alarm": "Alarm",
+          "preparing_insulation": "Forbereder isolasjonstest"
+        },
+        "name": "Driftsstatus"
+      },
+      "plant_daily_grid_import_energy": {
+        "name": "Daglig energi fra strømnettet"
+      },
+      "plant_daily_grid_export_energy": {
+        "name": "Daglig energi til strømnettet"
+      },
+      "plant_daily_third_party_inverter_energy_from_lifetime": {
+        "name": "Daglig energi fra tredjepartsvekselrettere"
+      },
+      "power": {
+        "name": "Effekt"
+      },
+      "plant_system_time": {
+        "name": "Systemtid"
+      },
+      "plant_system_timezone": {
+        "name": "Systemtidssone"
+      },
+      "plant_photovoltaic_power": {
+        "name": "PV-effekt"
+      },
+      "plant_grid_import_power": {
+        "name": "Effekt fra strømnettet"
+      },
+      "plant_grid_export_power": {
+        "name": "Effekt til strømnettet"
+      },
+      "plant_battery_time_remaining": {
+        "name": "Gjenværende batteritid"
+      },
+      "plant_consumed_power": {
+        "name": "Forbrukseffekt"
+      },
+      "plant_daily_pv_energy": {
+        "name": "Daglig PV-energi"
+      },
+      "plant_daily_battery_charge_energy": {
+        "name": "Daglig energi til batterilading"
+      },
+      "plant_daily_battery_discharge_energy": {
+        "name": "Daglig energi fra batteriutlading"
+      },
+      "inverter_startup_time": {
+        "name": "Oppstartstid"
+      },
+      "inverter_shutdown_time": {
+        "name": "Avslåingstid"
+      },
+      "inverter_ess_current": {
+        "name": "Batteristrøm (estimert)"
+      },
+      "pv_string_accumulated_energy": {
+        "name": "Akkumulert energi"
+      },
+      "pv_string_daily_energy": {
+        "name": "Daglig energi"
+      },
+      "modbus_max_data_fetch_time": {
+        "name": "Maksimal Modbus-avlesningstid siden omstart"
+      },
+      "modbus_latest_fetch_time_high": {
+        "name": "Modbus-avlesningstid"
+      },
+      "voltage": {
+        "name": "Spenning"
+      },
+      "current": {
+        "name": "Strøm"
+      },
+      "plant_grid_sensor_active_power": {
+        "name": "Aktiv netteffekt"
+      },
+      "plant_grid_sensor_reactive_power": {
+        "name": "Reaktiv netteffekt"
+      },
+      "plant_max_active_power": {
+        "name": "Maksimal aktiv effekt"
+      },
+      "plant_max_apparent_power": {
+        "name": "Maksimal tilsynelatende effekt"
+      },
+      "plant_ess_soc": {
+        "name": "Batteriets ladetilstand"
+      },
+      "plant_phase_a_active_power": {
+        "name": "Aktiv effekt for fase A"
+      },
+      "plant_phase_b_active_power": {
+        "name": "Aktiv effekt for fase B"
+      },
+      "plant_phase_c_active_power": {
+        "name": "Aktiv effekt for fase C"
+      },
+      "plant_phase_a_reactive_power": {
+        "name": "Reaktiv effekt for fase A"
+      },
+      "plant_phase_b_reactive_power": {
+        "name": "Reaktiv effekt for fase B"
+      },
+      "plant_phase_c_reactive_power": {
+        "name": "Reaktiv effekt for fase C"
+      },
+      "plant_general_alarm1": {
+        "name": "Generell alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Programvareversjoner samsvarer ikke",
+              "bit_1": "Lav isolasjonsmotstand",
+              "bit_2": "Overtemperatur",
+              "bit_3": "Utstyrsfeil",
+              "bit_4": "Jordingsfeil i systemet",
+              "bit_5": "Overspenning i PV-streng",
+              "bit_6": "PV-streng tilkoblet med omvendt polaritet",
+              "bit_7": "Tilbakestrøm i PV-streng",
+              "bit_8": "AFCI-feil",
+              "bit_9": "Strømbrudd",
+              "bit_10": "Overspenning i strømnettet",
+              "bit_11": "Underspenning i strømnettet",
+              "bit_12": "Overfrekvens i strømnettet",
+              "bit_13": "Underfrekvens i strømnettet",
+              "bit_14": "Ubalanse i nettspenningen",
+              "bit_15": "DC-komponent i utgangsstrøm utenfor grensen",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "plant_general_alarm2": {
+        "name": "Generell alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Lekkasjestrøm utenfor grensen",
+              "bit_1": "Kommunikasjonsfeil",
+              "bit_2": "Intern systembeskyttelse",
+              "bit_3": "Feil i AFCI-selvtestkrets",
+              "bit_4": "Beskyttelse ved øydrift",
+              "bit_5": "Beskyttelse ved manuell betjening",
+              "bit_6": "Ukjent alarm (bit 6)",
+              "bit_7": "Feil faserekkefølge",
+              "bit_8": "Kortslutning til PE",
+              "bit_9": "Mykstart mislyktes",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "plant_general_alarm3": {
+        "name": "Generell alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Programvareversjoner samsvarer ikke",
+              "bit_1": "Lav isolasjonsmotstand til jord",
+              "bit_2": "For høy temperatur",
+              "bit_3": "Utstyrsfeil",
+              "bit_4": "Undertemperatur",
+              "bit_5": "Intern beskyttelse",
+              "bit_6": "Ukontrollert varmeutvikling",
+              "bit_7": "Ukjent alarm (bit 7)",
+              "bit_8": "Ukjent alarm (bit 8)",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "plant_general_alarm4": {
+        "name": "Generell alarm 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Programvareversjoner samsvarer ikke",
+              "bit_1": "For høy temperatur",
+              "bit_2": "Utstyrsfeil",
+              "bit_3": "For høy lekkasjestrøm på utgangen for øydrift",
+              "bit_4": "Jordingsfeil på nøytralleder",
+              "bit_5": "Feil faserekkefølge i nettkabling",
+              "bit_6": "Feil faserekkefølge i vekselretterkabling",
+              "bit_7": "Manglende nettfase",
+              "bit_8": "Ukjent alarm (bit 8)",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "plant_general_alarm5": {
+        "name": "Generell alarm 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Programvareversjoner samsvarer ikke",
+              "bit_1": "Lav isolasjonsmotstand til jord",
+              "bit_2": "Overtemperatur",
+              "bit_3": "Utstyrsfeil",
+              "bit_4": "Ladefeil",
+              "bit_5": "Utstyrsbeskyttelse",
+              "bit_6": "Ukjent alarm (bit 6)",
+              "bit_7": "Ukjent alarm (bit 7)",
+              "bit_8": "Ukjent alarm (bit 8)",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "plant_general_alarm6": {
+        "name": "Generell alarm 6",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Kommunikasjonsfeil med gateway",
+              "bit_1": "Kommunikasjonsfeil med måler",
+              "bit_2": "Kommunikasjonsfeil med AC-effektsensor",
+              "bit_3": "Ukjent alarm (bit 3)",
+              "bit_4": "Ukjent alarm (bit 4)",
+              "bit_5": "Ukjent alarm (bit 5)",
+              "bit_6": "Hard beskyttelse ved overskridelse av grensen for innmating",
+              "bit_7": "Ukjent alarm (bit 7)",
+              "bit_8": "Generatoren kunne ikke starte",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "CLS-feil",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "plant_general_alarm7": {
+        "name": "Generell alarm 7",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "OVGR-feil",
+              "bit_1": "RPR-feil",
+              "bit_2": "Ukjent alarm (bit 2)",
+              "bit_3": "Ukjent alarm (bit 3)",
+              "bit_4": "Ukjent alarm (bit 4)",
+              "bit_5": "Ukjent alarm (bit 5)",
+              "bit_6": "Ukjent alarm (bit 6)",
+              "bit_7": "Ukjent alarm (bit 7)",
+              "bit_8": "Ukjent alarm (bit 8)",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          },
+          "alarm_reason": {
+            "name": "Årsak",
+            "state": {
+              "all_bits_set": "Alle biter er satt; alarmens betydning er ukjent"
+            }
+          }
+        }
+      },
+      "plant_grid_code_rated_frequency": {
+        "name": "Nominell frekvens i nettkoden"
+      },
+      "plant_grid_code_rated_voltage": {
+        "name": "Nominell spenning i nettkoden"
+      },
+      "plant_current_control_command_value": {
+        "name": "Gjeldende verdi for styrekommando"
+      },
+      "plant_total_load_power": {
+        "name": "Samlet lasteffekt"
+      },
+      "plant_active_power": {
+        "name": "Aktiv effekt"
+      },
+      "plant_reactive_power": {
+        "name": "Reaktiv effekt"
+      },
+      "plant_sigen_photovoltaic_power": {
+        "name": "Sigen-PV-effekt"
+      },
+      "plant_third_party_photovoltaic_power": {
+        "name": "PV-effekt fra tredjepart"
+      },
+      "plant_ess_power": {
+        "name": "Batterieffekt"
+      },
+      "plant_available_max_active_power": {
+        "name": "Maksimal tilgjengelig aktiv effekt"
+      },
+      "plant_available_min_active_power": {
+        "name": "Minimal tilgjengelig aktiv effekt"
+      },
+      "plant_available_max_reactive_power": {
+        "name": "Maksimal tilgjengelig reaktiv effekt"
+      },
+      "plant_available_min_reactive_power": {
+        "name": "Minimal tilgjengelig reaktiv effekt"
+      },
+      "plant_ess_available_max_charging_power": {
+        "name": "Maksimal tilgjengelig ladeeffekt"
+      },
+      "plant_ess_available_max_discharging_power": {
+        "name": "Maksimal tilgjengelig utladningseffekt"
+      },
+      "plant_grid_sensor_phase_a_active_power": {
+        "name": "Aktiv effekt for nettfase A"
+      },
+      "plant_grid_sensor_phase_b_active_power": {
+        "name": "Aktiv effekt for nettfase B"
+      },
+      "plant_grid_sensor_phase_c_active_power": {
+        "name": "Aktiv effekt for nettfase C"
+      },
+      "plant_grid_sensor_phase_a_reactive_power": {
+        "name": "Reaktiv effekt for nettfase A"
+      },
+      "plant_grid_sensor_phase_b_reactive_power": {
+        "name": "Reaktiv effekt for nettfase B"
+      },
+      "plant_grid_sensor_phase_c_reactive_power": {
+        "name": "Reaktiv effekt for nettfase C"
+      },
+      "plant_ess_rated_charging_power": {
+        "name": "Nominell ESS-ladeeffekt"
+      },
+      "plant_ess_rated_discharging_power": {
+        "name": "Nominell ESS-utladningseffekt"
+      },
+      "plant_ess_available_max_charging_capacity": {
+        "name": "Maksimal tilgjengelig ladeenergi"
+      },
+      "plant_ess_available_max_discharging_capacity": {
+        "name": "Maksimal tilgjengelig utladningsenergi"
+      },
+      "plant_ess_rated_energy_capacity": {
+        "name": "Nominell energikapasitet"
+      },
+      "plant_ess_charge_cut_off_soc": {
+        "name": "SOC for stopp av lading"
+      },
+      "plant_ess_discharge_cut_off_soc": {
+        "name": "SOC for stopp av utlading"
+      },
+      "plant_ess_soh": {
+        "name": "Batteriets helsetilstand"
+      },
+      "plant_pv_total_daily_generation": {
+        "name": "Daglig PV-produksjon"
+      },
+      "plant_pv_generation_previous_day": {
+        "name": "PV-produksjon i går"
+      },
+      "plant_ess_average_cell_temperature": {
+        "name": "Gjennomsnittlig ESS-celletemperatur"
+      },
+      "plant_accumulated_pv_energy": {
+        "name": "Samlet PV-produksjon"
+      },
+      "plant_daily_consumed_energy": {
+        "name": "Daglig energiforbruk"
+      },
+      "plant_accumulated_consumed_energy": {
+        "name": "Samlet energiforbruk"
+      },
+      "plant_smart_load_1_total_consumption": {
+        "name": "[Smartlast 1] samlet forbruk"
+      },
+      "plant_smart_load_2_total_consumption": {
+        "name": "[Smartlast 2] samlet forbruk"
+      },
+      "plant_smart_load_3_total_consumption": {
+        "name": "[Smartlast 3] samlet forbruk"
+      },
+      "plant_smart_load_4_total_consumption": {
+        "name": "[Smartlast 4] samlet forbruk"
+      },
+      "plant_smart_load_5_total_consumption": {
+        "name": "[Smartlast 5] samlet forbruk"
+      },
+      "plant_smart_load_6_total_consumption": {
+        "name": "[Smartlast 6] samlet forbruk"
+      },
+      "plant_smart_load_7_total_consumption": {
+        "name": "[Smartlast 7] samlet forbruk"
+      },
+      "plant_smart_load_8_total_consumption": {
+        "name": "[Smartlast 8] samlet forbruk"
+      },
+      "plant_smart_load_9_total_consumption": {
+        "name": "[Smartlast 9] samlet forbruk"
+      },
+      "plant_smart_load_10_total_consumption": {
+        "name": "[Smartlast 10] samlet forbruk"
+      },
+      "plant_smart_load_11_total_consumption": {
+        "name": "[Smartlast 11] samlet forbruk"
+      },
+      "plant_smart_load_12_total_consumption": {
+        "name": "[Smartlast 12] samlet forbruk"
+      },
+      "plant_smart_load_13_total_consumption": {
+        "name": "[Smartlast 13] samlet forbruk"
+      },
+      "plant_smart_load_14_total_consumption": {
+        "name": "[Smartlast 14] samlet forbruk"
+      },
+      "plant_smart_load_15_total_consumption": {
+        "name": "[Smartlast 15] samlet forbruk"
+      },
+      "plant_smart_load_16_total_consumption": {
+        "name": "[Smartlast 16] samlet forbruk"
+      },
+      "plant_smart_load_17_total_consumption": {
+        "name": "[Smartlast 17] samlet forbruk"
+      },
+      "plant_smart_load_18_total_consumption": {
+        "name": "[Smartlast 18] samlet forbruk"
+      },
+      "plant_smart_load_19_total_consumption": {
+        "name": "[Smartlast 19] samlet forbruk"
+      },
+      "plant_smart_load_20_total_consumption": {
+        "name": "[Smartlast 20] samlet forbruk"
+      },
+      "plant_smart_load_21_total_consumption": {
+        "name": "[Smartlast 21] samlet forbruk"
+      },
+      "plant_smart_load_22_total_consumption": {
+        "name": "[Smartlast 22] samlet forbruk"
+      },
+      "plant_smart_load_23_total_consumption": {
+        "name": "[Smartlast 23] samlet forbruk"
+      },
+      "plant_smart_load_24_total_consumption": {
+        "name": "[Smartlast 24] samlet forbruk"
+      },
+      "plant_smart_load_1_power": {
+        "name": "[Smartlast 1] effekt"
+      },
+      "plant_smart_load_2_power": {
+        "name": "[Smartlast 2] effekt"
+      },
+      "plant_smart_load_3_power": {
+        "name": "[Smartlast 3] effekt"
+      },
+      "plant_smart_load_4_power": {
+        "name": "[Smartlast 4] effekt"
+      },
+      "plant_smart_load_5_power": {
+        "name": "[Smartlast 5] effekt"
+      },
+      "plant_smart_load_6_power": {
+        "name": "[Smartlast 6] effekt"
+      },
+      "plant_smart_load_7_power": {
+        "name": "[Smartlast 7] effekt"
+      },
+      "plant_smart_load_8_power": {
+        "name": "[Smartlast 8] effekt"
+      },
+      "plant_smart_load_9_power": {
+        "name": "[Smartlast 9] effekt"
+      },
+      "plant_smart_load_10_power": {
+        "name": "[Smartlast 10] effekt"
+      },
+      "plant_smart_load_11_power": {
+        "name": "[Smartlast 11] effekt"
+      },
+      "plant_smart_load_12_power": {
+        "name": "[Smartlast 12] effekt"
+      },
+      "plant_smart_load_13_power": {
+        "name": "[Smartlast 13] effekt"
+      },
+      "plant_smart_load_14_power": {
+        "name": "[Smartlast 14] effekt"
+      },
+      "plant_smart_load_15_power": {
+        "name": "[Smartlast 15] effekt"
+      },
+      "plant_smart_load_16_power": {
+        "name": "[Smartlast 16] effekt"
+      },
+      "plant_smart_load_17_power": {
+        "name": "[Smartlast 17] effekt"
+      },
+      "plant_smart_load_18_power": {
+        "name": "[Smartlast 18] effekt"
+      },
+      "plant_smart_load_19_power": {
+        "name": "[Smartlast 19] effekt"
+      },
+      "plant_smart_load_20_power": {
+        "name": "[Smartlast 20] effekt"
+      },
+      "plant_smart_load_21_power": {
+        "name": "[Smartlast 21] effekt"
+      },
+      "plant_smart_load_22_power": {
+        "name": "[Smartlast 22] effekt"
+      },
+      "plant_smart_load_23_power": {
+        "name": "[Smartlast 23] effekt"
+      },
+      "plant_smart_load_24_power": {
+        "name": "[Smartlast 24] effekt"
+      },
+      "plant_total_generation_of_third_party_inverter": {
+        "name": "Samlet produksjon fra tredjepartsvekselrettere"
+      },
+      "plant_accumulated_battery_charge_energy": {
+        "name": "Samlet ESS-ladeenergi"
+      },
+      "plant_accumulated_battery_discharge_energy": {
+        "name": "Samlet ESS-utladningsenergi"
+      },
+      "plant_total_charged_energy_of_the_evdc": {
+        "name": "Samlet EVDC-ladeenergi"
+      },
+      "plant_total_discharged_energy_of_the_evdc": {
+        "name": "Samlet EVDC-utladningsenergi"
+      },
+      "plant_accumulated_grid_import_energy": {
+        "name": "Samlet energi fra strømnettet"
+      },
+      "plant_accumulated_grid_export_energy": {
+        "name": "Samlet energi til strømnettet"
+      },
+      "plant_total_energy_output_of_oil_fueled_generator": {
+        "name": "Samlet energiproduksjon fra drivstoffgenerator"
+      },
+      "plant_total_charged_energy_of_the_evac": {
+        "name": "Samlet EVAC-ladeenergi"
+      },
+      "plant_total_generation_of_self_pv": {
+        "name": "Samlet produksjon fra eget PV-anlegg"
+      },
+      "inverter_model_type": {
+        "name": "Modelltype"
+      },
+      "inverter_serial_number": {
+        "name": "Serienummer"
+      },
+      "inverter_machine_firmware_version": {
+        "name": "Fastvareversjon"
+      },
+      "inverter_rated_active_power": {
+        "name": "Nominell aktiv effekt"
+      },
+      "inverter_max_apparent_power": {
+        "name": "Maksimal tilsynelatende effekt"
+      },
+      "inverter_max_active_power": {
+        "name": "Maksimal aktiv effekt"
+      },
+      "inverter_max_absorption_power": {
+        "name": "Maksimal absorbert effekt"
+      },
+      "inverter_rated_battery_capacity": {
+        "name": "Nominell batterikapasitet"
+      },
+      "inverter_ess_rated_charge_power": {
+        "name": "Nominell ESS-ladeeffekt"
+      },
+      "inverter_ess_rated_discharge_power": {
+        "name": "Nominell ESS-utladningseffekt"
+      },
+      "inverter_ess_daily_charge_energy": {
+        "name": "Daglig ladeenergi"
+      },
+      "inverter_ess_accumulated_charge_energy": {
+        "name": "Samlet ladeenergi"
+      },
+      "inverter_ess_daily_discharge_energy": {
+        "name": "Daglig utladningsenergi"
+      },
+      "inverter_ess_accumulated_discharge_energy": {
+        "name": "Samlet utladningsenergi"
+      },
+      "inverter_max_active_power_adjustment_value": {
+        "name": "Maksimal justering av aktiv effekt"
+      },
+      "inverter_min_active_power_adjustment_value": {
+        "name": "Minimal justering av aktiv effekt"
+      },
+      "inverter_max_reactive_power_adjustment_value_fed": {
+        "name": "Maksimal levert reaktiv effekt"
+      },
+      "inverter_max_reactive_power_adjustment_value_absorbed": {
+        "name": "Maksimal absorbert reaktiv effekt"
+      },
+      "inverter_active_power": {
+        "name": "Aktiv effekt"
+      },
+      "inverter_reactive_power": {
+        "name": "Reaktiv effekt"
+      },
+      "inverter_ess_charge_discharge_power": {
+        "name": "Batterieffekt"
+      },
+      "inverter_ess_max_battery_charge_power": {
+        "name": "Maksimal batteriladeeffekt"
+      },
+      "inverter_ess_max_battery_discharge_power": {
+        "name": "Maksimal batteriutladningseffekt"
+      },
+      "inverter_ess_available_battery_charge_energy": {
+        "name": "Tilgjengelig batteriladeenergi"
+      },
+      "inverter_ess_available_battery_discharge_energy": {
+        "name": "Tilgjengelig batteriutladningsenergi"
+      },
+      "inverter_ess_battery_soc": {
+        "name": "Batteriets ladetilstand"
+      },
+      "inverter_ess_battery_soh": {
+        "name": "Batteriets helsetilstand"
+      },
+      "inverter_ess_average_cell_temperature": {
+        "name": "Gjennomsnittlig battericelletemperatur"
+      },
+      "inverter_ess_average_cell_voltage": {
+        "name": "Gjennomsnittlig battericellespenning"
+      },
+      "inverter_ess_maximum_battery_temperature": {
+        "name": "Maksimal batteritemperatur"
+      },
+      "inverter_ess_minimum_battery_temperature": {
+        "name": "Minimal batteritemperatur"
+      },
+      "inverter_ess_maximum_battery_cell_voltage": {
+        "name": "Maksimal battericellespenning"
+      },
+      "inverter_ess_minimum_battery_cell_voltage": {
+        "name": "Minimal battericellespenning"
+      },
+      "inverter_alarm1": {
+        "name": "Alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Programvareversjoner samsvarer ikke",
+              "bit_1": "Lav isolasjonsmotstand",
+              "bit_2": "Overtemperatur",
+              "bit_3": "Utstyrsfeil",
+              "bit_4": "Jordingsfeil i systemet",
+              "bit_5": "Overspenning i PV-streng",
+              "bit_6": "PV-streng tilkoblet med omvendt polaritet",
+              "bit_7": "Tilbakestrøm i PV-streng",
+              "bit_8": "AFCI-feil",
+              "bit_9": "Strømbrudd",
+              "bit_10": "Overspenning i strømnettet",
+              "bit_11": "Underspenning i strømnettet",
+              "bit_12": "Overfrekvens i strømnettet",
+              "bit_13": "Underfrekvens i strømnettet",
+              "bit_14": "Ubalanse i nettspenningen",
+              "bit_15": "DC-komponent i utgangsstrøm utenfor grensen",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "inverter_alarm2": {
+        "name": "Alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Lekkasjestrøm utenfor grensen",
+              "bit_1": "Kommunikasjonsfeil",
+              "bit_2": "Intern systembeskyttelse",
+              "bit_3": "Feil i AFCI-selvtestkrets",
+              "bit_4": "Beskyttelse ved øydrift",
+              "bit_5": "Beskyttelse ved manuell betjening",
+              "bit_6": "Ukjent alarm (bit 6)",
+              "bit_7": "Feil faserekkefølge",
+              "bit_8": "Kortslutning til PE",
+              "bit_9": "Mykstart mislyktes",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "inverter_alarm3": {
+        "name": "Alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Programvareversjoner samsvarer ikke",
+              "bit_1": "Lav isolasjonsmotstand til jord",
+              "bit_2": "For høy temperatur",
+              "bit_3": "Utstyrsfeil",
+              "bit_4": "Undertemperatur",
+              "bit_5": "Intern beskyttelse",
+              "bit_6": "Ukontrollert varmeutvikling",
+              "bit_7": "Ukjent alarm (bit 7)",
+              "bit_8": "Ukjent alarm (bit 8)",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "inverter_alarm4": {
+        "name": "Alarm 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Programvareversjoner samsvarer ikke",
+              "bit_1": "For høy temperatur",
+              "bit_2": "Utstyrsfeil",
+              "bit_3": "For høy lekkasjestrøm på utgangen for øydrift",
+              "bit_4": "Jordingsfeil på nøytralleder",
+              "bit_5": "Feil faserekkefølge i nettkabling",
+              "bit_6": "Feil faserekkefølge i vekselretterkabling",
+              "bit_7": "Manglende nettfase",
+              "bit_8": "Ukjent alarm (bit 8)",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "inverter_alarm5": {
+        "name": "Alarm 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Programvareversjoner samsvarer ikke",
+              "bit_1": "Lav isolasjonsmotstand til jord",
+              "bit_2": "Overtemperatur",
+              "bit_3": "Utstyrsfeil",
+              "bit_4": "Ladefeil",
+              "bit_5": "Utstyrsbeskyttelse",
+              "bit_6": "Ukjent alarm (bit 6)",
+              "bit_7": "Ukjent alarm (bit 7)",
+              "bit_8": "Ukjent alarm (bit 8)",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "inverter_grid_frequency": {
+        "name": "Nettfrekvens"
+      },
+      "inverter_pcs_internal_temperature": {
+        "name": "Intern PCS-temperatur"
+      },
+      "inverter_rated_grid_voltage": {
+        "name": "Nominell nettspenning"
+      },
+      "inverter_rated_grid_frequency": {
+        "name": "Nominell nettfrekvens"
+      },
+      "inverter_ab_line_voltage": {
+        "name": "Linjespenning A–B"
+      },
+      "inverter_bc_line_voltage": {
+        "name": "Linjespenning B–C"
+      },
+      "inverter_ca_line_voltage": {
+        "name": "Linjespenning C–A"
+      },
+      "inverter_phase_a_voltage": {
+        "name": "Spenning for fase A"
+      },
+      "inverter_phase_b_voltage": {
+        "name": "Spenning for fase B"
+      },
+      "inverter_phase_c_voltage": {
+        "name": "Spenning for fase C"
+      },
+      "inverter_phase_a_current": {
+        "name": "Strøm for fase A"
+      },
+      "inverter_phase_b_current": {
+        "name": "Strøm for fase B"
+      },
+      "inverter_phase_c_current": {
+        "name": "Strøm for fase C"
+      },
+      "inverter_power_factor": {
+        "name": "Effektfaktor"
+      },
+      "inverter_pack_count": {
+        "name": "Antall batteripakker"
+      },
+      "inverter_pv_string_count": {
+        "name": "Antall PV-strenger"
+      },
+      "inverter_mppt_count": {
+        "name": "Antall MPPT-er"
+      },
+      "inverter_pv_power": {
+        "name": "PV-effekt"
+      },
+      "inverter_insulation_resistance": {
+        "name": "Isolasjonsmotstand"
+      },
+      "inverter_active_power_fixed_value_adjustment_feedback": {
+        "name": "Tilbakemelding for fast aktiv effekt"
+      },
+      "inverter_reactive_power_fixed_value_adjustment_feedback": {
+        "name": "Tilbakemelding for fast reaktiv effekt"
+      },
+      "inverter_active_power_percentage_adjustment_feedback": {
+        "name": "Tilbakemelding for prosentvis aktiv effekt"
+      },
+      "inverter_reactive_power_qs_adjustment_feedback": {
+        "name": "Tilbakemelding for reaktiv effekt Q/S"
+      },
+      "inverter_power_factor_adjustment_feedback": {
+        "name": "Tilbakemelding for effektfaktorjustering"
+      },
+      "inverter_daily_pv_energy": {
+        "name": "Daglig PV-energi"
+      },
+      "inverter_accumulated_pv_energy": {
+        "name": "Samlet PV-energi"
+      },
+      "ac_charger_total_energy_consumed": {
+        "name": "Samlet forbrukt energi"
+      },
+      "ac_charger_charging_power": {
+        "name": "Ladeeffekt"
+      },
+      "ac_charger_rated_power": {
+        "name": "Nominell effekt"
+      },
+      "ac_charger_rated_current": {
+        "name": "Nominell strøm"
+      },
+      "ac_charger_rated_voltage": {
+        "name": "Nominell spenning"
+      },
+      "ac_charger_input_breaker_rated_current": {
+        "name": "Inngangsbryterens nominelle strøm"
+      },
+      "ac_charger_alarm1": {
+        "name": "Alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Overspenning i strømnettet",
+              "bit_1": "Underspenning i strømnettet",
+              "bit_2": "Overbelastning",
+              "bit_3": "Kortslutning",
+              "bit_4": "Overstrøm på ladeutgang",
+              "bit_5": "Lekkasjestrøm utenfor grensen",
+              "bit_6": "Jordingsfeil",
+              "bit_7": "Feil faserekkefølge i nettkabling",
+              "bit_8": "PEN-feil",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "ac_charger_alarm2": {
+        "name": "Alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "Feil i deteksjonskrets for lekkasjestrøm",
+              "bit_1": "Relé sitter fast",
+              "bit_2": "Feil i pilotkrets",
+              "bit_3": "Feil i hjelpestrømforsyning",
+              "bit_4": "Feil i elektrisk lås",
+              "bit_5": "Kommunikasjonsfeil med lyspanel",
+              "bit_6": "Ukjent alarm (bit 6)",
+              "bit_7": "Ukjent alarm (bit 7)",
+              "bit_8": "Ukjent alarm (bit 8)",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "ac_charger_alarm3": {
+        "name": "Alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Alarmstatus",
+            "state": {
+              "no_problem": "Ingen problemer",
+              "active": "Aktiv alarm",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmer",
+            "state": {
+              "bit_0": "For høy intern temperatur",
+              "bit_1": "Feil i ladekabel",
+              "bit_2": "Kommunikasjonsfeil med måler",
+              "bit_3": "Ukjent alarm (bit 3)",
+              "bit_4": "Ukjent alarm (bit 4)",
+              "bit_5": "Ukjent alarm (bit 5)",
+              "bit_6": "Ukjent alarm (bit 6)",
+              "bit_7": "Ukjent alarm (bit 7)",
+              "bit_8": "Ukjent alarm (bit 8)",
+              "bit_9": "Ukjent alarm (bit 9)",
+              "bit_10": "Ukjent alarm (bit 10)",
+              "bit_11": "Ukjent alarm (bit 11)",
+              "bit_12": "Ukjent alarm (bit 12)",
+              "bit_13": "Ukjent alarm (bit 13)",
+              "bit_14": "Ukjent alarm (bit 14)",
+              "bit_15": "Ukjent alarm (bit 15)",
+              "unknown": "Ukjent alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Råverdi"
+          }
+        }
+      },
+      "dc_charger_vehicle_battery_voltage": {
+        "name": "Bilbatteriets spenning"
+      },
+      "dc_charger_charging_current": {
+        "name": "Ladestrøm"
+      },
+      "dc_charger_output_power": {
+        "name": "Utgangseffekt"
+      },
+      "dc_charger_vehicle_soc": {
+        "name": "Bilens SOC"
+      },
+      "dc_charger_current_charging_capacity": {
+        "name": "Ladeenergi i denne økten"
+      },
+      "dc_charger_current_charging_duration": {
+        "name": "Ladetid i denne økten"
+      },
+      "dc_charger_discharging_current": {
+        "name": "Utladningsstrøm"
+      },
+      "dc_charger_current_discharging_capacity": {
+        "name": "Utladningsenergi i denne økten"
+      },
+      "dc_charger_current_discharging_duration": {
+        "name": "Utladningstid i denne økten"
+      },
+      "dc_charger_total_charging_capacity": {
+        "name": "Samlet ladeenergi"
+      },
+      "dc_charger_total_discharging_capacity": {
+        "name": "Samlet utladningsenergi"
+      },
+      "dc_charger_rated_charging_power": {
+        "name": "Nominell ladeeffekt"
+      },
+      "dc_charger_rated_discharging_power": {
+        "name": "Nominell utladningseffekt"
+      }
+    },
+    "binary_sensor": {
+      "plant_pv_generating": {
+        "name": "PV-produksjon aktiv"
+      },
+      "plant_battery_charging": {
+        "name": "Batteriet lades"
+      },
+      "plant_battery_discharging": {
+        "name": "Batteriet lades ut"
+      },
+      "plant_exporting_to_grid": {
+        "name": "Mater inn til strømnettet"
+      },
+      "plant_importing_from_grid": {
+        "name": "Henter fra strømnettet"
+      }
+    },
+    "button": {
+      "plant_grid_power_loss_lockout_alarm_clear": {
+        "name": "Nullstill sperrealarm etter strømbrudd"
+      },
+      "ac_charger_start": {
+        "name": "Start lading"
+      },
+      "ac_charger_stop": {
+        "name": "Stopp lading"
+      },
+      "dc_charger_start": {
+        "name": "Start lading"
+      },
+      "dc_charger_stop": {
+        "name": "Stopp lading"
+      }
+    },
+    "number": {
+      "plant_active_power_fixed_target": {
+        "name": "Fast justering av aktiv effekt"
+      },
+      "plant_reactive_power_fixed_target": {
+        "name": "Fast justering av reaktiv effekt"
+      },
+      "plant_active_power_percentage_target": {
+        "name": "Prosentvis justering av aktiv effekt"
+      },
+      "plant_qs_ratio_target": {
+        "name": "Q/S-justering"
+      },
+      "plant_power_factor_target": {
+        "name": "Effektfaktorjustering"
+      },
+      "plant_ess_max_charging_limit": {
+        "name": "Grense for maksimal ESS-ladeeffekt"
+      },
+      "plant_ess_max_discharging_limit": {
+        "name": "Grense for maksimal ESS-utladningseffekt"
+      },
+      "plant_pv_max_power_limit": {
+        "name": "Grense for maksimal PV-effekt"
+      },
+      "plant_grid_point_maximum_export_limitation": {
+        "name": "Grense for effekt til strømnettet"
+      },
+      "plant_grid_maximum_import_limitation": {
+        "name": "Grense for effekt fra strømnettet"
+      },
+      "plant_pcs_maximum_export_limitation": {
+        "name": "Grense for PCS-eksporteffekt"
+      },
+      "plant_pcs_maximum_import_limitation": {
+        "name": "Grense for PCS-importeffekt"
+      },
+      "plant_phase_a_active_power_fixed_target": {
+        "name": "Fast justering av aktiv effekt for fase A"
+      },
+      "plant_phase_b_active_power_fixed_target": {
+        "name": "Fast justering av aktiv effekt for fase B"
+      },
+      "plant_phase_c_active_power_fixed_target": {
+        "name": "Fast justering av aktiv effekt for fase C"
+      },
+      "plant_phase_a_reactive_power_fixed_target": {
+        "name": "Fast justering av reaktiv effekt for fase A"
+      },
+      "plant_phase_b_reactive_power_fixed_target": {
+        "name": "Fast justering av reaktiv effekt for fase B"
+      },
+      "plant_phase_c_reactive_power_fixed_target": {
+        "name": "Fast justering av reaktiv effekt for fase C"
+      },
+      "plant_phase_a_active_power_percentage_target": {
+        "name": "Prosentvis aktiv effekt for fase A"
+      },
+      "plant_phase_b_active_power_percentage_target": {
+        "name": "Prosentvis aktiv effekt for fase B"
+      },
+      "plant_phase_c_active_power_percentage_target": {
+        "name": "Prosentvis aktiv effekt for fase C"
+      },
+      "plant_phase_a_qs_ratio_target": {
+        "name": "Q/S-forhold for fase A"
+      },
+      "plant_phase_b_qs_ratio_target": {
+        "name": "Q/S-forhold for fase B"
+      },
+      "plant_phase_c_qs_ratio_target": {
+        "name": "Q/S-forhold for fase C"
+      },
+      "plant_backup_soc": {
+        "name": "ESS-reserveladetilstand"
+      },
+      "plant_charge_cut_off_soc": {
+        "name": "ESS-ladetilstand for stopp av lading"
+      },
+      "plant_discharge_cut_off_soc": {
+        "name": "ESS-ladetilstand for stopp av utlading"
+      },
+      "plant_active_power_regulation_gradient": {
+        "name": "[Nettkode] reguleringsgradient for aktiv effekt"
+      },
+      "plant_lvrt_reactive_power_comp_factor": {
+        "name": "[Nettkode] LVRT-kompensasjonsfaktor for reaktiv effekt"
+      },
+      "plant_lvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Nettkode] LVRT-kompensasjonsfaktor for reaktiv effekt i negativ sekvens"
+      },
+      "plant_hvrt_reactive_power_comp_factor": {
+        "name": "[Nettkode] HVRT-kompensasjonsfaktor for reaktiv effekt"
+      },
+      "plant_hvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Nettkode] HVRT-kompensasjonsfaktor for reaktiv effekt i negativ sekvens"
+      },
+      "plant_over_freq_derating_power_ramp_rate": {
+        "name": "[Nettkode] effektrampe for reduksjon ved overfrekvens"
+      },
+      "plant_over_freq_derating_trigger_freq": {
+        "name": "[Nettkode] utløserfrekvens for effektreduksjon ved overfrekvens"
+      },
+      "plant_over_freq_derating_cutoff_freq": {
+        "name": "[Nettkode] utkoblingsfrekvens for effektreduksjon ved overfrekvens"
+      },
+      "plant_under_freq_power_boost_power_ramp_rate": {
+        "name": "[Nettkode] effektrampe for økning ved underfrekvens"
+      },
+      "plant_under_freq_power_boost_trigger_freq": {
+        "name": "[Nettkode] utløserfrekvens for effektøkning ved underfrekvens"
+      },
+      "plant_under_freq_power_boost_cutoff_freq": {
+        "name": "[Nettkode] utkoblingsfrekvens for effektøkning ved underfrekvens"
+      },
+      "plant_pcc_power_factor_grid_import": {
+        "name": "Justering av effektfaktor ved uttak fra strømnettet"
+      },
+      "plant_pcc_power_factor_grid_export": {
+        "name": "Justering av effektfaktor ved innmating"
+      },
+      "plant_ess_preheating_reserved_soc": {
+        "name": "Reservert SOC til ESS-forvarming"
+      },
+      "inverter_active_power_fixed_adjustment": {
+        "name": "Fast justering av aktiv effekt"
+      },
+      "inverter_reactive_power_fixed_adjustment": {
+        "name": "Fast justering av reaktiv effekt"
+      },
+      "inverter_active_power_percentage_adjustment": {
+        "name": "Prosentvis justering av aktiv effekt"
+      },
+      "inverter_reactive_power_qs_adjustment": {
+        "name": "Justering av reaktiv effekt Q/S"
+      },
+      "inverter_power_factor_adjustment": {
+        "name": "Effektfaktorjustering"
+      },
+      "ac_charger_output_current": {
+        "name": "Laderens utgangsstrøm"
+      },
+      "dc_charger_max_charging_power_limit": {
+        "name": "Grense for maksimal ladeeffekt"
+      },
+      "dc_charger_max_discharging_power_limit": {
+        "name": "Grense for maksimal utladningseffekt"
+      },
+      "plant_ess_preheating_tou_start_time": {
+        "name": "ESS-forvarming TOU-periode {slot} starttid"
+      },
+      "plant_ess_preheating_tou_end_time": {
+        "name": "ESS-forvarming TOU-periode {slot} sluttid"
+      },
+      "plant_ess_preheating_tou_target_power": {
+        "name": "ESS-forvarming TOU-periode {slot} måleffekt"
+      }
+    },
+    "select": {
+      "plant_remote_ems_control_mode": {
+        "name": "Fjernstyrt EMS-modus"
+      },
+      "plant_ess_preheating_mode": {
+        "name": "ESS-forvarmingsmodus"
+      },
+      "plant_lvrt_enable": {
+        "name": "[Nettkode] aktiver LVRT"
+      },
+      "plant_lvrt_mode": {
+        "name": "[Nettkode] LVRT-modus"
+      },
+      "plant_lvrt_grid_voltage_protection_blocking": {
+        "name": "[Nettkode] LVRT-blokkering av nettspenningsvern"
+      },
+      "plant_hvrt_enable": {
+        "name": "[Nettkode] aktiver HVRT"
+      },
+      "plant_hvrt_mode": {
+        "name": "[Nettkode] HVRT-modus"
+      },
+      "plant_hvrt_grid_voltage_protection_blocking": {
+        "name": "[Nettkode] HVRT-blokkering av nettspenningsvern"
+      },
+      "plant_over_freq_derating_enable": {
+        "name": "[Nettkode] aktiver effektreduksjon ved overfrekvens"
+      },
+      "plant_under_freq_power_boost_enable": {
+        "name": "[Nettkode] aktiver effektøkning ved underfrekvens"
+      }
+    },
+    "switch": {
+      "plant_start_stop": {
+        "name": "Anlegg av/på"
+      },
+      "plant_remote_ems_enable": {
+        "name": "Fjernstyrt EMS (styrt av Home Assistant)"
+      },
+      "plant_independent_phase_power_control_enable": {
+        "name": "Uavhengig effektstyring per fase"
+      },
+      "plant_ess_preheating_enable": {
+        "name": "Aktiver ESS-forvarming"
+      },
+      "plant_ess_preheating_advance_enable": {
+        "name": "Aktiver fremskyndet ESS-forvarming"
+      },
+      "inverter_start_stop": {
+        "name": "Vekselretter av/på"
+      },
+      "ac_charger_start_stop": {
+        "name": "AC-lader av/på (utgått)"
+      },
+      "dc_charging": {
+        "name": "DC-lading (utgått)"
+      }
+    }
+  },
+  "selector": {
+    "device_type": {
+      "options": {
+        "new_plant": "Nytt anlegg",
+        "inverter": "Vekselretter",
+        "ac_charger": "AC-lader",
+        "dc_charger": "DC-lader"
+      }
+    },
+    "configured_device": {
+      "options": {
+        "accumulated_energy": "Endre akkumulerte energiverdier"
+      }
+    },
+    "entity_name_language": {
+      "options": {
+        "auto": "Automatisk (Home Assistants serverspråk)",
+        "da": "Dansk",
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fi": "Suomi",
+        "fr": "Français",
+        "it": "Italiano",
+        "nb": "Norsk Bokmål",
+        "nl": "Nederlands",
+        "pl": "Polski",
+        "sv": "Svenska"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_pcc_power_factor": {
+      "message": "Kan ikke sette PCC-effektfaktoren til {value}. Bruk -0.999 til -0.8 eller 0.8 til 1."
+    },
+    "coordinator_unavailable": {
+      "message": "Kan ikke styre {entity_id}: enhetsdata er utilgjengelige."
+    }
+  },
+  "services": {
+    "set_operation_mode": {
+      "name": "Angi driftsmodus",
+      "description": "Angi driftsmodus for Sigenergy-systemet.",
+      "fields": {
+        "mode": {
+          "name": "Modus",
+          "description": "Driftsmodusen som skal angis."
+        }
+      }
+    },
+    "set_remote_ems_control_mode": {
+      "name": "Angi fjernstyrt EMS-modus",
+      "description": "Angi fjernstyrt EMS-modus for Sigenergy-systemet.",
+      "fields": {
+        "mode": {
+          "name": "Modus",
+          "description": "Den fjernstyrte EMS-modusen som skal angis."
+        }
+      }
+    },
+    "set_power_limit": {
+      "name": "Angi effektgrense",
+      "description": "Angi en effektgrense for Sigenergy-systemet.",
+      "fields": {
+        "value": {
+          "name": "Verdi",
+          "description": "Effektgrenseverdien som skal angis."
+        }
+      }
+    }
+  }
+}

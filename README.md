@@ -11,7 +11,8 @@
 
 Monitor and control your Sigenergy ESS locally over Modbus TCP: solar production,
 battery and grid power, energy counters, EMS modes, and AC/DC chargers.
-Includes English and Swedish names, status labels and setup dialogs.
+Localized names, status labels and setup dialogs in
+[11 languages](docs/migrations/2.0.md#localized-names-and-alarm-details).
 
 **Upgrading to 2.0?** Eight status sensors use new stored values. Read the
 [migration guide](docs/migrations/2.0.md) before updating automation comparisons.
@@ -63,8 +64,10 @@ Use the installation ZIP, not GitHub's source archive.
 3. Add more devices through **Add integration → Sigenergy ESS**, selecting the
    existing plant. Devices in a plant should normally share the same IP and port.
 
-Change read-only mode, polling interval and device settings using **Configure**
-on the integration entry.
+Use **Configure → Device settings** to change read-only mode, polling interval
+and device settings. **Configure → Display settings** lets you select the entity
+name language; **Automatic** follows the Home Assistant server language.
+Custom names, entity IDs and history are preserved.
 
 **Controls start in read-only mode.** To use them, disable read-only mode in the
 integration options and enable the required control entities in Home Assistant.

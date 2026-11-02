@@ -21,6 +21,7 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .device_registry_compat import parent_device_info
+from .entity_language import translated_entity_name
 from .common import (
     generate_device_id,
     generate_unique_entity_id,
@@ -99,8 +100,8 @@ class SigenergyEntity(CoordinatorEntity):
         self.entity_description = description
         self.hub = coordinator.hub
         # Keep legacy description names as a fallback and for identity generation.
-        # Home Assistant resolves display names from its server language and
-        # preserves names explicitly set by the user in the entity registry.
+        # Automatic uses HA's server language; the optional override is applied
+        # before registry setup. User-defined names remain owned by the registry.
         self._attr_translation_key = (
             getattr(description, "translation_key", None) or description.key
         )
@@ -123,6 +124,31 @@ class SigenergyEntity(CoordinatorEntity):
             self._attr_device_info = _generate_device_info(
                 device_type, device_name, coordinator
             )
+
+    async def async_prepare_to_add_to_hass(self) -> None:
+        """Apply the selected display language before registry/name resolution."""
+        await super().async_prepare_to_add_to_hass()
+        translations = getattr(self.coordinator, "entity_name_translations", None)
+        if not translations:
+            return
+        name = translated_entity_name(
+            translations, self.platform_data.domain, self.translation_key,
+            self.translation_placeholders,
+        )
+        if name is None:
+            return
+        # Keep HA's normal suggested ID even for newly discovered entities.
+        # Setting _attr_name alone would also localize ID generation.
+        if not hasattr(self, "_language_suggested_object_id"):
+            self._language_suggested_object_id = super().suggested_object_id
+        self._attr_name = name
+
+    @property
+    def suggested_object_id(self) -> str | None:
+        """Keep display-language overrides out of entity ID generation."""
+        if hasattr(self, "_language_suggested_object_id"):
+            return self._language_suggested_object_id
+        return super().suggested_object_id
 
     @callback
     def _handle_coordinator_update(self) -> None:

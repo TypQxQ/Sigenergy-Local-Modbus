@@ -31,7 +31,7 @@ jobs:
       - name: Test supported Modbus versions
         run: |
           for version in 4.12.3 4.12.4; do
-            python -m pip install "modbus-connection==$version"
+            python -m pip install "modbus-connection==$version" "voluptuous==0.15.2"
             python -m unittest discover -s tests -v
           done
       - name: Validate integration metadata
