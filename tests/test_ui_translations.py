@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock
 from test_alarm7_unknown_value import alarm, sensor_class
 
 P = Path(__file__).resolve().parents[1] / "custom_components" / "sigen"
+LANGUAGES = {"da", "de", "en", "es", "fi", "fr", "it", "nb", "nl", "pl", "sv"}
 
 
 def leaves(tree, prefix=()):
@@ -34,9 +35,9 @@ class TestUICatalogues(unittest.TestCase):
                           for path in (P / "translations").glob("*.json")}
         cls.sv = cls.catalogues["sv"]
 
-    def test_all_ui_strings_have_all_six_languages_and_matching_placeholders(self):
+    def test_all_ui_strings_have_all_supported_languages_and_matching_placeholders(self):
         english = dict(leaves(self.en))
-        self.assertEqual({"en", "sv", "de", "nl", "fr", "es"}, set(self.catalogues))
+        self.assertEqual(LANGUAGES, set(self.catalogues))
         self.assertEqual(self.en, self.catalogues["en"])
         placeholders = lambda text: Counter((name, spec, conversion)
             for _, name, spec, conversion in Formatter().parse(text) if name is not None)
@@ -54,7 +55,7 @@ class TestUICatalogues(unittest.TestCase):
     def test_new_languages_keep_numbers_and_electrical_channel_identifiers(self):
         english = dict(leaves(self.en))
         numbers = lambda text: re.findall(r"(?<!\w)-?\d+(?:\.\d+)?", text)
-        for language in ("de", "nl", "fr", "es"):
+        for language in sorted(LANGUAGES - {"en", "sv"}):
             for path, translated in leaves(self.catalogues[language]):
                 with self.subTest(language=language, path=path):
                     self.assertEqual(numbers(english[path]), numbers(translated))
@@ -62,7 +63,7 @@ class TestUICatalogues(unittest.TestCase):
                              self.catalogues[language]["entity"]["sensor"]["inverter_output_type"]["state"])
 
     def test_new_languages_localize_each_ui_section(self):
-        for language in ("de", "nl", "fr", "es"):
+        for language in sorted(LANGUAGES - {"en", "sv"}):
             translated = dict(leaves(self.catalogues[language]))
             english = dict(leaves(self.en))
             paths = (("config", "step", "user", "title"),

@@ -1,0 +1,1816 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Połącz z systemem magazynowania energii Sigenergy",
+        "description": "Skonfiguruj system magazynowania energii Sigenergy, aby monitorować go i sterować nim przez Home Assistant.\n\nUpewnij się, że system Sigenergy jest podłączony do tej samej sieci co Home Assistant oraz że instalator włączył Modbus."
+      },
+      "dhcp_plant_config": {
+        "title": "Skonfiguruj instalację Sigenergy",
+        "description": "Wykryto nowe urządzenie Sigenergy pod adresem {ip_address}. Wybierz opcje konfiguracji:",
+        "data": {
+          "read_only": "Tryb tylko do odczytu"
+        },
+        "data_description": {
+          "read_only": "(Uniemożliwia Home Assistant wprowadzanie zmian w systemie Sigenergy. Zalecany podczas pierwszej konfiguracji. Można go później zmienić w ustawieniach urządzenia.)"
+        }
+      },
+      "device_type": {
+        "title": "Wybierz typ urządzenia",
+        "description": "Wybierz typ urządzenia Sigenergy, które chcesz dodać.",
+        "data": {
+          "device_type": "Typ urządzenia"
+        }
+      },
+      "plant_config": {
+        "title": "Skonfiguruj instalację Sigenergy",
+        "description": "Skonfiguruj nową instalację Sigenergy, aby monitorować ją i sterować nią przez Home Assistant. Identyfikator instalacji zostanie automatycznie ustawiony na 247.",
+        "data": {
+          "host": "Host (adres IP głównego falownika Sigenergy)",
+          "port": "Port (domyślnie 502)",
+          "inverter_slave_ids": "Identyfikator falownika (domyślnie 1)",
+          "ac_charger_slave_ids": "Identyfikatory ładowarek AC (oddziel przecinkami, jeśli jest ich kilka; pozostaw puste, jeśli nie ma ładowarki AC)",
+          "dc_charger_slave_ids": "Identyfikatory falowników z podłączonymi ładowarkami DC (oddziel przecinkami, jeśli jest ich kilka)",
+          "scan_interval": "Interwał odczytu (sekundy)",
+          "migrate_yaml": "Przenieś wartości czujników ze starszej konfiguracji YAML",
+          "migrate_yaml_description": "Po włączeniu początkowe wartości czujników zostaną zaimportowane ze starszej konfiguracji YAML, jeśli istnieje.",
+          "read_only": "Tryb tylko do odczytu",
+          "slave_id": "Identyfikator urządzenia instalacji"
+        },
+        "data_description": {
+          "read_only": "(Uniemożliwia Home Assistant wprowadzanie zmian w systemie Sigenergy. Zalecany podczas pierwszej konfiguracji. Można go później zmienić w ustawieniach urządzenia.)"
+        }
+      },
+      "select_plant": {
+        "title": "Wybierz instalację",
+        "description": "Wybierz instalację Sigenergy, do której ma zostać podłączone to urządzenie.",
+        "data": {
+          "parent_plant_id": "Instalacja"
+        }
+      },
+      "select_inverter": {
+        "title": "Wybierz falownik",
+        "description": "Wybierz falownik Sigenergy, do którego ma zostać podłączona ta ładowarka DC.",
+        "data": {
+          "parent_inverter_id": "Falownik"
+        }
+      },
+      "inverter_config": {
+        "title": "Skonfiguruj falownik Sigenergy",
+        "description": "Skonfiguruj dodatkowy falownik Sigenergy podłączony do tej samej instalacji.",
+        "data": {
+          "host": "Host (adres IP tego falownika)",
+          "port": "Port (domyślnie 502)",
+          "slave_id": "Identyfikator urządzenia (od 1 do 246)"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Skonfiguruj ładowarkę AC Sigenergy",
+        "description": "Skonfiguruj ładowarkę AC Sigenergy. Podaj adres hosta i port serwera Modbus (głównego falownika) oraz identyfikator tej ładowarki AC.",
+        "data": {
+          "host": "Host (adres IP tej ładowarki AC)",
+          "port": "Port (domyślnie 502)",
+          "slave_id": "Identyfikator urządzenia (od 1 do 246)"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Skonfiguruj ładowarkę DC Sigenergy",
+        "description": "Skonfiguruj ładowarkę DC Sigenergy podłączoną do wybranego falownika."
+      },
+      "reconfigure": {
+        "title": "Zmień konfigurację systemu Sigenergy",
+        "description": "Zaktualizuj listę identyfikatorów urządzeń tego systemu Sigenergy.",
+        "data": {
+          "inverter_slave_ids": "Identyfikator falownika (domyślnie 1)",
+          "ac_charger_slave_ids": "Identyfikator ładowarki AC (pozostaw puste, jeśli nie ma ładowarki AC)",
+          "dc_charger_slave_ids": "Identyfikatory falowników z podłączonymi ładowarkami DC (oddziel przecinkami, jeśli jest ich kilka)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nie można połączyć się z systemem Sigenergy. Sprawdź host i port.",
+      "unknown": "Wystąpił nieoczekiwany błąd.",
+      "invalid_integer_value": "Nieprawidłowa wartość całkowita.",
+      "each_id_must_be_between_1_and_246": "Każdy identyfikator musi mieścić się w zakresie od 1 do 246.",
+      "duplicate_ids_found": "Znaleziono zduplikowane identyfikatory.",
+      "dc_charger_requires_inverter": "Identyfikatory ładowarek DC muszą odpowiadać identyfikatorom skonfigurowanych falowników.",
+      "ac_charger_conflicts_inverter": "Identyfikatory ładowarek AC muszą różnić się od identyfikatorów falowników.",
+      "no_plants_available": "Brak dostępnych instalacji. Najpierw dodaj instalację.",
+      "no_inverters_available": "Brak dostępnych falowników w wybranej instalacji. Najpierw dodaj falownik.",
+      "read_only_mode_error": "Nie można zapisywać zmian w systemie Sigenergy w trybie tylko do odczytu.",
+      "must_be_divisible_by_high": "Musi być podzielne przez wysoki interwał.",
+      "cannot_be_lower_than_high": "Nie może być mniejsze niż wysoki interwał.",
+      "cannot_be_lower_than_medium": "Nie może być mniejsze niż średni interwał.",
+      "invalid_host": "Nieprawidłowy adres hosta.",
+      "invalid_port": "Nieprawidłowy numer portu. Musi mieścić się w zakresie od 1 do 65535.",
+      "required_value": "Wprowadź wartość.",
+      "must_be_number": "Wprowadź liczbę.",
+      "must_be_at_least_1": "Interwał aktualizacji musi wynosić co najmniej 1 sekundę."
+    },
+    "abort": {
+      "already_configured": "Ten system Sigenergy jest już skonfigurowany.",
+      "no_plants_available": "Brak dostępnych instalacji. Najpierw dodaj instalację.",
+      "no_inverters_available": "Brak dostępnych falowników w wybranej instalacji. Najpierw dodaj falownik.",
+      "device_added": "Urządzenie zostało dodane do konfiguracji instalacji.",
+      "parent_plant_not_found": "Nie znaleziono konfiguracji instalacji nadrzędnej.",
+      "parent_inverter_not_found": "Nie znaleziono konfiguracji falownika nadrzędnego.",
+      "parent_inverter_invalid": "Konfiguracja falownika nadrzędnego jest nieprawidłowa.",
+      "unknown_device_type": "Nieznany typ urządzenia.",
+      "no_devices_available": "Nie znaleziono urządzeń do zmiany konfiguracji.",
+      "invalid_device_selection": "Nieprawidłowy wybór urządzenia.",
+      "device_removed": "Urządzenie zostało usunięte.",
+      "plants_exist": "Instalacja Sigenergy jest już skonfigurowana."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje Sigenergy",
+        "description": "Skonfiguruj opcje integracji Sigenergy."
+      },
+      "select_device": {
+        "title": "Wybierz urządzenie do zmiany konfiguracji",
+        "description": "Wybierz urządzenie Sigenergy (instalację, falownik, ładowarkę AC lub DC), którego konfigurację chcesz zmienić lub które chcesz usunąć.",
+        "data": {
+          "selected_device": "Urządzenie"
+        }
+      },
+      "accumulated_energy_config": {
+        "title": "Wartości czujników energii skumulowanej",
+        "description": "Wysłanie formularza zresetuje wartości czujników energii skumulowanej (np. sumy energii).\n\nWprowadź wartości w kWh.",
+        "data": {
+          "sensor.sigen_plant_accumulated_pv_energy": "Skumulowana energia PV instalacji",
+          "sensor.sigen_plant_accumulated_consumed_energy": "Skumulowane zużycie energii instalacji",
+          "sensor.sigen_plant_accumulated_grid_import_energy": "Skumulowana energia pobrana z sieci przez instalację",
+          "sensor.sigen_plant_accumulated_grid_export_energy": "Skumulowana energia oddana do sieci przez instalację"
+        }
+      },
+      "plant_config": {
+        "title": "Zmień konfigurację instalacji Sigenergy",
+        "description": "Zaktualizuj dane połączenia i interwał odczytu tej instalacji.",
+        "data": {
+          "host": "Host (adres IP)",
+          "port": "Port",
+          "read_only": "Tryb tylko do odczytu",
+          "scan_interval": "Interwał odczytu (sekundy)",
+          "slave_id": "Identyfikator urządzenia instalacji"
+        },
+        "data_description": {
+          "read_only": "(Uniemożliwia Home Assistant wprowadzanie zmian w systemie Sigenergy. Zalecany podczas pierwszej konfiguracji. Można go później zmienić w ustawieniach urządzenia.)"
+        }
+      },
+      "inverter_config": {
+        "title": "Zmień konfigurację falownika Sigenergy",
+        "description": "Zaktualizuj dane połączenia tego falownika lub usuń go z instalacji.",
+        "data": {
+          "remove_device": "Usuń ten falownik",
+          "host": "Host (adres IP)",
+          "port": "Port",
+          "slave_id": "Identyfikator urządzenia"
+        }
+      },
+      "ac_charger_config": {
+        "title": "Zmień konfigurację ładowarki AC Sigenergy",
+        "description": "Zaktualizuj dane połączenia tej ładowarki AC lub usuń ją z instalacji.",
+        "data": {
+          "remove_device": "Usuń tę ładowarkę AC",
+          "host": "Host (adres IP)",
+          "port": "Port",
+          "slave_id": "Identyfikator urządzenia"
+        }
+      },
+      "dc_charger_config": {
+        "title": "Zmień konfigurację ładowarki DC Sigenergy",
+        "description": "Usuń tę ładowarkę DC z powiązanego falownika.",
+        "data": {
+          "remove_device": "Usuń tę ładowarkę DC"
+        }
+      },
+      "reconfigure": {
+        "title": "Zmień konfigurację systemu Sigenergy",
+        "description": "Zaktualizuj listę identyfikatorów urządzeń tego systemu Sigenergy.",
+        "data": {
+          "inverter_slave_ids": "Identyfikator falownika (domyślnie 1)",
+          "ac_charger_slave_ids": "Identyfikatory ładowarek AC (oddziel przecinkami, jeśli jest ich kilka; pozostaw puste, jeśli nie ma ładowarki AC)",
+          "dc_charger_slave_ids": "Identyfikatory falowników z podłączonymi ładowarkami DC (oddziel przecinkami, jeśli jest ich kilka)"
+        }
+      }
+    },
+    "error": {
+      "invalid_integer_value": "Nieprawidłowa wartość całkowita.",
+      "each_id_must_be_between_1_and_246": "Każdy identyfikator musi mieścić się w zakresie od 1 do 246.",
+      "duplicate_ids_found": "Znaleziono zduplikowane identyfikatory.",
+      "dc_charger_requires_inverter": "Identyfikatory ładowarek DC muszą odpowiadać identyfikatorom skonfigurowanych falowników.",
+      "ac_charger_conflicts_inverter": "Identyfikatory ładowarek AC muszą różnić się od identyfikatorów falowników.",
+      "invalid_host": "Nieprawidłowy adres hosta.",
+      "invalid_port": "Nieprawidłowy numer portu. Musi mieścić się w zakresie od 1 do 65535.",
+      "must_be_divisible_by_high": "Musi być podzielne przez wysoki interwał.",
+      "cannot_be_lower_than_high": "Nie może być mniejsze niż wysoki interwał.",
+      "cannot_be_lower_than_medium": "Nie może być mniejsze niż średni interwał.",
+      "cannot_connect": "Nie można połączyć się z systemem Sigenergy. Sprawdź host i port.",
+      "required_value": "Wprowadź wartość.",
+      "must_be_number": "Wprowadź liczbę.",
+      "must_be_at_least_1": "Interwał aktualizacji musi wynosić co najmniej 1 sekundę."
+    },
+    "abort": {
+      "already_configured": "Ten system Sigenergy jest już skonfigurowany.",
+      "no_plants_available": "Brak dostępnych instalacji. Najpierw dodaj instalację.",
+      "no_inverters_available": "Brak dostępnych falowników w wybranej instalacji. Najpierw dodaj falownik.",
+      "device_added": "Urządzenie zostało dodane do konfiguracji instalacji.",
+      "parent_plant_not_found": "Nie znaleziono konfiguracji instalacji nadrzędnej.",
+      "parent_inverter_not_found": "Nie znaleziono konfiguracji falownika nadrzędnego.",
+      "parent_inverter_invalid": "Konfiguracja falownika nadrzędnego jest nieprawidłowa.",
+      "unknown_device_type": "Nieznany typ urządzenia.",
+      "no_devices_available": "Nie znaleziono urządzeń do zmiany konfiguracji.",
+      "invalid_device_selection": "Nieprawidłowy wybór urządzenia.",
+      "device_removed": "Urządzenie zostało usunięte.",
+      "plants_exist": "Instalacja Sigenergy jest już skonfigurowana.",
+      "legacy_energy_adjustment_removed": "Ręczna zmiana wartości starszych czujników energii skumulowanej nie jest już obsługiwana. Żadne wartości nie zostały zmienione."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "plant_grid_sensor_status": {
+        "state": {
+          "offline": "Bez połączenia",
+          "online": "Połączono"
+        },
+        "name": "Stan czujnika sieci"
+      },
+      "plant_on_off_grid_status": {
+        "state": {
+          "on_grid": "Połączono z siecią",
+          "off_grid_auto": "Praca wyspowa (automatyczna)",
+          "off_grid_manual": "Praca wyspowa (ręczna)"
+        },
+        "name": "Stan połączenia z siecią"
+      },
+      "plant_running_state": {
+        "state": {
+          "standby": "Czuwanie",
+          "running": "Praca",
+          "fault": "Usterka",
+          "shutdown": "Wyłączono",
+          "environmental_abnormality": "Nieprawidłowe warunki otoczenia"
+        },
+        "name": "Stan pracy"
+      },
+      "plant_ems_work_mode": {
+        "state": {
+          "max_self_consumption": "Maksymalne zużycie własne",
+          "ai_mode": "Tryb AI",
+          "tou": "Taryfa czasowa",
+          "full_feed_in_to_grid": "Pełne oddawanie do sieci",
+          "vpp_scheduling": "Harmonogram VPP",
+          "remote_ems": "Zdalne sterowanie EMS",
+          "custom": "Niestandardowy"
+        },
+        "name": "Tryb pracy EMS"
+      },
+      "inverter_running_state": {
+        "state": {
+          "standby": "Czuwanie",
+          "running": "Praca",
+          "fault": "Usterka",
+          "shutdown": "Wyłączono",
+          "environmental_abnormality": "Nieprawidłowe warunki otoczenia"
+        },
+        "name": "Stan pracy"
+      },
+      "inverter_output_type": {
+        "state": {
+          "l_n": "L/N",
+          "l1_l2_l3": "L1/L2/L3",
+          "l1_l2_l3_n": "L1/L2/L3/N",
+          "l1_l2_n": "L1/L2/N"
+        },
+        "name": "Typ wyjścia"
+      },
+      "ac_charger_system_state": {
+        "state": {
+          "initializing": "Inicjalizacja",
+          "not_connected": "Nie podłączono",
+          "reserving": "Rezerwowanie",
+          "preparing": "Przygotowanie",
+          "ev_ready": "Pojazd gotowy",
+          "charging": "Ładowanie",
+          "fault": "Usterka",
+          "error": "Błąd"
+        },
+        "name": "Stan systemu"
+      },
+      "dc_charger_running_state": {
+        "state": {
+          "idle": "Bezczynny",
+          "occupied": "Zajęty",
+          "preparing_comm": "Przygotowanie komunikacji",
+          "charging": "Ładowanie",
+          "fault": "Usterka",
+          "scheduled": "Zaplanowano",
+          "ended": "Zakończono",
+          "charger_unavailable": "Niedostępne",
+          "discharging": "Rozładowywanie",
+          "alarm": "Alarm",
+          "preparing_insulation": "Przygotowanie testu izolacji"
+        },
+        "name": "Stan pracy"
+      },
+      "plant_daily_grid_import_energy": {
+        "name": "Dzienna energia pobrana z sieci"
+      },
+      "plant_daily_grid_export_energy": {
+        "name": "Dzienna energia oddana do sieci"
+      },
+      "plant_daily_third_party_inverter_energy_from_lifetime": {
+        "name": "Dzienna energia z falowników zewnętrznych"
+      },
+      "power": {
+        "name": "Moc"
+      },
+      "plant_system_time": {
+        "name": "Czas systemowy"
+      },
+      "plant_system_timezone": {
+        "name": "Strefa czasowa systemu"
+      },
+      "plant_photovoltaic_power": {
+        "name": "Moc PV"
+      },
+      "plant_grid_import_power": {
+        "name": "Moc pobierana z sieci"
+      },
+      "plant_grid_export_power": {
+        "name": "Moc oddawana do sieci"
+      },
+      "plant_battery_time_remaining": {
+        "name": "Pozostały czas pracy akumulatora"
+      },
+      "plant_consumed_power": {
+        "name": "Moc zużywana"
+      },
+      "plant_daily_pv_energy": {
+        "name": "Dzienna energia PV"
+      },
+      "plant_daily_battery_charge_energy": {
+        "name": "Dzienna energia ładowania akumulatora"
+      },
+      "plant_daily_battery_discharge_energy": {
+        "name": "Dzienna energia rozładowania akumulatora"
+      },
+      "inverter_startup_time": {
+        "name": "Czas uruchomienia"
+      },
+      "inverter_shutdown_time": {
+        "name": "Czas wyłączenia"
+      },
+      "inverter_ess_current": {
+        "name": "Prąd akumulatora (szacowany)"
+      },
+      "pv_string_accumulated_energy": {
+        "name": "Energia skumulowana"
+      },
+      "pv_string_daily_energy": {
+        "name": "Energia dzienna"
+      },
+      "modbus_max_data_fetch_time": {
+        "name": "Maksymalny czas odczytu Modbus od ponownego uruchomienia"
+      },
+      "modbus_latest_fetch_time_high": {
+        "name": "Czas odczytu Modbus"
+      },
+      "voltage": {
+        "name": "Napięcie"
+      },
+      "current": {
+        "name": "Prąd"
+      },
+      "plant_grid_sensor_active_power": {
+        "name": "Moc czynna sieci"
+      },
+      "plant_grid_sensor_reactive_power": {
+        "name": "Moc bierna sieci"
+      },
+      "plant_max_active_power": {
+        "name": "Maksymalna moc czynna"
+      },
+      "plant_max_apparent_power": {
+        "name": "Maksymalna moc pozorna"
+      },
+      "plant_ess_soc": {
+        "name": "Stan naładowania akumulatora"
+      },
+      "plant_phase_a_active_power": {
+        "name": "Moc czynna fazy A"
+      },
+      "plant_phase_b_active_power": {
+        "name": "Moc czynna fazy B"
+      },
+      "plant_phase_c_active_power": {
+        "name": "Moc czynna fazy C"
+      },
+      "plant_phase_a_reactive_power": {
+        "name": "Moc bierna fazy A"
+      },
+      "plant_phase_b_reactive_power": {
+        "name": "Moc bierna fazy B"
+      },
+      "plant_phase_c_reactive_power": {
+        "name": "Moc bierna fazy C"
+      },
+      "plant_general_alarm1": {
+        "name": "Alarm ogólny 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Niezgodność wersji oprogramowania",
+              "bit_1": "Niska rezystancja izolacji",
+              "bit_2": "Zbyt wysoka temperatura",
+              "bit_3": "Usterka urządzenia",
+              "bit_4": "Usterka uziemienia systemu",
+              "bit_5": "Przepięcie w łańcuchu PV",
+              "bit_6": "Odwrócona polaryzacja łańcucha PV",
+              "bit_7": "Prąd wsteczny w łańcuchu PV",
+              "bit_8": "Usterka AFCI",
+              "bit_9": "Przerwa w zasilaniu sieciowym",
+              "bit_10": "Zbyt wysokie napięcie sieci",
+              "bit_11": "Zbyt niskie napięcie sieci",
+              "bit_12": "Zbyt wysoka częstotliwość sieci",
+              "bit_13": "Zbyt niska częstotliwość sieci",
+              "bit_14": "Asymetria napięcia sieci",
+              "bit_15": "Składowa stała prądu wyjściowego poza limitem",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "plant_general_alarm2": {
+        "name": "Alarm ogólny 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Prąd upływu poza limitem",
+              "bit_1": "Nieprawidłowa komunikacja",
+              "bit_2": "Wewnętrzne zabezpieczenie systemu",
+              "bit_3": "Usterka obwodu autotestu AFCI",
+              "bit_4": "Zabezpieczenie pracy wyspowej",
+              "bit_5": "Zabezpieczenie obsługi ręcznej",
+              "bit_6": "Nieznany alarm (bit 6)",
+              "bit_7": "Nieprawidłowa kolejność faz",
+              "bit_8": "Zwarcie do PE",
+              "bit_9": "Nieudany łagodny rozruch",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "plant_general_alarm3": {
+        "name": "Alarm ogólny 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Niezgodność wersji oprogramowania",
+              "bit_1": "Niska rezystancja izolacji względem ziemi",
+              "bit_2": "Zbyt wysoka temperatura",
+              "bit_3": "Usterka urządzenia",
+              "bit_4": "Zbyt niska temperatura",
+              "bit_5": "Zabezpieczenie wewnętrzne",
+              "bit_6": "Ucieczka termiczna",
+              "bit_7": "Nieznany alarm (bit 7)",
+              "bit_8": "Nieznany alarm (bit 8)",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "plant_general_alarm4": {
+        "name": "Alarm ogólny 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Niezgodność wersji oprogramowania",
+              "bit_1": "Zbyt wysoka temperatura",
+              "bit_2": "Usterka urządzenia",
+              "bit_3": "Nadmierny prąd upływu na wyjściu wyspowym",
+              "bit_4": "Usterka uziemienia przewodu neutralnego",
+              "bit_5": "Nieprawidłowa kolejność faz w okablowaniu sieci",
+              "bit_6": "Nieprawidłowa kolejność faz w okablowaniu falownika",
+              "bit_7": "Zanik fazy sieci",
+              "bit_8": "Nieznany alarm (bit 8)",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "plant_general_alarm5": {
+        "name": "Alarm ogólny 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Niezgodność wersji oprogramowania",
+              "bit_1": "Niska rezystancja izolacji względem ziemi",
+              "bit_2": "Zbyt wysoka temperatura",
+              "bit_3": "Usterka urządzenia",
+              "bit_4": "Usterka ładowania",
+              "bit_5": "Zabezpieczenie urządzenia",
+              "bit_6": "Nieznany alarm (bit 6)",
+              "bit_7": "Nieznany alarm (bit 7)",
+              "bit_8": "Nieznany alarm (bit 8)",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "plant_general_alarm6": {
+        "name": "Alarm ogólny 6",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Nieprawidłowa komunikacja z bramą",
+              "bit_1": "Nieprawidłowa komunikacja z licznikiem",
+              "bit_2": "Nieprawidłowa komunikacja z czujnikiem mocy AC",
+              "bit_3": "Nieznany alarm (bit 3)",
+              "bit_4": "Nieznany alarm (bit 4)",
+              "bit_5": "Nieznany alarm (bit 5)",
+              "bit_6": "Twarde zabezpieczenie przed przekroczeniem limitu mocy oddawanej do sieci",
+              "bit_7": "Nieznany alarm (bit 7)",
+              "bit_8": "Nieudane uruchomienie generatora",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Usterka CLS",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "plant_general_alarm7": {
+        "name": "Alarm ogólny 7",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Usterka OVGR",
+              "bit_1": "Usterka RPR",
+              "bit_2": "Nieznany alarm (bit 2)",
+              "bit_3": "Nieznany alarm (bit 3)",
+              "bit_4": "Nieznany alarm (bit 4)",
+              "bit_5": "Nieznany alarm (bit 5)",
+              "bit_6": "Nieznany alarm (bit 6)",
+              "bit_7": "Nieznany alarm (bit 7)",
+              "bit_8": "Nieznany alarm (bit 8)",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          },
+          "alarm_reason": {
+            "name": "Przyczyna",
+            "state": {
+              "all_bits_set": "Wszystkie bity są ustawione; znaczenie alarmu jest nieznane"
+            }
+          }
+        }
+      },
+      "plant_grid_code_rated_frequency": {
+        "name": "Częstotliwość znamionowa kodeksu sieci"
+      },
+      "plant_grid_code_rated_voltage": {
+        "name": "Napięcie znamionowe kodeksu sieci"
+      },
+      "plant_current_control_command_value": {
+        "name": "Bieżąca wartość polecenia sterowania"
+      },
+      "plant_total_load_power": {
+        "name": "Łączna moc obciążeń"
+      },
+      "plant_active_power": {
+        "name": "Moc czynna"
+      },
+      "plant_reactive_power": {
+        "name": "Moc bierna"
+      },
+      "plant_sigen_photovoltaic_power": {
+        "name": "Moc PV Sigen"
+      },
+      "plant_third_party_photovoltaic_power": {
+        "name": "Moc PV zewnętrznych urządzeń"
+      },
+      "plant_ess_power": {
+        "name": "Moc akumulatora"
+      },
+      "plant_available_max_active_power": {
+        "name": "Maksymalna dostępna moc czynna"
+      },
+      "plant_available_min_active_power": {
+        "name": "Minimalna dostępna moc czynna"
+      },
+      "plant_available_max_reactive_power": {
+        "name": "Maksymalna dostępna moc bierna"
+      },
+      "plant_available_min_reactive_power": {
+        "name": "Minimalna dostępna moc bierna"
+      },
+      "plant_ess_available_max_charging_power": {
+        "name": "Maksymalna dostępna moc ładowania"
+      },
+      "plant_ess_available_max_discharging_power": {
+        "name": "Maksymalna dostępna moc rozładowania"
+      },
+      "plant_grid_sensor_phase_a_active_power": {
+        "name": "Moc czynna fazy A sieci"
+      },
+      "plant_grid_sensor_phase_b_active_power": {
+        "name": "Moc czynna fazy B sieci"
+      },
+      "plant_grid_sensor_phase_c_active_power": {
+        "name": "Moc czynna fazy C sieci"
+      },
+      "plant_grid_sensor_phase_a_reactive_power": {
+        "name": "Moc bierna fazy A sieci"
+      },
+      "plant_grid_sensor_phase_b_reactive_power": {
+        "name": "Moc bierna fazy B sieci"
+      },
+      "plant_grid_sensor_phase_c_reactive_power": {
+        "name": "Moc bierna fazy C sieci"
+      },
+      "plant_ess_rated_charging_power": {
+        "name": "Znamionowa moc ładowania ESS"
+      },
+      "plant_ess_rated_discharging_power": {
+        "name": "Znamionowa moc rozładowania ESS"
+      },
+      "plant_ess_available_max_charging_capacity": {
+        "name": "Maksymalna dostępna energia ładowania"
+      },
+      "plant_ess_available_max_discharging_capacity": {
+        "name": "Maksymalna dostępna energia rozładowania"
+      },
+      "plant_ess_rated_energy_capacity": {
+        "name": "Znamionowa pojemność energetyczna"
+      },
+      "plant_ess_charge_cut_off_soc": {
+        "name": "SOC zakończenia ładowania"
+      },
+      "plant_ess_discharge_cut_off_soc": {
+        "name": "SOC zakończenia rozładowania"
+      },
+      "plant_ess_soh": {
+        "name": "Stan kondycji akumulatora"
+      },
+      "plant_pv_total_daily_generation": {
+        "name": "Dzienna produkcja PV"
+      },
+      "plant_pv_generation_previous_day": {
+        "name": "Produkcja PV z poprzedniego dnia"
+      },
+      "plant_ess_average_cell_temperature": {
+        "name": "Średnia temperatura ogniw ESS"
+      },
+      "plant_accumulated_pv_energy": {
+        "name": "Łączna produkcja PV"
+      },
+      "plant_daily_consumed_energy": {
+        "name": "Dzienne zużycie energii przez obciążenia"
+      },
+      "plant_accumulated_consumed_energy": {
+        "name": "Łączne zużycie energii przez obciążenia"
+      },
+      "plant_smart_load_1_total_consumption": {
+        "name": "[Inteligentne obciążenie 1] zużycie całkowite"
+      },
+      "plant_smart_load_2_total_consumption": {
+        "name": "[Inteligentne obciążenie 2] zużycie całkowite"
+      },
+      "plant_smart_load_3_total_consumption": {
+        "name": "[Inteligentne obciążenie 3] zużycie całkowite"
+      },
+      "plant_smart_load_4_total_consumption": {
+        "name": "[Inteligentne obciążenie 4] zużycie całkowite"
+      },
+      "plant_smart_load_5_total_consumption": {
+        "name": "[Inteligentne obciążenie 5] zużycie całkowite"
+      },
+      "plant_smart_load_6_total_consumption": {
+        "name": "[Inteligentne obciążenie 6] zużycie całkowite"
+      },
+      "plant_smart_load_7_total_consumption": {
+        "name": "[Inteligentne obciążenie 7] zużycie całkowite"
+      },
+      "plant_smart_load_8_total_consumption": {
+        "name": "[Inteligentne obciążenie 8] zużycie całkowite"
+      },
+      "plant_smart_load_9_total_consumption": {
+        "name": "[Inteligentne obciążenie 9] zużycie całkowite"
+      },
+      "plant_smart_load_10_total_consumption": {
+        "name": "[Inteligentne obciążenie 10] zużycie całkowite"
+      },
+      "plant_smart_load_11_total_consumption": {
+        "name": "[Inteligentne obciążenie 11] zużycie całkowite"
+      },
+      "plant_smart_load_12_total_consumption": {
+        "name": "[Inteligentne obciążenie 12] zużycie całkowite"
+      },
+      "plant_smart_load_13_total_consumption": {
+        "name": "[Inteligentne obciążenie 13] zużycie całkowite"
+      },
+      "plant_smart_load_14_total_consumption": {
+        "name": "[Inteligentne obciążenie 14] zużycie całkowite"
+      },
+      "plant_smart_load_15_total_consumption": {
+        "name": "[Inteligentne obciążenie 15] zużycie całkowite"
+      },
+      "plant_smart_load_16_total_consumption": {
+        "name": "[Inteligentne obciążenie 16] zużycie całkowite"
+      },
+      "plant_smart_load_17_total_consumption": {
+        "name": "[Inteligentne obciążenie 17] zużycie całkowite"
+      },
+      "plant_smart_load_18_total_consumption": {
+        "name": "[Inteligentne obciążenie 18] zużycie całkowite"
+      },
+      "plant_smart_load_19_total_consumption": {
+        "name": "[Inteligentne obciążenie 19] zużycie całkowite"
+      },
+      "plant_smart_load_20_total_consumption": {
+        "name": "[Inteligentne obciążenie 20] zużycie całkowite"
+      },
+      "plant_smart_load_21_total_consumption": {
+        "name": "[Inteligentne obciążenie 21] zużycie całkowite"
+      },
+      "plant_smart_load_22_total_consumption": {
+        "name": "[Inteligentne obciążenie 22] zużycie całkowite"
+      },
+      "plant_smart_load_23_total_consumption": {
+        "name": "[Inteligentne obciążenie 23] zużycie całkowite"
+      },
+      "plant_smart_load_24_total_consumption": {
+        "name": "[Inteligentne obciążenie 24] zużycie całkowite"
+      },
+      "plant_smart_load_1_power": {
+        "name": "[Inteligentne obciążenie 1] moc"
+      },
+      "plant_smart_load_2_power": {
+        "name": "[Inteligentne obciążenie 2] moc"
+      },
+      "plant_smart_load_3_power": {
+        "name": "[Inteligentne obciążenie 3] moc"
+      },
+      "plant_smart_load_4_power": {
+        "name": "[Inteligentne obciążenie 4] moc"
+      },
+      "plant_smart_load_5_power": {
+        "name": "[Inteligentne obciążenie 5] moc"
+      },
+      "plant_smart_load_6_power": {
+        "name": "[Inteligentne obciążenie 6] moc"
+      },
+      "plant_smart_load_7_power": {
+        "name": "[Inteligentne obciążenie 7] moc"
+      },
+      "plant_smart_load_8_power": {
+        "name": "[Inteligentne obciążenie 8] moc"
+      },
+      "plant_smart_load_9_power": {
+        "name": "[Inteligentne obciążenie 9] moc"
+      },
+      "plant_smart_load_10_power": {
+        "name": "[Inteligentne obciążenie 10] moc"
+      },
+      "plant_smart_load_11_power": {
+        "name": "[Inteligentne obciążenie 11] moc"
+      },
+      "plant_smart_load_12_power": {
+        "name": "[Inteligentne obciążenie 12] moc"
+      },
+      "plant_smart_load_13_power": {
+        "name": "[Inteligentne obciążenie 13] moc"
+      },
+      "plant_smart_load_14_power": {
+        "name": "[Inteligentne obciążenie 14] moc"
+      },
+      "plant_smart_load_15_power": {
+        "name": "[Inteligentne obciążenie 15] moc"
+      },
+      "plant_smart_load_16_power": {
+        "name": "[Inteligentne obciążenie 16] moc"
+      },
+      "plant_smart_load_17_power": {
+        "name": "[Inteligentne obciążenie 17] moc"
+      },
+      "plant_smart_load_18_power": {
+        "name": "[Inteligentne obciążenie 18] moc"
+      },
+      "plant_smart_load_19_power": {
+        "name": "[Inteligentne obciążenie 19] moc"
+      },
+      "plant_smart_load_20_power": {
+        "name": "[Inteligentne obciążenie 20] moc"
+      },
+      "plant_smart_load_21_power": {
+        "name": "[Inteligentne obciążenie 21] moc"
+      },
+      "plant_smart_load_22_power": {
+        "name": "[Inteligentne obciążenie 22] moc"
+      },
+      "plant_smart_load_23_power": {
+        "name": "[Inteligentne obciążenie 23] moc"
+      },
+      "plant_smart_load_24_power": {
+        "name": "[Inteligentne obciążenie 24] moc"
+      },
+      "plant_total_generation_of_third_party_inverter": {
+        "name": "Łączna produkcja z falowników zewnętrznych"
+      },
+      "plant_accumulated_battery_charge_energy": {
+        "name": "Łączna energia ładowania ESS"
+      },
+      "plant_accumulated_battery_discharge_energy": {
+        "name": "Łączna energia rozładowania ESS"
+      },
+      "plant_total_charged_energy_of_the_evdc": {
+        "name": "Łączna energia ładowania EVDC"
+      },
+      "plant_total_discharged_energy_of_the_evdc": {
+        "name": "Łączna energia rozładowania EVDC"
+      },
+      "plant_accumulated_grid_import_energy": {
+        "name": "Łączna energia pobrana z sieci"
+      },
+      "plant_accumulated_grid_export_energy": {
+        "name": "Łączna energia oddana do sieci"
+      },
+      "plant_total_energy_output_of_oil_fueled_generator": {
+        "name": "Łączna energia wyprodukowana przez generator spalinowy"
+      },
+      "plant_total_charged_energy_of_the_evac": {
+        "name": "Łączna energia ładowania EVAC"
+      },
+      "plant_total_generation_of_self_pv": {
+        "name": "Łączna produkcja z własnej instalacji PV"
+      },
+      "inverter_model_type": {
+        "name": "Typ modelu"
+      },
+      "inverter_serial_number": {
+        "name": "Numer seryjny"
+      },
+      "inverter_machine_firmware_version": {
+        "name": "Wersja oprogramowania układowego"
+      },
+      "inverter_rated_active_power": {
+        "name": "Znamionowa moc czynna"
+      },
+      "inverter_max_apparent_power": {
+        "name": "Maksymalna moc pozorna"
+      },
+      "inverter_max_active_power": {
+        "name": "Maksymalna moc czynna"
+      },
+      "inverter_max_absorption_power": {
+        "name": "Maksymalna moc pobierana"
+      },
+      "inverter_rated_battery_capacity": {
+        "name": "Znamionowa pojemność akumulatora"
+      },
+      "inverter_ess_rated_charge_power": {
+        "name": "Znamionowa moc ładowania ESS"
+      },
+      "inverter_ess_rated_discharge_power": {
+        "name": "Znamionowa moc rozładowania ESS"
+      },
+      "inverter_ess_daily_charge_energy": {
+        "name": "Dzienna energia ładowania"
+      },
+      "inverter_ess_accumulated_charge_energy": {
+        "name": "Łączna energia ładowania"
+      },
+      "inverter_ess_daily_discharge_energy": {
+        "name": "Dzienna energia rozładowania"
+      },
+      "inverter_ess_accumulated_discharge_energy": {
+        "name": "Łączna energia rozładowania"
+      },
+      "inverter_max_active_power_adjustment_value": {
+        "name": "Maksymalna regulacja mocy czynnej"
+      },
+      "inverter_min_active_power_adjustment_value": {
+        "name": "Minimalna regulacja mocy czynnej"
+      },
+      "inverter_max_reactive_power_adjustment_value_fed": {
+        "name": "Maksymalna moc bierna oddawana"
+      },
+      "inverter_max_reactive_power_adjustment_value_absorbed": {
+        "name": "Maksymalna moc bierna pobierana"
+      },
+      "inverter_active_power": {
+        "name": "Moc czynna"
+      },
+      "inverter_reactive_power": {
+        "name": "Moc bierna"
+      },
+      "inverter_ess_charge_discharge_power": {
+        "name": "Moc akumulatora"
+      },
+      "inverter_ess_max_battery_charge_power": {
+        "name": "Maksymalna moc ładowania akumulatora"
+      },
+      "inverter_ess_max_battery_discharge_power": {
+        "name": "Maksymalna moc rozładowania akumulatora"
+      },
+      "inverter_ess_available_battery_charge_energy": {
+        "name": "Dostępna energia ładowania akumulatora"
+      },
+      "inverter_ess_available_battery_discharge_energy": {
+        "name": "Dostępna energia rozładowania akumulatora"
+      },
+      "inverter_ess_battery_soc": {
+        "name": "Stan naładowania akumulatora"
+      },
+      "inverter_ess_battery_soh": {
+        "name": "Stan kondycji akumulatora"
+      },
+      "inverter_ess_average_cell_temperature": {
+        "name": "Średnia temperatura ogniw akumulatora"
+      },
+      "inverter_ess_average_cell_voltage": {
+        "name": "Średnie napięcie ogniw akumulatora"
+      },
+      "inverter_ess_maximum_battery_temperature": {
+        "name": "Maksymalna temperatura akumulatora"
+      },
+      "inverter_ess_minimum_battery_temperature": {
+        "name": "Minimalna temperatura akumulatora"
+      },
+      "inverter_ess_maximum_battery_cell_voltage": {
+        "name": "Maksymalne napięcie ogniwa akumulatora"
+      },
+      "inverter_ess_minimum_battery_cell_voltage": {
+        "name": "Minimalne napięcie ogniwa akumulatora"
+      },
+      "inverter_alarm1": {
+        "name": "Alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Niezgodność wersji oprogramowania",
+              "bit_1": "Niska rezystancja izolacji",
+              "bit_2": "Zbyt wysoka temperatura",
+              "bit_3": "Usterka urządzenia",
+              "bit_4": "Usterka uziemienia systemu",
+              "bit_5": "Przepięcie w łańcuchu PV",
+              "bit_6": "Odwrócona polaryzacja łańcucha PV",
+              "bit_7": "Prąd wsteczny w łańcuchu PV",
+              "bit_8": "Usterka AFCI",
+              "bit_9": "Przerwa w zasilaniu sieciowym",
+              "bit_10": "Zbyt wysokie napięcie sieci",
+              "bit_11": "Zbyt niskie napięcie sieci",
+              "bit_12": "Zbyt wysoka częstotliwość sieci",
+              "bit_13": "Zbyt niska częstotliwość sieci",
+              "bit_14": "Asymetria napięcia sieci",
+              "bit_15": "Składowa stała prądu wyjściowego poza limitem",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "inverter_alarm2": {
+        "name": "Alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Prąd upływu poza limitem",
+              "bit_1": "Nieprawidłowa komunikacja",
+              "bit_2": "Wewnętrzne zabezpieczenie systemu",
+              "bit_3": "Usterka obwodu autotestu AFCI",
+              "bit_4": "Zabezpieczenie pracy wyspowej",
+              "bit_5": "Zabezpieczenie obsługi ręcznej",
+              "bit_6": "Nieznany alarm (bit 6)",
+              "bit_7": "Nieprawidłowa kolejność faz",
+              "bit_8": "Zwarcie do PE",
+              "bit_9": "Nieudany łagodny rozruch",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "inverter_alarm3": {
+        "name": "Alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Niezgodność wersji oprogramowania",
+              "bit_1": "Niska rezystancja izolacji względem ziemi",
+              "bit_2": "Zbyt wysoka temperatura",
+              "bit_3": "Usterka urządzenia",
+              "bit_4": "Zbyt niska temperatura",
+              "bit_5": "Zabezpieczenie wewnętrzne",
+              "bit_6": "Ucieczka termiczna",
+              "bit_7": "Nieznany alarm (bit 7)",
+              "bit_8": "Nieznany alarm (bit 8)",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "inverter_alarm4": {
+        "name": "Alarm 4",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Niezgodność wersji oprogramowania",
+              "bit_1": "Zbyt wysoka temperatura",
+              "bit_2": "Usterka urządzenia",
+              "bit_3": "Nadmierny prąd upływu na wyjściu wyspowym",
+              "bit_4": "Usterka uziemienia przewodu neutralnego",
+              "bit_5": "Nieprawidłowa kolejność faz w okablowaniu sieci",
+              "bit_6": "Nieprawidłowa kolejność faz w okablowaniu falownika",
+              "bit_7": "Zanik fazy sieci",
+              "bit_8": "Nieznany alarm (bit 8)",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "inverter_alarm5": {
+        "name": "Alarm 5",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Niezgodność wersji oprogramowania",
+              "bit_1": "Niska rezystancja izolacji względem ziemi",
+              "bit_2": "Zbyt wysoka temperatura",
+              "bit_3": "Usterka urządzenia",
+              "bit_4": "Usterka ładowania",
+              "bit_5": "Zabezpieczenie urządzenia",
+              "bit_6": "Nieznany alarm (bit 6)",
+              "bit_7": "Nieznany alarm (bit 7)",
+              "bit_8": "Nieznany alarm (bit 8)",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "inverter_grid_frequency": {
+        "name": "Częstotliwość sieci"
+      },
+      "inverter_pcs_internal_temperature": {
+        "name": "Temperatura wewnętrzna PCS"
+      },
+      "inverter_rated_grid_voltage": {
+        "name": "Znamionowe napięcie sieci"
+      },
+      "inverter_rated_grid_frequency": {
+        "name": "Znamionowa częstotliwość sieci"
+      },
+      "inverter_ab_line_voltage": {
+        "name": "Napięcie międzyfazowe A–B"
+      },
+      "inverter_bc_line_voltage": {
+        "name": "Napięcie międzyfazowe B–C"
+      },
+      "inverter_ca_line_voltage": {
+        "name": "Napięcie międzyfazowe C–A"
+      },
+      "inverter_phase_a_voltage": {
+        "name": "Napięcie fazy A"
+      },
+      "inverter_phase_b_voltage": {
+        "name": "Napięcie fazy B"
+      },
+      "inverter_phase_c_voltage": {
+        "name": "Napięcie fazy C"
+      },
+      "inverter_phase_a_current": {
+        "name": "Prąd fazy A"
+      },
+      "inverter_phase_b_current": {
+        "name": "Prąd fazy B"
+      },
+      "inverter_phase_c_current": {
+        "name": "Prąd fazy C"
+      },
+      "inverter_power_factor": {
+        "name": "Współczynnik mocy"
+      },
+      "inverter_pack_count": {
+        "name": "Liczba pakietów akumulatorów"
+      },
+      "inverter_pv_string_count": {
+        "name": "Liczba łańcuchów PV"
+      },
+      "inverter_mppt_count": {
+        "name": "Liczba MPPT"
+      },
+      "inverter_pv_power": {
+        "name": "Moc PV"
+      },
+      "inverter_insulation_resistance": {
+        "name": "Rezystancja izolacji"
+      },
+      "inverter_active_power_fixed_value_adjustment_feedback": {
+        "name": "Odczyt zwrotny stałego nastawienia mocy czynnej"
+      },
+      "inverter_reactive_power_fixed_value_adjustment_feedback": {
+        "name": "Odczyt zwrotny stałego nastawienia mocy biernej"
+      },
+      "inverter_active_power_percentage_adjustment_feedback": {
+        "name": "Odczyt zwrotny procentowego nastawienia mocy czynnej"
+      },
+      "inverter_reactive_power_qs_adjustment_feedback": {
+        "name": "Odczyt zwrotny nastawienia Q/S mocy biernej"
+      },
+      "inverter_power_factor_adjustment_feedback": {
+        "name": "Odczyt zwrotny nastawienia współczynnika mocy"
+      },
+      "inverter_daily_pv_energy": {
+        "name": "Dzienna energia PV"
+      },
+      "inverter_accumulated_pv_energy": {
+        "name": "Łączna energia PV"
+      },
+      "ac_charger_total_energy_consumed": {
+        "name": "Łączna zużyta energia"
+      },
+      "ac_charger_charging_power": {
+        "name": "Moc ładowania"
+      },
+      "ac_charger_rated_power": {
+        "name": "Moc znamionowa"
+      },
+      "ac_charger_rated_current": {
+        "name": "Prąd znamionowy"
+      },
+      "ac_charger_rated_voltage": {
+        "name": "Napięcie znamionowe"
+      },
+      "ac_charger_input_breaker_rated_current": {
+        "name": "Prąd znamionowy wyłącznika wejściowego"
+      },
+      "ac_charger_alarm1": {
+        "name": "Alarm 1",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Zbyt wysokie napięcie sieci",
+              "bit_1": "Zbyt niskie napięcie sieci",
+              "bit_2": "Przeciążenie",
+              "bit_3": "Zwarcie",
+              "bit_4": "Przetężenie na wyjściu ładowania",
+              "bit_5": "Prąd upływu poza limitem",
+              "bit_6": "Usterka uziemienia",
+              "bit_7": "Nieprawidłowa kolejność faz w okablowaniu sieci",
+              "bit_8": "Usterka PEN",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "ac_charger_alarm2": {
+        "name": "Alarm 2",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Usterka obwodu wykrywania prądu upływu",
+              "bit_1": "Zablokowany przekaźnik",
+              "bit_2": "Usterka obwodu pilota",
+              "bit_3": "Usterka modułu zasilania pomocniczego",
+              "bit_4": "Usterka blokady elektrycznej",
+              "bit_5": "Usterka komunikacji z panelem świetlnym",
+              "bit_6": "Nieznany alarm (bit 6)",
+              "bit_7": "Nieznany alarm (bit 7)",
+              "bit_8": "Nieznany alarm (bit 8)",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "ac_charger_alarm3": {
+        "name": "Alarm 3",
+        "state_attributes": {
+          "alarm_status": {
+            "name": "Stan alarmów",
+            "state": {
+              "no_problem": "Brak problemów",
+              "active": "Aktywny alarm",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "alarm_codes": {
+            "name": "Alarmy",
+            "state": {
+              "bit_0": "Zbyt wysoka temperatura wewnętrzna",
+              "bit_1": "Usterka przewodu ładowania",
+              "bit_2": "Usterka komunikacji z licznikiem",
+              "bit_3": "Nieznany alarm (bit 3)",
+              "bit_4": "Nieznany alarm (bit 4)",
+              "bit_5": "Nieznany alarm (bit 5)",
+              "bit_6": "Nieznany alarm (bit 6)",
+              "bit_7": "Nieznany alarm (bit 7)",
+              "bit_8": "Nieznany alarm (bit 8)",
+              "bit_9": "Nieznany alarm (bit 9)",
+              "bit_10": "Nieznany alarm (bit 10)",
+              "bit_11": "Nieznany alarm (bit 11)",
+              "bit_12": "Nieznany alarm (bit 12)",
+              "bit_13": "Nieznany alarm (bit 13)",
+              "bit_14": "Nieznany alarm (bit 14)",
+              "bit_15": "Nieznany alarm (bit 15)",
+              "unknown": "Nieznany alarm"
+            }
+          },
+          "raw_value": {
+            "name": "Wartość surowa"
+          }
+        }
+      },
+      "dc_charger_vehicle_battery_voltage": {
+        "name": "Napięcie akumulatora pojazdu"
+      },
+      "dc_charger_charging_current": {
+        "name": "Prąd ładowania"
+      },
+      "dc_charger_output_power": {
+        "name": "Moc wyjściowa"
+      },
+      "dc_charger_vehicle_soc": {
+        "name": "SOC pojazdu"
+      },
+      "dc_charger_current_charging_capacity": {
+        "name": "Energia ładowania w tej sesji"
+      },
+      "dc_charger_current_charging_duration": {
+        "name": "Czas ładowania w tej sesji"
+      },
+      "dc_charger_discharging_current": {
+        "name": "Prąd rozładowania"
+      },
+      "dc_charger_current_discharging_capacity": {
+        "name": "Energia rozładowania w tej sesji"
+      },
+      "dc_charger_current_discharging_duration": {
+        "name": "Czas rozładowania w tej sesji"
+      },
+      "dc_charger_total_charging_capacity": {
+        "name": "Łączna energia ładowania"
+      },
+      "dc_charger_total_discharging_capacity": {
+        "name": "Łączna energia rozładowania"
+      },
+      "dc_charger_rated_charging_power": {
+        "name": "Znamionowa moc ładowania"
+      },
+      "dc_charger_rated_discharging_power": {
+        "name": "Znamionowa moc rozładowania"
+      }
+    },
+    "binary_sensor": {
+      "plant_pv_generating": {
+        "name": "Produkcja PV aktywna"
+      },
+      "plant_battery_charging": {
+        "name": "Akumulator jest ładowany"
+      },
+      "plant_battery_discharging": {
+        "name": "Akumulator jest rozładowywany"
+      },
+      "plant_exporting_to_grid": {
+        "name": "Oddawanie energii do sieci"
+      },
+      "plant_importing_from_grid": {
+        "name": "Pobieranie energii z sieci"
+      }
+    },
+    "button": {
+      "plant_grid_power_loss_lockout_alarm_clear": {
+        "name": "Skasuj alarm blokady po zaniku zasilania sieciowego"
+      },
+      "ac_charger_start": {
+        "name": "Rozpocznij ładowanie"
+      },
+      "ac_charger_stop": {
+        "name": "Zatrzymaj ładowanie"
+      },
+      "dc_charger_start": {
+        "name": "Rozpocznij ładowanie"
+      },
+      "dc_charger_stop": {
+        "name": "Zatrzymaj ładowanie"
+      }
+    },
+    "number": {
+      "plant_active_power_fixed_target": {
+        "name": "Stałe nastawienie mocy czynnej"
+      },
+      "plant_reactive_power_fixed_target": {
+        "name": "Stałe nastawienie mocy biernej"
+      },
+      "plant_active_power_percentage_target": {
+        "name": "Procentowe nastawienie mocy czynnej"
+      },
+      "plant_qs_ratio_target": {
+        "name": "Nastawienie Q/S"
+      },
+      "plant_power_factor_target": {
+        "name": "Nastawienie współczynnika mocy"
+      },
+      "plant_ess_max_charging_limit": {
+        "name": "Limit maksymalnej mocy ładowania ESS"
+      },
+      "plant_ess_max_discharging_limit": {
+        "name": "Limit maksymalnej mocy rozładowania ESS"
+      },
+      "plant_pv_max_power_limit": {
+        "name": "Limit maksymalnej mocy PV"
+      },
+      "plant_grid_point_maximum_export_limitation": {
+        "name": "Limit mocy oddawanej do sieci"
+      },
+      "plant_grid_maximum_import_limitation": {
+        "name": "Limit mocy pobieranej z sieci"
+      },
+      "plant_pcs_maximum_export_limitation": {
+        "name": "Limit mocy eksportu PCS"
+      },
+      "plant_pcs_maximum_import_limitation": {
+        "name": "Limit mocy importu PCS"
+      },
+      "plant_phase_a_active_power_fixed_target": {
+        "name": "Stałe nastawienie mocy czynnej fazy A"
+      },
+      "plant_phase_b_active_power_fixed_target": {
+        "name": "Stałe nastawienie mocy czynnej fazy B"
+      },
+      "plant_phase_c_active_power_fixed_target": {
+        "name": "Stałe nastawienie mocy czynnej fazy C"
+      },
+      "plant_phase_a_reactive_power_fixed_target": {
+        "name": "Stałe nastawienie mocy biernej fazy A"
+      },
+      "plant_phase_b_reactive_power_fixed_target": {
+        "name": "Stałe nastawienie mocy biernej fazy B"
+      },
+      "plant_phase_c_reactive_power_fixed_target": {
+        "name": "Stałe nastawienie mocy biernej fazy C"
+      },
+      "plant_phase_a_active_power_percentage_target": {
+        "name": "Procent mocy czynnej fazy A"
+      },
+      "plant_phase_b_active_power_percentage_target": {
+        "name": "Procent mocy czynnej fazy B"
+      },
+      "plant_phase_c_active_power_percentage_target": {
+        "name": "Procent mocy czynnej fazy C"
+      },
+      "plant_phase_a_qs_ratio_target": {
+        "name": "Stosunek Q/S fazy A"
+      },
+      "plant_phase_b_qs_ratio_target": {
+        "name": "Stosunek Q/S fazy B"
+      },
+      "plant_phase_c_qs_ratio_target": {
+        "name": "Stosunek Q/S fazy C"
+      },
+      "plant_backup_soc": {
+        "name": "Rezerwowy stan naładowania ESS"
+      },
+      "plant_charge_cut_off_soc": {
+        "name": "Stan naładowania zakończenia ładowania ESS"
+      },
+      "plant_discharge_cut_off_soc": {
+        "name": "Stan naładowania zakończenia rozładowania ESS"
+      },
+      "plant_active_power_regulation_gradient": {
+        "name": "[Kodeks sieci] gradient regulacji mocy czynnej"
+      },
+      "plant_lvrt_reactive_power_comp_factor": {
+        "name": "[Kodeks sieci] współczynnik kompensacji mocy biernej LVRT"
+      },
+      "plant_lvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Kodeks sieci] współczynnik kompensacji mocy biernej składowej przeciwnej LVRT"
+      },
+      "plant_hvrt_reactive_power_comp_factor": {
+        "name": "[Kodeks sieci] współczynnik kompensacji mocy biernej HVRT"
+      },
+      "plant_hvrt_neg_seq_reactive_power_comp_factor": {
+        "name": "[Kodeks sieci] współczynnik kompensacji mocy biernej składowej przeciwnej HVRT"
+      },
+      "plant_over_freq_derating_power_ramp_rate": {
+        "name": "[Kodeks sieci] rampa ograniczania mocy przy nadczęstotliwości"
+      },
+      "plant_over_freq_derating_trigger_freq": {
+        "name": "[Kodeks sieci] częstotliwość aktywacji ograniczania mocy przy nadczęstotliwości"
+      },
+      "plant_over_freq_derating_cutoff_freq": {
+        "name": "[Kodeks sieci] częstotliwość odcięcia ograniczania mocy przy nadczęstotliwości"
+      },
+      "plant_under_freq_power_boost_power_ramp_rate": {
+        "name": "[Kodeks sieci] rampa zwiększania mocy przy podczęstotliwości"
+      },
+      "plant_under_freq_power_boost_trigger_freq": {
+        "name": "[Kodeks sieci] częstotliwość aktywacji zwiększania mocy przy podczęstotliwości"
+      },
+      "plant_under_freq_power_boost_cutoff_freq": {
+        "name": "[Kodeks sieci] częstotliwość odcięcia zwiększania mocy przy podczęstotliwości"
+      },
+      "plant_pcc_power_factor_grid_import": {
+        "name": "Nastawienie współczynnika mocy poboru z sieci"
+      },
+      "plant_pcc_power_factor_grid_export": {
+        "name": "Nastawienie współczynnika mocy oddawania do sieci"
+      },
+      "plant_ess_preheating_reserved_soc": {
+        "name": "SOC zarezerwowany na wstępne podgrzewanie ESS"
+      },
+      "inverter_active_power_fixed_adjustment": {
+        "name": "Stałe nastawienie mocy czynnej"
+      },
+      "inverter_reactive_power_fixed_adjustment": {
+        "name": "Stałe nastawienie mocy biernej"
+      },
+      "inverter_active_power_percentage_adjustment": {
+        "name": "Procentowe nastawienie mocy czynnej"
+      },
+      "inverter_reactive_power_qs_adjustment": {
+        "name": "Nastawienie Q/S mocy biernej"
+      },
+      "inverter_power_factor_adjustment": {
+        "name": "Nastawienie współczynnika mocy"
+      },
+      "ac_charger_output_current": {
+        "name": "Prąd wyjściowy ładowarki"
+      },
+      "dc_charger_max_charging_power_limit": {
+        "name": "Limit maksymalnej mocy ładowania"
+      },
+      "dc_charger_max_discharging_power_limit": {
+        "name": "Limit maksymalnej mocy rozładowania"
+      },
+      "plant_ess_preheating_tou_start_time": {
+        "name": "Godzina rozpoczęcia okresu TOU {slot} wstępnego podgrzewania ESS"
+      },
+      "plant_ess_preheating_tou_end_time": {
+        "name": "Godzina zakończenia okresu TOU {slot} wstępnego podgrzewania ESS"
+      },
+      "plant_ess_preheating_tou_target_power": {
+        "name": "Docelowa moc okresu TOU {slot} wstępnego podgrzewania ESS"
+      }
+    },
+    "select": {
+      "plant_remote_ems_control_mode": {
+        "name": "Tryb zdalnego sterowania EMS"
+      },
+      "plant_ess_preheating_mode": {
+        "name": "Tryb wstępnego podgrzewania ESS"
+      },
+      "plant_lvrt_enable": {
+        "name": "[Kodeks sieci] włączenie LVRT"
+      },
+      "plant_lvrt_mode": {
+        "name": "[Kodeks sieci] tryb LVRT"
+      },
+      "plant_lvrt_grid_voltage_protection_blocking": {
+        "name": "[Kodeks sieci] blokowanie zabezpieczenia napięcia sieci LVRT"
+      },
+      "plant_hvrt_enable": {
+        "name": "[Kodeks sieci] włączenie HVRT"
+      },
+      "plant_hvrt_mode": {
+        "name": "[Kodeks sieci] tryb HVRT"
+      },
+      "plant_hvrt_grid_voltage_protection_blocking": {
+        "name": "[Kodeks sieci] blokowanie zabezpieczenia napięcia sieci HVRT"
+      },
+      "plant_over_freq_derating_enable": {
+        "name": "[Kodeks sieci] włączenie ograniczania mocy przy nadczęstotliwości"
+      },
+      "plant_under_freq_power_boost_enable": {
+        "name": "[Kodeks sieci] włączenie zwiększania mocy przy podczęstotliwości"
+      }
+    },
+    "switch": {
+      "plant_start_stop": {
+        "name": "Włączenie instalacji"
+      },
+      "plant_remote_ems_enable": {
+        "name": "Zdalne sterowanie EMS (przez Home Assistant)"
+      },
+      "plant_independent_phase_power_control_enable": {
+        "name": "Niezależne sterowanie mocą faz"
+      },
+      "plant_ess_preheating_enable": {
+        "name": "Włączenie wstępnego podgrzewania ESS"
+      },
+      "plant_ess_preheating_advance_enable": {
+        "name": "Włączenie wyprzedzającego podgrzewania ESS"
+      },
+      "inverter_start_stop": {
+        "name": "Włączenie falownika"
+      },
+      "ac_charger_start_stop": {
+        "name": "Włączenie ładowarki AC (przestarzałe)"
+      },
+      "dc_charging": {
+        "name": "Ładowanie DC (przestarzałe)"
+      }
+    }
+  },
+  "selector": {
+    "device_type": {
+      "options": {
+        "new_plant": "Nowa instalacja",
+        "inverter": "Falownik",
+        "ac_charger": "Ładowarka AC",
+        "dc_charger": "Ładowarka DC"
+      }
+    },
+    "configured_device": {
+      "options": {
+        "accumulated_energy": "Zmień skumulowane wartości energii"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_pcc_power_factor": {
+      "message": "Nie można ustawić współczynnika mocy PCC na {value}. Użyj wartości od -0.999 do -0.8 lub od 0.8 do 1."
+    },
+    "coordinator_unavailable": {
+      "message": "Nie można sterować {entity_id}: dane urządzenia są niedostępne."
+    }
+  },
+  "services": {
+    "set_operation_mode": {
+      "name": "Ustaw tryb pracy",
+      "description": "Ustaw tryb pracy systemu Sigenergy.",
+      "fields": {
+        "mode": {
+          "name": "Tryb",
+          "description": "Tryb pracy do ustawienia."
+        }
+      }
+    },
+    "set_remote_ems_control_mode": {
+      "name": "Ustaw tryb zdalnego sterowania EMS",
+      "description": "Ustaw tryb zdalnego sterowania EMS systemu Sigenergy.",
+      "fields": {
+        "mode": {
+          "name": "Tryb",
+          "description": "Tryb zdalnego sterowania EMS do ustawienia."
+        }
+      }
+    },
+    "set_power_limit": {
+      "name": "Ustaw limit mocy",
+      "description": "Ustaw limit mocy systemu Sigenergy.",
+      "fields": {
+        "value": {
+          "name": "Wartość",
+          "description": "Wartość limitu mocy do ustawienia."
+        }
+      }
+    }
+  }
+}

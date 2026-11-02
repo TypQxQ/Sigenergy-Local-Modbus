@@ -11,7 +11,8 @@
 
 Monitor and control your Sigenergy ESS locally over Modbus TCP: solar production,
 battery and grid power, energy counters, EMS modes, and AC/DC chargers.
-Includes Dutch, English, French, German, Spanish and Swedish translations.
+Localized names, status labels and setup dialogs in
+[11 languages](docs/migrations/2.0.md#localized-names-and-alarm-details).
 
 **Upgrading to 2.0?** Eight status sensors use new stored values. Read the
 [migration guide](docs/migrations/2.0.md) before updating automation comparisons.
