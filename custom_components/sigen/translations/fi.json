@@ -126,7 +126,11 @@
     "step": {
       "init": {
         "title": "Sigenergy-asetukset",
-        "description": "Määritä Sigenergy-integraation asetukset."
+        "description": "Määritä Sigenergy-integraation asetukset.",
+        "menu_options": {
+          "select_device": "Laitteiden asetukset",
+          "display_settings": "Näyttöasetukset"
+        }
       },
       "select_device": {
         "title": "Valitse uudelleen määritettävä laite",
@@ -194,6 +198,16 @@
           "ac_charger_slave_ids": "AC-laturien laitetunnukset (erota useat pilkuilla; jätä tyhjäksi, jos AC-laturia ei ole)",
           "dc_charger_slave_ids": "Invertterien tunnukset, joihin on liitetty DC-latureita (erota useat pilkuilla)"
         }
+      },
+      "display_settings": {
+        "title": "Näyttöasetukset",
+        "description": "Valitse entiteettien oletusnimien kieli. Valintaikkunat, tilatekstit ja hälytystiedot noudattavat Home Assistantin käyttöliittymän kieltä.",
+        "data": {
+          "entity_name_language": "Entiteettien nimien kieli"
+        },
+        "data_description": {
+          "entity_name_language": "Automaattinen käyttää Home Assistantin palvelimen kieltä. Omat nimet, entiteettitunnukset ja historia säilyvät. Kielen vaihtaminen lataa integraation uudelleen."
+        }
       }
     },
     "error": {
@@ -210,7 +224,8 @@
       "cannot_connect": "Yhteys Sigenergy-järjestelmään epäonnistui. Tarkista isäntä ja portti.",
       "required_value": "Anna arvo.",
       "must_be_number": "Anna numero.",
-      "must_be_at_least_1": "Päivitysvälin on oltava vähintään 1 sekunti."
+      "must_be_at_least_1": "Päivitysvälin on oltava vähintään 1 sekunti.",
+      "invalid_entity_name_language": "Valitse tuettu kieli tai Automaattinen."
     },
     "abort": {
       "already_configured": "Tämä Sigenergy-järjestelmä on jo määritetty.",
@@ -1770,6 +1785,22 @@
     "configured_device": {
       "options": {
         "accumulated_energy": "Muuta kertyneen energian arvoja"
+      }
+    },
+    "entity_name_language": {
+      "options": {
+        "auto": "Automaattinen (Home Assistantin palvelimen kieli)",
+        "da": "Dansk",
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fi": "Suomi",
+        "fr": "Français",
+        "it": "Italiano",
+        "nb": "Norsk Bokmål",
+        "nl": "Nederlands",
+        "pl": "Polski",
+        "sv": "Svenska"
       }
     }
   },

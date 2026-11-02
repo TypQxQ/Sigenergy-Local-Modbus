@@ -64,8 +64,10 @@ Use the installation ZIP, not GitHub's source archive.
 3. Add more devices through **Add integration → Sigenergy ESS**, selecting the
    existing plant. Devices in a plant should normally share the same IP and port.
 
-Change read-only mode, polling interval and device settings using **Configure**
-on the integration entry.
+Use **Configure → Device settings** to change read-only mode, polling interval
+and device settings. **Configure → Display settings** lets you select the entity
+name language; **Automatic** follows the Home Assistant server language.
+Custom names, entity IDs and history are preserved.
 
 **Controls start in read-only mode.** To use them, disable read-only mode in the
 integration options and enable the required control entities in Home Assistant.

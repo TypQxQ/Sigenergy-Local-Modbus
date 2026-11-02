@@ -126,7 +126,11 @@
     "step": {
       "init": {
         "title": "Sigenergy-opties",
-        "description": "Configureer de opties van de Sigenergy-integratie."
+        "description": "Configureer de opties van de Sigenergy-integratie.",
+        "menu_options": {
+          "select_device": "Apparaatinstellingen",
+          "display_settings": "Weergave-instellingen"
+        }
       },
       "select_device": {
         "title": "Apparaat selecteren om opnieuw te configureren",
@@ -194,6 +198,16 @@
           "ac_charger_slave_ids": "Apparaat-ID’s van AC-laders (meerdere scheiden met komma’s; leeg laten als er geen AC-lader is)",
           "dc_charger_slave_ids": "ID’s van omvormers met aangesloten DC-laders (meerdere scheiden met komma’s)"
         }
+      },
+      "display_settings": {
+        "title": "Weergave-instellingen",
+        "description": "Kies de taal voor standaardnamen van entiteiten. Dialogen, statuslabels en alarmdetails volgen de interfacetaal van Home Assistant.",
+        "data": {
+          "entity_name_language": "Taal voor entiteitsnamen"
+        },
+        "data_description": {
+          "entity_name_language": "Automatisch gebruikt de servertaal van Home Assistant. Eigen namen, entiteits-ID’s en geschiedenis blijven behouden. Bij een taalwijziging wordt de integratie opnieuw geladen."
+        }
       }
     },
     "error": {
@@ -210,7 +224,8 @@
       "cannot_connect": "Kan geen verbinding maken met het Sigenergy-systeem. Controleer de host en de poort.",
       "required_value": "Voer een waarde in.",
       "must_be_number": "Voer een getal in.",
-      "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn."
+      "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn.",
+      "invalid_entity_name_language": "Kies een ondersteunde taal of Automatisch."
     },
     "abort": {
       "already_configured": "Dit Sigenergy-systeem is al geconfigureerd.",
@@ -1770,6 +1785,22 @@
     "configured_device": {
       "options": {
         "accumulated_energy": "Cumulatieve energiewaarden wijzigen"
+      }
+    },
+    "entity_name_language": {
+      "options": {
+        "auto": "Automatisch (servertaal van Home Assistant)",
+        "da": "Dansk",
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fi": "Suomi",
+        "fr": "Français",
+        "it": "Italiano",
+        "nb": "Norsk Bokmål",
+        "nl": "Nederlands",
+        "pl": "Polski",
+        "sv": "Svenska"
       }
     }
   },

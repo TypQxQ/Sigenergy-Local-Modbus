@@ -30,7 +30,8 @@ def load_flows():
                 pass
     tree = ast.parse((SOURCE / "config_flow.py").read_text(encoding="utf-8"))
     methods = {"_data", "_async_load_devices", "async_step_select_device",
-               "async_step_accumulated_energy_config", "async_step_plant_config"}
+               "async_step_accumulated_energy_config", "async_step_plant_config",
+               "async_step_init", "async_step_display_settings"}
     nodes = [ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)]
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == "validate_host_port":
@@ -54,7 +55,7 @@ def load_flows():
 
 def options_flow(scope):
     flow = scope["SigenergyOptionsFlowHandler"]()
-    flow.config_entry = SimpleNamespace(entry_id="fixture", data={
+    flow.config_entry = SimpleNamespace(entry_id="fixture", options={}, data={
         "device_type": "plant", "name": "Fixture plant",
         "plant_connection": {"host": "192.0.2.1", "port": 502, "slave_id": 247,
                              "read_only": True, "scan_interval": 5},
@@ -66,6 +67,7 @@ def options_flow(scope):
         async_update_entry=Mock(), _async_schedule_save=Mock(), async_reload=AsyncMock()))
     flow.async_abort = Mock(side_effect=lambda **kw: {"type": "abort", **kw})
     flow.async_show_form = Mock(side_effect=lambda **kw: {"type": "form", **kw})
+    flow.async_show_menu = Mock(side_effect=lambda **kw: {"type": "menu", **kw})
     flow.async_create_entry = Mock(side_effect=lambda **kw: {"type": "create_entry", **kw})
     flow._temp_config = {}
     return flow
@@ -119,8 +121,10 @@ class TestPollingInterval(unittest.IsolatedAsyncioTestCase):
             with self.subTest(interval=interval):
                 scope = load_flows()
                 flow = options_flow(scope)
+                flow.config_entry.options = {"entity_name_language": "sv", "other": True}
                 result = await flow.async_step_plant_config(plant_input(interval))
                 self.assertEqual("create_entry", result["type"])
+                self.assertEqual(flow.config_entry.options, result["data"])
                 saved = flow.hass.config_entries.async_update_entry.call_args.kwargs["data"]
                 stored_interval = saved["plant_connection"]["scan_interval"]
                 _, hub, ns = _make_coordinator()

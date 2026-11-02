@@ -126,7 +126,11 @@
     "step": {
       "init": {
         "title": "Sigenergy-indstillinger",
-        "description": "Konfigurer indstillingerne for Sigenergy-integrationen."
+        "description": "Konfigurer indstillingerne for Sigenergy-integrationen.",
+        "menu_options": {
+          "select_device": "Enhedsindstillinger",
+          "display_settings": "Visningsindstillinger"
+        }
       },
       "select_device": {
         "title": "Vælg enhed til omkonfiguration",
@@ -194,6 +198,16 @@
           "ac_charger_slave_ids": "AC-ladernes enheds-ID’er (kommasepareret ved flere; tomt, hvis der ikke er en AC-lader)",
           "dc_charger_slave_ids": "ID’er for vekselrettere med tilsluttede DC-ladere (kommasepareret ved flere)"
         }
+      },
+      "display_settings": {
+        "title": "Visningsindstillinger",
+        "description": "Vælg sproget for entiteternes standardnavne. Dialoger, statusetiketter og alarmdetaljer følger grænsefladesproget i Home Assistant.",
+        "data": {
+          "entity_name_language": "Sprog for entitetsnavne"
+        },
+        "data_description": {
+          "entity_name_language": "Automatisk bruger Home Assistants serversprog. Egne navne, entitets-ID’er og historik bevares. Ændring af sproget genindlæser integrationen."
+        }
       }
     },
     "error": {
@@ -210,7 +224,8 @@
       "cannot_connect": "Kunne ikke oprette forbindelse til Sigenergy-systemet. Kontroller vært og port.",
       "required_value": "Angiv en værdi.",
       "must_be_number": "Angiv et tal.",
-      "must_be_at_least_1": "Opdateringsintervallet skal være mindst 1 sekund."
+      "must_be_at_least_1": "Opdateringsintervallet skal være mindst 1 sekund.",
+      "invalid_entity_name_language": "Vælg et understøttet sprog eller Automatisk."
     },
     "abort": {
       "already_configured": "Dette Sigenergy-system er allerede konfigureret.",
@@ -1770,6 +1785,22 @@
     "configured_device": {
       "options": {
         "accumulated_energy": "Rediger akkumulerede energiværdier"
+      }
+    },
+    "entity_name_language": {
+      "options": {
+        "auto": "Automatisk (Home Assistants serversprog)",
+        "da": "Dansk",
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fi": "Suomi",
+        "fr": "Français",
+        "it": "Italiano",
+        "nb": "Norsk Bokmål",
+        "nl": "Nederlands",
+        "pl": "Polski",
+        "sv": "Svenska"
       }
     }
   },

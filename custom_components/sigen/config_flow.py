@@ -38,6 +38,9 @@ from .const import (
     DEFAULT_READ_ONLY,
     DEFAULT_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
+    CONF_ENTITY_NAME_LANGUAGE,
+    ENTITY_NAME_LANGUAGE_AUTO,
+    ENTITY_NAME_LANGUAGES,
     CONF_HOST,
     CONF_PORT,
     CONF_SLAVE_ID,
@@ -1082,8 +1085,39 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         _LOGGER.debug("Loaded devices for selection: %s", self._devices)
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        """Initial handler for device reconfiguration options."""
-        return await self.async_step_select_device()
+        """Choose device configuration or integration display settings."""
+        return self.async_show_menu(
+            step_id="init", menu_options=["select_device", "display_settings"],
+        )
+
+    async def async_step_display_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Select a display-name language without modifying device settings."""
+        languages = (ENTITY_NAME_LANGUAGE_AUTO, *ENTITY_NAME_LANGUAGES)
+        current = self.config_entry.options.get(CONF_ENTITY_NAME_LANGUAGE, ENTITY_NAME_LANGUAGE_AUTO)
+        if current not in languages:
+            current = ENTITY_NAME_LANGUAGE_AUTO
+        errors = {}
+        if user_input is not None:
+            current = user_input.get(CONF_ENTITY_NAME_LANGUAGE)
+            if current in languages:
+                options = dict(self.config_entry.options)
+                if current == ENTITY_NAME_LANGUAGE_AUTO:
+                    options.pop(CONF_ENTITY_NAME_LANGUAGE, None)
+                else:
+                    options[CONF_ENTITY_NAME_LANGUAGE] = current
+                # OptionsFlow persists this and the existing update listener
+                # reloads once. Do not also update/reload the entry here.
+                return self.async_create_entry(title="", data=options)
+            errors[CONF_ENTITY_NAME_LANGUAGE] = "invalid_entity_name_language"
+            current = ENTITY_NAME_LANGUAGE_AUTO
+        return self.async_show_form(
+            step_id="display_settings",
+            data_schema=vol.Schema({vol.Required(CONF_ENTITY_NAME_LANGUAGE, default=current):
+                SelectSelector(SelectSelectorConfig(
+                    options=list(languages), translation_key="entity_name_language",
+                ))}),
+            errors=errors,
+        )
 
     async def async_step_select_device(self, user_input: dict[str, Any] | None = None):
         """Handle selection of which existing device to reconfigure."""
@@ -1201,7 +1235,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Reload the entry to ensure changes take effect
         await self.hass.config_entries.async_reload(self.config_entry.entry_id)
 
-        return self.async_create_entry(title="Sigenergy", data={})
+        return self.async_create_entry(title="Sigenergy", data=dict(self.config_entry.options))
 
     async def async_step_inverter_config(
         self, user_input: dict[str, Any] | None = None
@@ -1329,7 +1363,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Reload the entry to ensure changes take effect
         await self.hass.config_entries.async_reload(self.config_entry.entry_id)
 
-        return self.async_create_entry(title="Sigenergy", data={})
+        return self.async_create_entry(title="Sigenergy", data=dict(self.config_entry.options))
 
     async def async_step_ac_charger_config(
         self, user_input: dict[str, Any] | None = None
@@ -1442,7 +1476,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Reload the entry to ensure changes take effect
         await self.hass.config_entries.async_reload(self.config_entry.entry_id)
 
-        return self.async_create_entry(title="Sigenergy", data={})
+        return self.async_create_entry(title="Sigenergy", data=dict(self.config_entry.options))
 
     async def async_step_dc_charger_config(
         self, user_input: dict[str, Any] | None = None
@@ -1504,7 +1538,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             # Reload the entry to ensure changes take effect
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
 
-            return self.async_create_entry(title="Sigenergy", data={})
+            return self.async_create_entry(title="Sigenergy", data=dict(self.config_entry.options))
 
         # Handle non-removal case (no changes, but still cleanup before returning)
         _LOGGER.debug(
@@ -1512,7 +1546,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
         return self.async_create_entry(
-            title="", data={}
+            title="", data=dict(self.config_entry.options)
         )  # Existing return for non-removal
 
     async def _async_remove_devices_and_entities(

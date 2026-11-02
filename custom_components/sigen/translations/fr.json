@@ -126,7 +126,11 @@
     "step": {
       "init": {
         "title": "Options Sigenergy",
-        "description": "Configurez les options de l’intégration Sigenergy."
+        "description": "Configurez les options de l’intégration Sigenergy.",
+        "menu_options": {
+          "select_device": "Paramètres des appareils",
+          "display_settings": "Paramètres d’affichage"
+        }
       },
       "select_device": {
         "title": "Sélectionner l’appareil à reconfigurer",
@@ -194,6 +198,16 @@
           "ac_charger_slave_ids": "Identifiants des bornes CA (séparés par des virgules s’il y en a plusieurs ; laisser vide si aucune borne CA)",
           "dc_charger_slave_ids": "Identifiants des onduleurs avec bornes CC raccordées (séparés par des virgules s’il y en a plusieurs)"
         }
+      },
+      "display_settings": {
+        "title": "Paramètres d’affichage",
+        "description": "Choisissez la langue des noms d’entités par défaut. Les dialogues, états et détails des alarmes suivent la langue de votre interface Home Assistant.",
+        "data": {
+          "entity_name_language": "Langue des noms d’entités"
+        },
+        "data_description": {
+          "entity_name_language": "Automatique utilise la langue du serveur Home Assistant. Les noms personnalisés, identifiants d’entités et historiques sont conservés. Un changement de langue recharge l’intégration."
+        }
       }
     },
     "error": {
@@ -210,7 +224,8 @@
       "cannot_connect": "Impossible de se connecter au système Sigenergy. Vérifiez l’hôte et le port.",
       "required_value": "Saisissez une valeur.",
       "must_be_number": "Saisissez un nombre.",
-      "must_be_at_least_1": "L’intervalle de mise à jour doit être d’au moins 1 seconde."
+      "must_be_at_least_1": "L’intervalle de mise à jour doit être d’au moins 1 seconde.",
+      "invalid_entity_name_language": "Sélectionnez une langue prise en charge ou Automatique."
     },
     "abort": {
       "already_configured": "Ce système Sigenergy est déjà configuré.",
@@ -1770,6 +1785,22 @@
     "configured_device": {
       "options": {
         "accumulated_energy": "Modifier les valeurs d’énergie cumulée"
+      }
+    },
+    "entity_name_language": {
+      "options": {
+        "auto": "Automatique (langue du serveur Home Assistant)",
+        "da": "Dansk",
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fi": "Suomi",
+        "fr": "Français",
+        "it": "Italiano",
+        "nb": "Norsk Bokmål",
+        "nl": "Nederlands",
+        "pl": "Polski",
+        "sv": "Svenska"
       }
     }
   },

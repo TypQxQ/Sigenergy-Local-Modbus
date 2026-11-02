@@ -90,6 +90,15 @@ class TestUICatalogues(unittest.TestCase):
             with self.subTest(catalogue=path.name):
                 json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
 
+    def test_language_selector_and_configure_menu_cover_every_choice(self):
+        for language, catalogue in self.catalogues.items():
+            with self.subTest(language=language):
+                self.assertEqual(LANGUAGES | {"auto"},
+                                 set(catalogue["selector"]["entity_name_language"]["options"]))
+                self.assertEqual({"select_device", "display_settings"},
+                                 set(catalogue["options"]["step"]["init"]["menu_options"]))
+                self.assertIn("entity_name_language", catalogue["options"]["step"]["display_settings"]["data"])
+
     def test_flow_errors_and_abort_reasons_are_translation_keys(self):
         tree = ast.parse((P / "config_flow.py").read_text(encoding="utf-8"))
         for cls in (node for node in tree.body if isinstance(node, ast.ClassDef)):

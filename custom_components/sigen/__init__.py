@@ -25,6 +25,7 @@ from .modbus import SigenergyModbusHub
 from .const import CONF_PLANT_CONNECTION
 from .common import generate_device_id
 from .device_registry_compat import register_parent_devices
+from .entity_language import async_load_entity_name_translations
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug("async_setup_entry: Scan interval set to %s seconds", scan_interval)
     _LOGGER.debug("async_setup_entry: CONF_PLANT_CONNECTION: %s", entry.data[CONF_PLANT_CONNECTION])
 
+    name_translations = await async_load_entity_name_translations(hass, entry)
+
     hub = SigenergyModbusHub(hass, entry)
     _LOGGER.debug("async_setup_entry: SigenergyModbusHub created: %s", hub)
 
@@ -63,6 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name=f"{DOMAIN}_{host}_{port}",
         scan_interval=scan_interval,
     )
+    coordinator.entity_name_translations = name_translations
     _LOGGER.debug("async_setup_entry: SigenergyDataUpdateCoordinator created: %s", coordinator)
 
     try:

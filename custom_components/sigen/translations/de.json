@@ -126,7 +126,11 @@
     "step": {
       "init": {
         "title": "Sigenergy-Optionen",
-        "description": "Konfigurieren Sie die Optionen der Sigenergy-Integration."
+        "description": "Konfigurieren Sie die Optionen der Sigenergy-Integration.",
+        "menu_options": {
+          "select_device": "Geräteeinstellungen",
+          "display_settings": "Anzeigeeinstellungen"
+        }
       },
       "select_device": {
         "title": "Gerät zur Neukonfiguration auswählen",
@@ -194,6 +198,16 @@
           "ac_charger_slave_ids": "AC-Ladegerät-IDs (mehrere durch Kommas trennen; für kein AC-Ladegerät leer lassen)",
           "dc_charger_slave_ids": "Wechselrichter-IDs mit angeschlossenen DC-Ladegeräten (mehrere durch Kommas trennen)"
         }
+      },
+      "display_settings": {
+        "title": "Anzeigeeinstellungen",
+        "description": "Wählen Sie die Sprache für Standardnamen von Entitäten. Dialoge, Statusanzeigen und Alarmdetails folgen der Sprache Ihrer Home-Assistant-Oberfläche.",
+        "data": {
+          "entity_name_language": "Sprache der Entitätsnamen"
+        },
+        "data_description": {
+          "entity_name_language": "Automatisch verwendet die Home-Assistant-Serversprache. Eigene Namen, Entitäts-IDs und Verlauf bleiben erhalten. Bei einer Sprachänderung wird die Integration neu geladen."
+        }
       }
     },
     "error": {
@@ -210,7 +224,8 @@
       "cannot_connect": "Verbindung zum Sigenergy-System fehlgeschlagen. Prüfen Sie Host und Port.",
       "required_value": "Geben Sie einen Wert ein.",
       "must_be_number": "Geben Sie eine Zahl ein.",
-      "must_be_at_least_1": "Das Aktualisierungsintervall muss mindestens 1 Sekunde betragen."
+      "must_be_at_least_1": "Das Aktualisierungsintervall muss mindestens 1 Sekunde betragen.",
+      "invalid_entity_name_language": "Wählen Sie eine unterstützte Sprache oder Automatisch."
     },
     "abort": {
       "already_configured": "Dieses Sigenergy-System ist bereits konfiguriert.",
@@ -1770,6 +1785,22 @@
     "configured_device": {
       "options": {
         "accumulated_energy": "Kumulierte Energiewerte ändern"
+      }
+    },
+    "entity_name_language": {
+      "options": {
+        "auto": "Automatisch (Home-Assistant-Serversprache)",
+        "da": "Dansk",
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fi": "Suomi",
+        "fr": "Français",
+        "it": "Italiano",
+        "nb": "Norsk Bokmål",
+        "nl": "Nederlands",
+        "pl": "Polski",
+        "sv": "Svenska"
       }
     }
   },

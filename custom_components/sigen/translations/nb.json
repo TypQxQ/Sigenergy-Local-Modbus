@@ -126,7 +126,11 @@
     "step": {
       "init": {
         "title": "Sigenergy-alternativer",
-        "description": "Konfigurer alternativene for Sigenergy-integrasjonen."
+        "description": "Konfigurer alternativene for Sigenergy-integrasjonen.",
+        "menu_options": {
+          "select_device": "Enhetsinnstillinger",
+          "display_settings": "Visningsinnstillinger"
+        }
       },
       "select_device": {
         "title": "Velg enhet som skal konfigureres på nytt",
@@ -194,6 +198,16 @@
           "ac_charger_slave_ids": "Enhets-ID-er for AC-ladere (kommaseparert ved flere; la stå tomt hvis det ikke finnes en AC-lader)",
           "dc_charger_slave_ids": "ID-er for vekselrettere med tilkoblede DC-ladere (kommaseparert ved flere)"
         }
+      },
+      "display_settings": {
+        "title": "Visningsinnstillinger",
+        "description": "Velg språket for entitetenes standardnavn. Dialoger, statusetiketter og alarmdetaljer følger grensesnittspråket i Home Assistant.",
+        "data": {
+          "entity_name_language": "Språk for entitetsnavn"
+        },
+        "data_description": {
+          "entity_name_language": "Automatisk bruker Home Assistants serverspråk. Egne navn, entitets-ID-er og historikk bevares. Endring av språket laster integrasjonen på nytt."
+        }
       }
     },
     "error": {
@@ -210,7 +224,8 @@
       "cannot_connect": "Kunne ikke koble til Sigenergy-systemet. Kontroller vert og port.",
       "required_value": "Angi en verdi.",
       "must_be_number": "Angi et tall.",
-      "must_be_at_least_1": "Oppdateringsintervallet må være minst 1 sekund."
+      "must_be_at_least_1": "Oppdateringsintervallet må være minst 1 sekund.",
+      "invalid_entity_name_language": "Velg et støttet språk eller Automatisk."
     },
     "abort": {
       "already_configured": "Dette Sigenergy-systemet er allerede konfigurert.",
@@ -1770,6 +1785,22 @@
     "configured_device": {
       "options": {
         "accumulated_energy": "Endre akkumulerte energiverdier"
+      }
+    },
+    "entity_name_language": {
+      "options": {
+        "auto": "Automatisk (Home Assistants serverspråk)",
+        "da": "Dansk",
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fi": "Suomi",
+        "fr": "Français",
+        "it": "Italiano",
+        "nb": "Norsk Bokmål",
+        "nl": "Nederlands",
+        "pl": "Polski",
+        "sv": "Svenska"
       }
     }
   },

@@ -126,7 +126,11 @@
     "step": {
       "init": {
         "title": "Sigenergy Options",
-        "description": "Configure the options for the Sigenergy integration."
+        "description": "Configure the options for the Sigenergy integration.",
+        "menu_options": {
+          "select_device": "Device settings",
+          "display_settings": "Display settings"
+        }
       },
       "select_device": {
         "title": "Select Device to Reconfigure",
@@ -194,6 +198,16 @@
           "ac_charger_slave_ids": "AC Charger Device IDs ( comma-separated when multiple. Default is empty for no AC charger )",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached ( comma-separated when multiple )"
         }
+      },
+      "display_settings": {
+        "title": "Display settings",
+        "description": "Choose the language for default entity names. Dialogs, status labels and alarm details follow your Home Assistant interface language.",
+        "data": {
+          "entity_name_language": "Entity name language"
+        },
+        "data_description": {
+          "entity_name_language": "Automatic uses the Home Assistant server language. Custom names, entity IDs and history are preserved. Changing the language reloads the integration."
+        }
       }
     },
     "error": {
@@ -210,7 +224,8 @@
       "cannot_connect": "Failed to connect to the Sigenergy system. Please check the host and port.",
       "required_value": "Enter a value.",
       "must_be_number": "Enter a number.",
-      "must_be_at_least_1": "The update interval must be at least 1 second."
+      "must_be_at_least_1": "The update interval must be at least 1 second.",
+      "invalid_entity_name_language": "Select a supported language or Automatic."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured.",
@@ -1770,6 +1785,22 @@
     "configured_device": {
       "options": {
         "accumulated_energy": "Change accumulated energy values"
+      }
+    },
+    "entity_name_language": {
+      "options": {
+        "auto": "Automatic (Home Assistant server language)",
+        "da": "Dansk",
+        "de": "Deutsch",
+        "en": "English",
+        "es": "Español",
+        "fi": "Suomi",
+        "fr": "Français",
+        "it": "Italiano",
+        "nb": "Norsk Bokmål",
+        "nl": "Nederlands",
+        "pl": "Polski",
+        "sv": "Svenska"
       }
     }
   },

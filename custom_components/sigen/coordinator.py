@@ -46,6 +46,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.latest_update_timing: dict[str, Any] = {}
         self._degraded_devices: set[str] = set()
         self.pv_restore_states: dict[str, dict[str, Any]] = {}
+        self.entity_name_translations: dict[str, str] | None = None
 
         if scan_interval < MIN_SCAN_INTERVAL:
             scan_interval = DEFAULT_SCAN_INTERVAL
