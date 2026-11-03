@@ -59,6 +59,11 @@ switching a dashboard or automation to the new sensor, check its entity ID and
 unit; convert hours to minutes where the consumer expects minutes. Historical
 helper data is not rewritten or transferred to the new entity.
 
+Entity IDs in examples are placeholders. A new sensor may instead be named
+`sensor.garage_sigen_plant_battery_time_remaining`. Open the sensor's entity
+settings and copy its actual entity ID into your template or dashboard. A
+reference to a nonexistent ID returns `unknown`. No renaming is required.
+
 ## Controls and Remote EMS
 
 Read-only mode is enabled by default. Write controls and many diagnostic entities
@@ -87,6 +92,41 @@ availability, then select the desired mode. A fixed delay is not confirmation.
 Home Assistant skips actions targeting unavailable entities before the
 integration receives them, so the integration cannot recover an undelivered
 command. Include an automation trace and full debug log when reporting failures.
+
+## Alarm monitoring
+
+Use the `alarm_status` attribute when building an alarm indicator. Checking
+whether the sensor's state differs from `No Problem` also flags `Unknown Alarm`
+and unavailable readings as if they were confirmed faults.
+
+| Reading | Meaning |
+|---|---|
+| `alarm_status: no_problem` | Valid reading with no alarm bits set |
+| `alarm_status: active` | At least one recognized alarm bit is set |
+| `alarm_status: unknown` | The reading cannot be fully interpreted |
+| Entity `unknown`/`unavailable`, or missing `alarm_status` | No usable alarm status |
+
+For a confirmed-alarm indicator, use this template, replacing the example ID:
+
+```jinja2
+{% set alarm = 'sensor.sigen_plant_general_alarm_7' %}
+{{ has_value(alarm) and state_attr(alarm, 'alarm_status') == 'active' }}
+```
+
+Pair it with a separate uncertainty/offline indicator so a false confirmed-alarm
+indicator is not mistaken for an all-clear:
+
+```jinja2
+{% set alarm = 'sensor.sigen_plant_general_alarm_7' %}
+{{ not has_value(alarm)
+   or state_attr(alarm, 'alarm_status') not in ['no_problem', 'active'] }}
+```
+
+Alarm 7's `0xFFFF` has `alarm_status: unknown` and
+`alarm_reason: all_bits_set`. It activates the uncertainty indicator, not the
+confirmed-alarm indicator. The value alone does not establish that the register
+is unsupported. Polling continues, so a later valid reading can report a normal
+status or a recognized alarm. These attributes use stable keys in every language.
 
 ## Modbus limitations
 
