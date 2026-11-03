@@ -130,7 +130,8 @@
         "description": "Konfigurieren Sie die Optionen der Sigenergy-Integration.",
         "menu_options": {
           "select_device": "Geräteeinstellungen",
-          "display_settings": "Anzeigeeinstellungen"
+          "display_settings": "Anzeigeeinstellungen",
+          "power_flow_settings": "Leistungsflussanzeigen"
         }
       },
       "select_device": {
@@ -209,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Automatisch verwendet die Home-Assistant-Serversprache. Eigene Namen, Entitäts-IDs und Verlauf bleiben erhalten. Bei einer Sprachänderung wird die Integration neu geladen."
         }
+      },
+      "power_flow_settings": {
+        "title": "Leistungsflussanzeigen",
+        "description": "Optionale Filterung nur für binäre Anzeigen. Leistungs- und Energiewerte bleiben unverändert.",
+        "data": {
+          "power_flow_hysteresis": "Hysterese aktivieren",
+          "power_flow_on_w": "Einschalten oberhalb (W)",
+          "power_flow_off_w": "Ausschalten bei oder unter (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "Wenn deaktiviert, gilt der bisherige Schwellenwert von 10 W."
+        }
       }
     },
     "error": {
@@ -227,7 +240,8 @@
       "must_be_number": "Geben Sie eine Zahl ein.",
       "must_be_at_least_1": "Das Aktualisierungsintervall muss mindestens 1 Sekunde betragen.",
       "invalid_entity_name_language": "Wählen Sie eine unterstützte Sprache oder Automatisch.",
-      "device_address_in_use": "Diese Geräte-ID wird bereits auf demselben Host und Port verwendet. Wählen Sie eine andere ID oder einen anderen Endpunkt."
+      "device_address_in_use": "Diese Geräte-ID wird bereits auf demselben Host und Port verwendet. Wählen Sie eine andere ID oder einen anderen Endpunkt.",
+      "invalid_power_flow_thresholds": "Gültige Schwellenwerte eingeben: Ausschalten muss unter Einschalten liegen."
     },
     "abort": {
       "already_configured": "Dieses Sigenergy-System ist bereits konfiguriert.",

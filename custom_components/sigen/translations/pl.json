@@ -130,7 +130,8 @@
         "description": "Skonfiguruj opcje integracji Sigenergy.",
         "menu_options": {
           "select_device": "Ustawienia urządzeń",
-          "display_settings": "Ustawienia wyświetlania"
+          "display_settings": "Ustawienia wyświetlania",
+          "power_flow_settings": "Wskaźniki przepływu mocy"
         }
       },
       "select_device": {
@@ -209,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Opcja automatyczna używa języka serwera Home Assistant. Własne nazwy, identyfikatory encji i historia zostają zachowane. Zmiana języka przeładowuje integrację."
         }
+      },
+      "power_flow_settings": {
+        "title": "Wskaźniki przepływu mocy",
+        "description": "Opcjonalne filtrowanie tylko wskaźników binarnych. Odczyty mocy i energii pozostają bez zmian.",
+        "data": {
+          "power_flow_hysteresis": "Włącz histerezę",
+          "power_flow_on_w": "Włącz powyżej (W)",
+          "power_flow_off_w": "Wyłącz przy lub poniżej (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "Gdy wyłączona, używany jest dotychczasowy próg 10 W."
+        }
       }
     },
     "error": {
@@ -227,7 +240,8 @@
       "must_be_number": "Wprowadź liczbę.",
       "must_be_at_least_1": "Interwał aktualizacji musi wynosić co najmniej 1 sekundę.",
       "invalid_entity_name_language": "Wybierz obsługiwany język lub opcję automatyczną.",
-      "device_address_in_use": "Ten identyfikator urządzenia jest już używany na tym samym hoście i porcie. Wybierz inny identyfikator lub punkt połączenia."
+      "device_address_in_use": "Ten identyfikator urządzenia jest już używany na tym samym hoście i porcie. Wybierz inny identyfikator lub punkt połączenia.",
+      "invalid_power_flow_thresholds": "Użyj poprawnych progów, z progiem wyłączenia niższym od progu włączenia."
     },
     "abort": {
       "already_configured": "Ten system Sigenergy jest już skonfigurowany.",

@@ -31,6 +31,18 @@ installer. The charger normally uses the inverter's Modbus TCP endpoint, not its
 own Wi-Fi IP. A plant-level EVAC energy reading does not prove that the charger's
 own registers are reachable. See the resolved [replacement charger report](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/391).
 
+For an address change on the same inverter or AC charger, edit the existing
+device through **Configure → Device settings**. B4 reloads with the new address
+without deleting its registry entries, preserving IDs, custom names, areas and
+entity settings. Do not remove/re-add a device merely to change its IP or port.
+An actual hardware replacement requires checking its identity and commissioned
+settings; changing an address does not establish that replacement hardware is
+the same physical device or that its counters continue the old history.
+
+Explicit removal targets the selected device's integration identifier and its
+registry descendants, including its PV/DC children. Similar display names do not
+select other inverters. Entries owned by other integrations are left alone.
+
 ## Model and firmware notes
 
 Firmware numbering is model-specific; an SPC number is not a universal minimum
@@ -82,6 +94,91 @@ After setup, check direction during a known import, export, charge and discharge
 period, and check that kWh totals and the kW Now view agree with those directions.
 No manual template or history migration is needed for this mapping. See Home
 Assistant's [energy guidance](https://www.home-assistant.io/docs/energy/faq/).
+
+### Third-party PV
+
+External/AC-coupled inverter energy already has dedicated sensors:
+
+| Sensor | Register key / calculation |
+|---|---|
+| Plant **Total generation of third-party inverter** | `plant_total_generation_of_third_party_inverter`, lifetime counter; disabled by default |
+| Plant **Daily third-party inverter energy** | `plant_daily_third_party_inverter_energy_from_lifetime`, derived from that lifetime counter |
+
+If the total sensor is absent from your dashboard, find it in the integration's
+entity list and enable it. Enable and record the total source when using its
+daily derivative. No write controls or new Riemann-sum helper are needed when
+the device supplies this counter. Native readings use kWh; HA may display a
+converted unit such as MWh. Do not apply another scaling factor to the reading.
+
+The normal **Daily PV energy** calculation sums Sigenergy inverter daily
+counters; it does not add the separate third-party daily counter. For the Energy
+Dashboard, establish whether your selected plant PV total includes external PV
+before adding another source: overlapping totals would double count production.
+Available registers depend on the installation. See [the third-party PV report](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/255).
+
+## Power flow indicators
+
+**Configure → Power flow indicators** optionally enables hysteresis for the
+existing PV-generating, importing/exporting and battery-charging/discharging
+binary sensors. It is off by default, retaining the existing 10 W threshold.
+
+With hysteresis enabled, the defaults turn an indicator on **above 50 W** and
+off **at or below 10 W** in its indicated direction. Between those thresholds,
+the previous state is retained. For example, import power of 60 → 30 → 5 W gives
+on → on → off. The thresholds are shared across these indicators and must
+satisfy `0 ≤ off < on ≤ 1000000 W`.
+
+Missing/invalid readings clear the remembered state. After a reload or data
+loss, a reading inside the band does not restore an old on-state; the upper
+threshold must be exceeded again. Saving changed options reloads the integration.
+Disabling the feature restores the normal threshold behavior. Numeric power,
+energy counters, polling and control writes are unaffected.
+
+## Grid outage and recovery notifications
+
+In 2.0, use the stored keys `on_grid`, `off_grid_auto` and `off_grid_manual`,
+not translated labels. This example can be pasted into an automation's YAML
+editor after replacing the entity ID. It creates a local persistent notification;
+replace that action with your phone notification if desired.
+
+```yaml
+alias: Sigenergy grid connection notifications
+triggers:
+  - trigger: state
+    entity_id: sensor.sigen_plant_grid_connection_status
+    from: "on_grid"
+    to:
+      - "off_grid_auto"
+      - "off_grid_manual"
+    for: "00:00:30"
+    id: outage
+  - trigger: state
+    entity_id: sensor.sigen_plant_grid_connection_status
+    from:
+      - "off_grid_auto"
+      - "off_grid_manual"
+    to: "on_grid"
+    for: "00:00:30"
+    id: restored
+actions:
+  - action: persistent_notification.create
+    data:
+      notification_id: sigenergy_grid_connection
+      title: Sigenergy grid connection
+      message: >-
+        {{ 'Grid connection restored.' if trigger.id == 'restored'
+           else 'The system is off grid.' }}
+mode: queued
+max: 2
+```
+
+An entity becoming `unavailable` is a communication/data issue, not proof of a
+grid outage. Requiring a known previous grid state avoids false outage/recovery
+messages on startup or after data loss. This also means that starting HA while
+already off grid produces no new outage notification from this example. Check
+the current state separately if that is required. Manual off-grid operation is
+not necessarily a utility failure. The 30-second timer resets on an HA restart
+or automation reload; see [HA state triggers](https://www.home-assistant.io/docs/automation/trigger/#state-trigger).
 
 ## Recorder storage
 

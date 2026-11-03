@@ -99,3 +99,25 @@ class TestDeviceAddresses(unittest.IsolatedAsyncioTestCase):
             self.flow.hass.config_entries.async_update_entry.assert_not_called()
             self.flow.hass.config_entries.async_reload.assert_not_awaited()
             self.flow._async_remove_devices_and_entities.assert_not_awaited()
+
+    async def test_changed_addresses_keep_registry_entries_and_preserve_device_options(self):
+        for role,name,method,device_id,group in (
+            ('inverter','Fixture inverter','async_step_inverter_config',1,'inverter_connections'),
+            ('ac_charger','Fixture charger','async_step_ac_charger_config',2,'ac_charger_connections'),
+        ):
+            for change in ({'host':'192.0.2.9'}, {'port':1502}, {'slave_id':3}):
+                flow = options_flow(self.scope)
+                flow.config_entry = deepcopy(self.flow.config_entry)
+                flow._selected_device = {'type':role,'id':name}
+                flow._async_remove_devices_and_entities = AsyncMock()
+                before = deepcopy(flow.config_entry)
+                submission = self.connection(slave_id=device_id)
+                submission.update(change)
+                result = await getattr(flow,method)(submission)
+                self.assertEqual('create_entry',result['type'])
+                self.assertEqual(before.options,result['data'])
+                saved=flow.hass.config_entries.async_update_entry.call_args.kwargs['data']
+                self.assertEqual({**before.data[group][name], **change}, saved[group][name])
+                self.assertEqual(before,flow.config_entry)
+                flow._async_remove_devices_and_entities.assert_not_awaited()
+                flow.hass.config_entries.async_reload.assert_awaited_once_with('fixture')

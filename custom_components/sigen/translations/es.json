@@ -130,7 +130,8 @@
         "description": "Configure las opciones de la integración Sigenergy.",
         "menu_options": {
           "select_device": "Ajustes de dispositivos",
-          "display_settings": "Ajustes de visualización"
+          "display_settings": "Ajustes de visualización",
+          "power_flow_settings": "Indicadores de flujo de potencia"
         }
       },
       "select_device": {
@@ -209,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Automático usa el idioma del servidor de Home Assistant. Se conservan los nombres personalizados, los ID de entidades y el historial. Cambiar el idioma recarga la integración."
         }
+      },
+      "power_flow_settings": {
+        "title": "Indicadores de flujo de potencia",
+        "description": "Filtrado opcional solo para indicadores binarios. Las lecturas de potencia y energía no cambian.",
+        "data": {
+          "power_flow_hysteresis": "Activar histéresis",
+          "power_flow_on_w": "Activar por encima de (W)",
+          "power_flow_off_w": "Desactivar en o por debajo de (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "Si está desactivado, se utiliza el umbral existente de 10 W."
+        }
       }
     },
     "error": {
@@ -227,7 +240,8 @@
       "must_be_number": "Introduzca un número.",
       "must_be_at_least_1": "El intervalo de actualización debe ser de al menos 1 segundo.",
       "invalid_entity_name_language": "Seleccione un idioma compatible o Automático.",
-      "device_address_in_use": "Este ID de dispositivo ya se utiliza en el mismo host y puerto. Elige otro ID o punto de conexión."
+      "device_address_in_use": "Este ID de dispositivo ya se utiliza en el mismo host y puerto. Elige otro ID o punto de conexión.",
+      "invalid_power_flow_thresholds": "Utiliza umbrales válidos con el de desactivación inferior al de activación."
     },
     "abort": {
       "already_configured": "Este sistema Sigenergy ya está configurado.",

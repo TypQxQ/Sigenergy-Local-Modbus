@@ -95,7 +95,7 @@ class TestUICatalogues(unittest.TestCase):
             with self.subTest(language=language):
                 self.assertEqual(LANGUAGES | {"auto"},
                                  set(catalogue["selector"]["entity_name_language"]["options"]))
-                self.assertEqual({"select_device", "display_settings"},
+                self.assertEqual({"select_device", "display_settings", "power_flow_settings"},
                                  set(catalogue["options"]["step"]["init"]["menu_options"]))
                 self.assertIn("entity_name_language", catalogue["options"]["step"]["display_settings"]["data"])
 

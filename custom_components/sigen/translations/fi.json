@@ -130,7 +130,8 @@
         "description": "Määritä Sigenergy-integraation asetukset.",
         "menu_options": {
           "select_device": "Laitteiden asetukset",
-          "display_settings": "Näyttöasetukset"
+          "display_settings": "Näyttöasetukset",
+          "power_flow_settings": "Tehovirran ilmaisimet"
         }
       },
       "select_device": {
@@ -209,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Automaattinen käyttää Home Assistantin palvelimen kieltä. Omat nimet, entiteettitunnukset ja historia säilyvät. Kielen vaihtaminen lataa integraation uudelleen."
         }
+      },
+      "power_flow_settings": {
+        "title": "Tehovirran ilmaisimet",
+        "description": "Valinnainen suodatus vain binääri-ilmaisimille. Teho- ja energialukemat eivät muutu.",
+        "data": {
+          "power_flow_hysteresis": "Ota hystereesi käyttöön",
+          "power_flow_on_w": "Kytke päälle yli (W)",
+          "power_flow_off_w": "Kytke pois rajalla tai sen alle (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "Kun poistettu käytöstä, käytetään nykyistä 10 W:n rajaa."
+        }
       }
     },
     "error": {
@@ -227,7 +240,8 @@
       "must_be_number": "Anna numero.",
       "must_be_at_least_1": "Päivitysvälin on oltava vähintään 1 sekunti.",
       "invalid_entity_name_language": "Valitse tuettu kieli tai Automaattinen.",
-      "device_address_in_use": "Tämä laitetunnus on jo käytössä samalla palvelimella ja portilla. Valitse toinen tunnus tai yhteyspiste."
+      "device_address_in_use": "Tämä laitetunnus on jo käytössä samalla palvelimella ja portilla. Valitse toinen tunnus tai yhteyspiste.",
+      "invalid_power_flow_thresholds": "Anna kelvolliset rajat: poiskytkentärajan on oltava päällekytkentärajaa pienempi."
     },
     "abort": {
       "already_configured": "Tämä Sigenergy-järjestelmä on jo määritetty.",

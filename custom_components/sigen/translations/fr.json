@@ -130,7 +130,8 @@
         "description": "Configurez les options de l’intégration Sigenergy.",
         "menu_options": {
           "select_device": "Paramètres des appareils",
-          "display_settings": "Paramètres d’affichage"
+          "display_settings": "Paramètres d’affichage",
+          "power_flow_settings": "Indicateurs de flux de puissance"
         }
       },
       "select_device": {
@@ -209,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Automatique utilise la langue du serveur Home Assistant. Les noms personnalisés, identifiants d’entités et historiques sont conservés. Un changement de langue recharge l’intégration."
         }
+      },
+      "power_flow_settings": {
+        "title": "Indicateurs de flux de puissance",
+        "description": "Filtrage facultatif des indicateurs binaires uniquement. Les mesures de puissance et d’énergie restent inchangées.",
+        "data": {
+          "power_flow_hysteresis": "Activer l’hystérésis",
+          "power_flow_on_w": "Activer au-dessus de (W)",
+          "power_flow_off_w": "Désactiver à ou en dessous de (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "Si désactivé, le seuil existant de 10 W est utilisé."
+        }
       }
     },
     "error": {
@@ -227,7 +240,8 @@
       "must_be_number": "Saisissez un nombre.",
       "must_be_at_least_1": "L’intervalle de mise à jour doit être d’au moins 1 seconde.",
       "invalid_entity_name_language": "Sélectionnez une langue prise en charge ou Automatique.",
-      "device_address_in_use": "Cet identifiant est déjà utilisé sur le même hôte et le même port. Choisissez un autre identifiant ou point de connexion."
+      "device_address_in_use": "Cet identifiant est déjà utilisé sur le même hôte et le même port. Choisissez un autre identifiant ou point de connexion.",
+      "invalid_power_flow_thresholds": "Utilisez des seuils valides, avec le seuil de désactivation inférieur au seuil d’activation."
     },
     "abort": {
       "already_configured": "Ce système Sigenergy est déjà configuré.",

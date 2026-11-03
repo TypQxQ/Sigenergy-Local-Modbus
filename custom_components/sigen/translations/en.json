@@ -130,7 +130,8 @@
         "description": "Configure the options for the Sigenergy integration.",
         "menu_options": {
           "select_device": "Device settings",
-          "display_settings": "Display settings"
+          "display_settings": "Display settings",
+          "power_flow_settings": "Power flow indicators"
         }
       },
       "select_device": {
@@ -209,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Automatic uses the Home Assistant server language. Custom names, entity IDs and history are preserved. Changing the language reloads the integration."
         }
+      },
+      "power_flow_settings": {
+        "title": "Power flow indicators",
+        "description": "Optional filtering for binary indicators only. Power and energy readings are unchanged.",
+        "data": {
+          "power_flow_hysteresis": "Enable hysteresis",
+          "power_flow_on_w": "Turn on above (W)",
+          "power_flow_off_w": "Turn off at or below (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "When disabled, the existing 10 W threshold is used."
+        }
       }
     },
     "error": {
@@ -227,7 +240,8 @@
       "must_be_number": "Enter a number.",
       "must_be_at_least_1": "The update interval must be at least 1 second.",
       "invalid_entity_name_language": "Select a supported language or Automatic.",
-      "device_address_in_use": "This device ID is already used on the same host and port. Choose a different ID or endpoint."
+      "device_address_in_use": "This device ID is already used on the same host and port. Choose a different ID or endpoint.",
+      "invalid_power_flow_thresholds": "Use valid thresholds with turn-off lower than turn-on."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured.",

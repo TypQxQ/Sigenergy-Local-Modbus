@@ -130,7 +130,8 @@
         "description": "Ändra inställningar för Sigenergy-integrationen.",
         "menu_options": {
           "select_device": "Enhetsinställningar",
-          "display_settings": "Visningsinställningar"
+          "display_settings": "Visningsinställningar",
+          "power_flow_settings": "Effektflödesindikatorer"
         }
       },
       "select_device": {
@@ -209,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Automatiskt använder Home Assistants serverspråk. Egna namn, entitets-ID:n och historik bevaras. När språket ändras läses integrationen in på nytt."
         }
+      },
+      "power_flow_settings": {
+        "title": "Effektflödesindikatorer",
+        "description": "Valfri filtrering endast för binära indikatorer. Effekt- och energivärden påverkas inte.",
+        "data": {
+          "power_flow_hysteresis": "Aktivera hysteres",
+          "power_flow_on_w": "Slå på över (W)",
+          "power_flow_off_w": "Slå av vid eller under (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "När funktionen är avstängd används den befintliga gränsen på 10 W."
+        }
       }
     },
     "error": {
@@ -227,7 +240,8 @@
       "must_be_number": "Ange ett tal.",
       "must_be_at_least_1": "Uppdateringsintervallet måste vara minst 1 sekund.",
       "invalid_entity_name_language": "Välj ett språk som stöds eller Automatiskt.",
-      "device_address_in_use": "Detta enhets-ID används redan på samma värd och port. Välj ett annat ID eller en annan anslutning."
+      "device_address_in_use": "Detta enhets-ID används redan på samma värd och port. Välj ett annat ID eller en annan anslutning.",
+      "invalid_power_flow_thresholds": "Ange giltiga gränser där avslag är lägre än tillslag."
     },
     "abort": {
       "already_configured": "Detta Sigenergy-system är redan konfigurerat.",
