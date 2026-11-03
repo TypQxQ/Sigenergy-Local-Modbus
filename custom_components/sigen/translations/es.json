@@ -105,7 +105,8 @@
       "invalid_port": "Número de puerto no válido. Debe estar entre 1 y 65535.",
       "required_value": "Introduzca un valor.",
       "must_be_number": "Introduzca un número.",
-      "must_be_at_least_1": "El intervalo de actualización debe ser de al menos 1 segundo."
+      "must_be_at_least_1": "El intervalo de actualización debe ser de al menos 1 segundo.",
+      "device_address_in_use": "Este ID de dispositivo ya se utiliza en el mismo host y puerto. Elige otro ID o punto de conexión."
     },
     "abort": {
       "already_configured": "Este sistema Sigenergy ya está configurado.",
@@ -225,7 +226,8 @@
       "required_value": "Introduzca un valor.",
       "must_be_number": "Introduzca un número.",
       "must_be_at_least_1": "El intervalo de actualización debe ser de al menos 1 segundo.",
-      "invalid_entity_name_language": "Seleccione un idioma compatible o Automático."
+      "invalid_entity_name_language": "Seleccione un idioma compatible o Automático.",
+      "device_address_in_use": "Este ID de dispositivo ya se utiliza en el mismo host y puerto. Elige otro ID o punto de conexión."
     },
     "abort": {
       "already_configured": "Este sistema Sigenergy ya está configurado.",

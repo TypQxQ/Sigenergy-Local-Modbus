@@ -105,7 +105,8 @@
       "invalid_port": "Ugyldigt portnummer. Skal være mellem 1 og 65535.",
       "required_value": "Angiv en værdi.",
       "must_be_number": "Angiv et tal.",
-      "must_be_at_least_1": "Opdateringsintervallet skal være mindst 1 sekund."
+      "must_be_at_least_1": "Opdateringsintervallet skal være mindst 1 sekund.",
+      "device_address_in_use": "Dette enheds-ID bruges allerede på samme vært og port. Vælg et andet ID eller forbindelsespunkt."
     },
     "abort": {
       "already_configured": "Dette Sigenergy-system er allerede konfigureret.",
@@ -225,7 +226,8 @@
       "required_value": "Angiv en værdi.",
       "must_be_number": "Angiv et tal.",
       "must_be_at_least_1": "Opdateringsintervallet skal være mindst 1 sekund.",
-      "invalid_entity_name_language": "Vælg et understøttet sprog eller Automatisk."
+      "invalid_entity_name_language": "Vælg et understøttet sprog eller Automatisk.",
+      "device_address_in_use": "Dette enheds-ID bruges allerede på samme vært og port. Vælg et andet ID eller forbindelsespunkt."
     },
     "abort": {
       "already_configured": "Dette Sigenergy-system er allerede konfigureret.",

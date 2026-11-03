@@ -105,7 +105,8 @@
       "invalid_port": "Ongeldig poortnummer. Moet tussen 1 en 65535 liggen.",
       "required_value": "Voer een waarde in.",
       "must_be_number": "Voer een getal in.",
-      "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn."
+      "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn.",
+      "device_address_in_use": "Dit apparaat-ID wordt al gebruikt op dezelfde host en poort. Kies een ander ID of eindpunt."
     },
     "abort": {
       "already_configured": "Dit Sigenergy-systeem is al geconfigureerd.",
@@ -225,7 +226,8 @@
       "required_value": "Voer een waarde in.",
       "must_be_number": "Voer een getal in.",
       "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn.",
-      "invalid_entity_name_language": "Kies een ondersteunde taal of Automatisch."
+      "invalid_entity_name_language": "Kies een ondersteunde taal of Automatisch.",
+      "device_address_in_use": "Dit apparaat-ID wordt al gebruikt op dezelfde host en poort. Kies een ander ID of eindpunt."
     },
     "abort": {
       "already_configured": "Dit Sigenergy-systeem is al geconfigureerd.",

@@ -105,7 +105,8 @@
       "invalid_port": "Virheellinen portin numero. Sen on oltava välillä 1–65535.",
       "required_value": "Anna arvo.",
       "must_be_number": "Anna numero.",
-      "must_be_at_least_1": "Päivitysvälin on oltava vähintään 1 sekunti."
+      "must_be_at_least_1": "Päivitysvälin on oltava vähintään 1 sekunti.",
+      "device_address_in_use": "Tämä laitetunnus on jo käytössä samalla palvelimella ja portilla. Valitse toinen tunnus tai yhteyspiste."
     },
     "abort": {
       "already_configured": "Tämä Sigenergy-järjestelmä on jo määritetty.",
@@ -225,7 +226,8 @@
       "required_value": "Anna arvo.",
       "must_be_number": "Anna numero.",
       "must_be_at_least_1": "Päivitysvälin on oltava vähintään 1 sekunti.",
-      "invalid_entity_name_language": "Valitse tuettu kieli tai Automaattinen."
+      "invalid_entity_name_language": "Valitse tuettu kieli tai Automaattinen.",
+      "device_address_in_use": "Tämä laitetunnus on jo käytössä samalla palvelimella ja portilla. Valitse toinen tunnus tai yhteyspiste."
     },
     "abort": {
       "already_configured": "Tämä Sigenergy-järjestelmä on jo määritetty.",

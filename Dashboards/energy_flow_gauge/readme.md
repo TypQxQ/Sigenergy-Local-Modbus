@@ -16,10 +16,32 @@ This has not been tested on HA earlier than 2024.9 and requires the following HA
 The sensor names needs to be changed to suit your system.
 
 # Installation
-- Copy - paste the raw card code from `energy_flow.yaml` to your a new card on you lovelace dashboard. Add any card and replace the raw code that you can edit by clicking on the *SHOW CODE EDITOR* in the bottom left.
+1. Copy `power_flow_gauges_sigen.yaml` into `config/packages/`. Enable packages
+   by merging the following into `configuration.yaml` (keep any existing
+   `homeassistant` settings):
 
-- Copy - paste the raw code in `power_flow_gauges_sigen.yaml` to your HA configuration.yaml file or a new file in the config/packages folder of your HA installation. If you create a new file in the config/packages folder for the first time, you need to add `package: !include_dir_named packages` to your configuration.yaml file.
+   ```yaml
+   homeassistant:
+     packages: !include_dir_named packages
+   ```
 
+2. Replace the source entity IDs with your actual IDs. The examples expect kW
+   power readings and the built-in **Battery time remaining** sensor in hours.
+   Battery power is positive when charging and negative when discharging.
+3. Check the Home Assistant configuration, then restart to load the package.
+4. Open an empty, manually managed dashboard's **Raw configuration editor** and
+   paste `energy_flow.yaml`. This file starts with `views:` and defines a whole
+   dashboard; it cannot be pasted into a single card's YAML editor.
+
+In B4, missing source readings make dependent gauge sensors unavailable instead
+of reporting fabricated zeroes. Statistics may need some valid samples after
+startup. The existing battery-minutes helper converts the integration's estimate
+from hours to minutes. If you previously copied this package, update your copy
+manually and preserve any local entity-ID mappings; integration updates do not
+replace your dashboard configuration.
+
+For Home Assistant's built-in Energy Dashboard, see the
+[sensor mapping guide](../../docs/USAGE.md#home-assistant-energy-dashboard).
 
 # Configuration 
 

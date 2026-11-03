@@ -105,7 +105,8 @@
       "invalid_port": "Invalid port number. Must be between 1 and 65535.",
       "required_value": "Enter a value.",
       "must_be_number": "Enter a number.",
-      "must_be_at_least_1": "The update interval must be at least 1 second."
+      "must_be_at_least_1": "The update interval must be at least 1 second.",
+      "device_address_in_use": "This device ID is already used on the same host and port. Choose a different ID or endpoint."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured.",
@@ -225,7 +226,8 @@
       "required_value": "Enter a value.",
       "must_be_number": "Enter a number.",
       "must_be_at_least_1": "The update interval must be at least 1 second.",
-      "invalid_entity_name_language": "Select a supported language or Automatic."
+      "invalid_entity_name_language": "Select a supported language or Automatic.",
+      "device_address_in_use": "This device ID is already used on the same host and port. Choose a different ID or endpoint."
     },
     "abort": {
       "already_configured": "This Sigenergy system is already configured.",

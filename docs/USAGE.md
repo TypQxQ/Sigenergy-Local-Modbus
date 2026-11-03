@@ -20,6 +20,91 @@ devices to an existing plant. Use the integration entry's **Configure** menu to
 change plant or device settings. Keep the same host and port across a plant
 unless your installation requires a different layout.
 
+Each inverter or AC charger needs a unique combination of host, port and device
+ID. B4 rejects an address already assigned to another device before probing or
+saving it, including when editing a device. The same ID can be used on different
+hosts or ports. A DC charger shares its parent inverter's address. Hostname
+matching ignores case and a trailing dot; DNS aliases are not resolved.
+
+If an AC charger cannot be found, confirm its commissioned device ID with the
+installer. The charger normally uses the inverter's Modbus TCP endpoint, not its
+own Wi-Fi IP. A plant-level EVAC energy reading does not prove that the charger's
+own registers are reachable. See the resolved [replacement charger report](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/391).
+
+## Model and firmware notes
+
+Firmware numbering is model-specific; an SPC number is not a universal minimum
+across all Sigenergy products.
+
+| Model | Evidence and limits |
+|---|---|
+| SigenStor | SPC109+ is the usual baseline for the Modbus functionality used here; available registers still depend on firmware and equipment. |
+| SigenMate | A user reports working read-only operation on **V100R001C00SPC101** after enabling Modbus in the app. Sigenergy supplied protocol V2.9 to that user. This is a field report, not verification of every plant/inverter/PV sensor or any write controls. |
+
+The [SigenMate report and vendor response](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/395)
+supersede the earlier blanket statement in that thread that SigenMate could not
+connect. Confirm the exact model, full firmware string, Modbus setting and
+applicable protocol when reporting compatibility. Start with read-only mode.
+
+## Home Assistant Energy Dashboard
+
+Use **Settings → Dashboards → Energy** to select your actual entity IDs. The
+labels below identify integration entities; IDs can differ between installations.
+Enable required disabled sensors in entity settings and retain their Recorder
+history. Check for statistics errors if a sensor is missing from the selector.
+
+For accumulated **energy** (kWh), use one source for each flow:
+
+| Energy setting | Integration sensor |
+|---|---|
+| Grid import | Plant **Total imported energy** (`plant_accumulated_grid_import_energy`) |
+| Grid export | Plant **Total exported energy** (`plant_accumulated_grid_export_energy`) |
+| Solar production | Plant **Total PV generation** (`plant_accumulated_pv_energy`) |
+| Energy into battery | Plant **Total charged energy of the ESS** (`plant_accumulated_battery_charge_energy`) |
+| Energy out of battery | Plant **Total discharged energy of the ESS** (`plant_accumulated_battery_discharge_energy`) |
+
+For the **Now** view, configure **power** measurements (kW):
+
+| Power setting | Integration sensor and sign |
+|---|---|
+| Grid connection | Plant **Grid active power** (`plant_grid_sensor_active_power`): positive import, negative export; use Standard. |
+| Solar | Plant **PV power** (`plant_photovoltaic_power`): non-negative generation. |
+| Battery | Plant **Battery power** (`plant_ess_power`): positive charging, negative discharging; use Inverted to match HA's positive-discharge convention. |
+
+Do not assign **Consumed power** to the grid connection: it measures household
+consumption, not grid import/export. Use the signed grid sensor once, rather
+than adding its split import/export power sensors as additional grid sources.
+Likewise, choose either the plant's PV total or individual PV energy sensors;
+adding both counts the same generation twice. Third-party PV or separate meters
+may require a different topology; confirm what each meter includes first.
+
+After setup, check direction during a known import, export, charge and discharge
+period, and check that kWh totals and the kW Now view agree with those directions.
+No manual template or history migration is needed for this mapping. See Home
+Assistant's [energy guidance](https://www.home-assistant.io/docs/energy/faq/).
+
+## Recorder storage
+
+Disable entities you do not use in entity settings. For live readings you want
+to keep but do not need in history, exclude only those specific entities from
+Recorder. For example, merge this into your existing `recorder` block, replacing
+the example IDs:
+
+```yaml
+recorder:
+  exclude:
+    entities:
+      - sensor.sigen_plant_modbus_fetch_time
+      - sensor.sigen_plant_modbus_max_data_fetch_time_since_restart
+```
+
+Excluded entities lose future history/statistics. Keep Energy Dashboard sources,
+PV accumulated/daily energy integrators and any other sensors needed for restore
+or historical calculations recorded. Avoid a blanket exclusion of all `sigen`
+entities. Changing `commit_interval` batches writes; it does not reduce the
+number of state changes stored. Purging or editing old data is not required.
+See [Recorder filtering](https://www.home-assistant.io/integrations/recorder/#configure-filter).
+
 ## Battery time remaining
 
 The plant's **Battery time remaining** sensor estimates how long the battery

@@ -20,7 +20,9 @@ Localized names, status labels and setup dialogs in
 ## Requirements
 
 - Home Assistant **2026.10+** (Python **3.14.2+**).
-- Sigenergy firmware **SPC109+**, with **Modbus TCP enabled** (see below).
+- **Modbus TCP enabled** and firmware compatible with your model. SigenStor
+  normally requires **SPC109+**; see [model and firmware notes](docs/USAGE.md#model-and-firmware-notes)
+  for the SigenMate SPC101 field report.
 - Your inverter's IP address and device ID. Reserve its IP address in your router.
 - AC chargers normally use ID **1**; assign inverters different IDs when sharing
   the connection. DC chargers are accessed through their inverter.
@@ -86,6 +88,7 @@ details, see the [usage guide](docs/USAGE.md).
 ## Dashboards and tools
 
 - [Energy Flow Dashboard](Dashboards/energy_flow_gauge/readme.md)
+- [Energy Dashboard sensor mapping and Recorder advice](docs/USAGE.md#home-assistant-energy-dashboard)
 - [Energy price and charging chart](Dashboards/nordpool_energy_chart/readme.md)
 - [Si-GCG's projects](https://github.com/Si-GCG/sigenergy_projects)
 - [EMHASS guide](https://sigenergy.annable.me/)
