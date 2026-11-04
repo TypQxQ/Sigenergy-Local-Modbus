@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import asyncio
 from dataclasses import dataclass
+from math import isfinite
 from typing import Any, Callable, Dict, Optional, Coroutine
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription, NumberMode
@@ -803,7 +804,7 @@ AC_CHARGER_NUMBERS = [
         icon="mdi:current-ac",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         native_min_value=6,
-        native_max_value=32,  # This will be adjusted dynamically based on rated current
+        native_max_value=6,  # Replaced by the live charger and breaker limits below.
         native_step=1,
         entity_category=EntityCategory.CONFIG,
         # identifier here will be ac_charger_name
@@ -940,6 +941,29 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
         )
         # No number-specific init needed for now
 
+    def _ac_charger_max_current(self) -> float | None:
+        """Use both live S32/100 ratings; never guess a missing safe limit."""
+        data = (self.coordinator.data or {}).get("ac_chargers", {}).get(self._device_name, {})
+        limits = []
+        for key in ("ac_charger_rated_current", "ac_charger_input_breaker_rated_current"):
+            raw = data.get(key)
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                return None
+            # Reject nonfinite values, invalid ratings and the S32 invalid marker.
+            if not isfinite(raw) or not 6 <= raw < 0x7FFFFFFF / 100:
+                return None
+            limits.append(float(raw))
+        return min(limits)
+
+    @property
+    def native_max_value(self) -> float:
+        """Expose the smaller charger/breaker rating for this specific device."""
+        if self.entity_description.key == "ac_charger_output_current":
+            limit = self._ac_charger_max_current()
+            # HA still needs a well-formed range while the control is unavailable.
+            return limit if limit is not None else 6
+        return super().native_max_value
+
     @property
     def native_value(self) -> float | None:
         """Return the value of the number."""
@@ -967,6 +991,9 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
         """Return if entity is available."""
         if not super().available or not self._control_reading_available():
             return False
+        if (self.entity_description.key == "ac_charger_output_current"
+                and self._ac_charger_max_current() is None):
+            return False
             
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name
@@ -980,6 +1007,15 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
                 translation_key="coordinator_unavailable",
                 translation_placeholders={"entity_id": self.entity_id},
             )
+
+        if self.entity_description.key == "ac_charger_output_current":
+            maximum = self.native_max_value
+            if isinstance(value, bool) or not isfinite(value) or not 6 <= value <= maximum:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_ac_charger_current",
+                    translation_placeholders={"value": str(value), "maximum": str(maximum)},
+                )
 
         # PCC registers 40157/40158 have a disjoint protocol range. HA's
         # ordinary min/max validation cannot reject its forbidden middle.

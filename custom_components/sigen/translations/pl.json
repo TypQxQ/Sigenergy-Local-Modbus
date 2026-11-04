@@ -1838,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "Nie można ustawić prądu ładowania na {value} A. Użyj wartości od 6 do {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "Nie można ustawić współczynnika mocy PCC na {value}. Użyj wartości od -0.999 do -0.8 lub od 0.8 do 1."
     },

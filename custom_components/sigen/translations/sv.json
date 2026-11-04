@@ -1838,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "Kan inte ställa in laddströmmen på {value} A. Ange ett värde mellan 6 och {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "Kan inte sätta PCC-effektfaktorn till {value}. Ange -0,999 till -0,8, eller 0,8 till 1."
     },

@@ -31,6 +31,14 @@ installer. The charger normally uses the inverter's Modbus TCP endpoint, not its
 own Wi-Fi IP. A plant-level EVAC energy reading does not prove that the charger's
 own registers are reachable. See the resolved [replacement charger report](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/391).
 
+**Charger Output Current** uses the smaller of the charger's reported **Rated
+Current** and **Input Breaker Rated Current**, instead of a fixed 32 A ceiling.
+For example, ratings of 48 A and 60 A permit up to 48 A; 48 A and 40 A permit up
+to 40 A. Missing or invalid ratings make the control unavailable until valid
+readings return. The diagnostic entities can remain disabled: their underlying
+registers are already read by the integration. Commission wiring and breaker
+settings through the installer; this control does not change those ratings.
+
 For an address change on the same inverter or AC charger, edit the existing
 device through **Configure → Device settings**. B4 reloads with the new address
 without deleting its registry entries, preserving IDs, custom names, areas and

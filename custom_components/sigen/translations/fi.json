@@ -1838,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "Latausvirraksi ei voi asettaa {value} A. Käytä arvoa 6–{maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "PCC-tehokerrointa ei voi asettaa arvoon {value}. Käytä arvoa -0.999–-0.8 tai 0.8–1."
     },

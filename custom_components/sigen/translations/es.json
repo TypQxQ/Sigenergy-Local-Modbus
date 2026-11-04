@@ -1838,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "No se puede ajustar la corriente de carga a {value} A. Usa un valor entre 6 y {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "No se puede establecer el factor de potencia PCC en {value}. Utilice un valor de -0.999 a -0.8 o de 0.8 a 1."
     },

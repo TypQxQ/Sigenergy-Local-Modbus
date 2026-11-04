@@ -1838,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "Der Ladestrom kann nicht auf {value} A eingestellt werden. Verwende einen Wert zwischen 6 und {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "Der PCC-Leistungsfaktor kann nicht auf {value} gesetzt werden. Verwenden Sie -0.999 bis -0.8 oder 0.8 bis 1."
     },

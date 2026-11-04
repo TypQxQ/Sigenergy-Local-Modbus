@@ -1838,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "Kan ikke indstille ladestrømmen til {value} A. Brug en værdi mellem 6 og {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "Kan ikke indstille PCC-effektfaktoren til {value}. Brug -0.999 til -0.8 eller 0.8 til 1."
     },

@@ -1838,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "Cannot set charger current to {value} A. Use a value between 6 and {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "Cannot set PCC power factor to {value}. Use -0.999 to -0.8, or 0.8 to 1."
     },

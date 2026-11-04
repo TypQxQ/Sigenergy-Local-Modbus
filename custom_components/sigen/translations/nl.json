@@ -1838,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "De laadstroom kan niet worden ingesteld op {value} A. Gebruik een waarde tussen 6 en {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "De PCC-arbeidsfactor kan niet worden ingesteld op {value}. Gebruik -0.999 tot -0.8 of 0.8 tot 1."
     },
