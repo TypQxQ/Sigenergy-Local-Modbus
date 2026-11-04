@@ -105,7 +105,8 @@
       "invalid_port": "Ogiltig port. Ange ett tal mellan 1 och 65535.",
       "required_value": "Ange ett värde.",
       "must_be_number": "Ange ett tal.",
-      "must_be_at_least_1": "Uppdateringsintervallet måste vara minst 1 sekund."
+      "must_be_at_least_1": "Uppdateringsintervallet måste vara minst 1 sekund.",
+      "device_address_in_use": "Detta enhets-ID används redan på samma värd och port. Välj ett annat ID eller en annan anslutning."
     },
     "abort": {
       "already_configured": "Detta Sigenergy-system är redan konfigurerat.",
@@ -129,7 +130,8 @@
         "description": "Ändra inställningar för Sigenergy-integrationen.",
         "menu_options": {
           "select_device": "Enhetsinställningar",
-          "display_settings": "Visningsinställningar"
+          "display_settings": "Visningsinställningar",
+          "power_flow_settings": "Effektflödesindikatorer"
         }
       },
       "select_device": {
@@ -208,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Automatiskt använder Home Assistants serverspråk. Egna namn, entitets-ID:n och historik bevaras. När språket ändras läses integrationen in på nytt."
         }
+      },
+      "power_flow_settings": {
+        "title": "Effektflödesindikatorer",
+        "description": "Valfri filtrering endast för binära indikatorer. Effekt- och energivärden påverkas inte.",
+        "data": {
+          "power_flow_hysteresis": "Aktivera hysteres",
+          "power_flow_on_w": "Slå på över (W)",
+          "power_flow_off_w": "Slå av vid eller under (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "När funktionen är avstängd används den befintliga gränsen på 10 W."
+        }
       }
     },
     "error": {
@@ -225,7 +239,9 @@
       "required_value": "Ange ett värde.",
       "must_be_number": "Ange ett tal.",
       "must_be_at_least_1": "Uppdateringsintervallet måste vara minst 1 sekund.",
-      "invalid_entity_name_language": "Välj ett språk som stöds eller Automatiskt."
+      "invalid_entity_name_language": "Välj ett språk som stöds eller Automatiskt.",
+      "device_address_in_use": "Detta enhets-ID används redan på samma värd och port. Välj ett annat ID eller en annan anslutning.",
+      "invalid_power_flow_thresholds": "Ange giltiga gränser där avslag är lägre än tillslag."
     },
     "abort": {
       "already_configured": "Detta Sigenergy-system är redan konfigurerat.",
@@ -319,7 +335,24 @@
         "name": "Exporterad effekt till elnätet"
       },
       "plant_battery_time_remaining": {
-        "name": "Återstående batteritid"
+        "name": "Återstående batteritid",
+        "state_attributes": {
+          "battery_soc_percent": {
+            "name": "Batteriets laddningsnivå (%)"
+          },
+          "backup_soc_percent": {
+            "name": "Reservnivå (%)"
+          },
+          "rated_capacity_kwh": {
+            "name": "Nominell batterikapacitet (kWh)"
+          },
+          "consumed_power_kw": {
+            "name": "Husets förbrukning (kW)"
+          },
+          "usable_energy_kwh": {
+            "name": "Tillgänglig energi över reservnivån (kWh)"
+          }
+        }
       },
       "plant_consumed_power": {
         "name": "Förbrukad effekt"
@@ -1805,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "Kan inte ställa in laddströmmen på {value} A. Ange ett värde mellan 6 och {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "Kan inte sätta PCC-effektfaktorn till {value}. Ange -0,999 till -0,8, eller 0,8 till 1."
     },

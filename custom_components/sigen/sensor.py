@@ -233,9 +233,15 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Add translatable alarm details while preserving the legacy state."""
+        """Expose cached calculation inputs and translatable alarm details."""
         attributes = super().extra_state_attributes
         key = self.entity_description.key
+        if key == "plant_battery_time_remaining":
+            inputs = SC.battery_time_remaining_inputs(self.coordinator.data)
+            return {**(attributes or {}), **{
+                name: float(value) if value is not None else None
+                for name, value in inputs.items()
+            }}
         if group := ALARM_REGISTER_GROUPS.get(key):
             details = alarm_state_attributes(key, self._get_raw_value(), ALARM_CODES[group])
             if details is not None:

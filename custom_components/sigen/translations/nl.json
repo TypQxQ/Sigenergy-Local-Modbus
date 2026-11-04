@@ -105,7 +105,8 @@
       "invalid_port": "Ongeldig poortnummer. Moet tussen 1 en 65535 liggen.",
       "required_value": "Voer een waarde in.",
       "must_be_number": "Voer een getal in.",
-      "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn."
+      "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn.",
+      "device_address_in_use": "Dit apparaat-ID wordt al gebruikt op dezelfde host en poort. Kies een ander ID of eindpunt."
     },
     "abort": {
       "already_configured": "Dit Sigenergy-systeem is al geconfigureerd.",
@@ -129,7 +130,8 @@
         "description": "Configureer de opties van de Sigenergy-integratie.",
         "menu_options": {
           "select_device": "Apparaatinstellingen",
-          "display_settings": "Weergave-instellingen"
+          "display_settings": "Weergave-instellingen",
+          "power_flow_settings": "Vermogensstroomindicatoren"
         }
       },
       "select_device": {
@@ -208,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Automatisch gebruikt de servertaal van Home Assistant. Eigen namen, entiteits-ID’s en geschiedenis blijven behouden. Bij een taalwijziging wordt de integratie opnieuw geladen."
         }
+      },
+      "power_flow_settings": {
+        "title": "Vermogensstroomindicatoren",
+        "description": "Optionele filtering alleen voor binaire indicatoren. Vermogens- en energiewaarden blijven ongewijzigd.",
+        "data": {
+          "power_flow_hysteresis": "Hysterese inschakelen",
+          "power_flow_on_w": "Inschakelen boven (W)",
+          "power_flow_off_w": "Uitschakelen op of onder (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "Bij uitschakeling wordt de bestaande drempel van 10 W gebruikt."
+        }
       }
     },
     "error": {
@@ -225,7 +239,9 @@
       "required_value": "Voer een waarde in.",
       "must_be_number": "Voer een getal in.",
       "must_be_at_least_1": "Het update-interval moet minstens 1 seconde zijn.",
-      "invalid_entity_name_language": "Kies een ondersteunde taal of Automatisch."
+      "invalid_entity_name_language": "Kies een ondersteunde taal of Automatisch.",
+      "device_address_in_use": "Dit apparaat-ID wordt al gebruikt op dezelfde host en poort. Kies een ander ID of eindpunt.",
+      "invalid_power_flow_thresholds": "Gebruik geldige drempels met uitschakelen lager dan inschakelen."
     },
     "abort": {
       "already_configured": "Dit Sigenergy-systeem is al geconfigureerd.",
@@ -358,7 +374,24 @@
         "name": "Terugleververmogen"
       },
       "plant_battery_time_remaining": {
-        "name": "Resterende batterijduur"
+        "name": "Resterende batterijduur",
+        "state_attributes": {
+          "battery_soc_percent": {
+            "name": "Laadniveau batterij (%)"
+          },
+          "backup_soc_percent": {
+            "name": "Reservelaadniveau (%)"
+          },
+          "rated_capacity_kwh": {
+            "name": "Nominale batterijcapaciteit (kWh)"
+          },
+          "consumed_power_kw": {
+            "name": "Huishoudelijk verbruik (kW)"
+          },
+          "usable_energy_kwh": {
+            "name": "Bruikbare energie boven de reserve (kWh)"
+          }
+        }
       },
       "plant_consumed_power": {
         "name": "Verbruiksvermogen"
@@ -1805,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "De laadstroom kan niet worden ingesteld op {value} A. Gebruik een waarde tussen 6 en {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "De PCC-arbeidsfactor kan niet worden ingesteld op {value}. Gebruik -0.999 tot -0.8 of 0.8 tot 1."
     },

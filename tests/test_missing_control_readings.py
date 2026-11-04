@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+from math import isfinite
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,6 +26,7 @@ class ControlError(Exception):
 def load_controls():
     definitions = _load_sigen_module('modbusregisterdefinitions')
     scope = {'_LOGGER': Mock(), 'DOMAIN': 'sigen', 'HomeAssistantError': ControlError,
+             'isfinite': isfinite,
              'DEVICE_TYPE_PLANT': 'plant', 'DEVICE_TYPE_INVERTER': 'inverter',
              'DEVICE_TYPE_AC_CHARGER': 'ac_charger', 'DEVICE_TYPE_DC_CHARGER': 'dc_charger',
              'DCChargerRunningState': definitions.DCChargerRunningState,

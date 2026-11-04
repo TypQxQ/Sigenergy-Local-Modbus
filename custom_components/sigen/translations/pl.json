@@ -105,7 +105,8 @@
       "invalid_port": "Nieprawidłowy numer portu. Musi mieścić się w zakresie od 1 do 65535.",
       "required_value": "Wprowadź wartość.",
       "must_be_number": "Wprowadź liczbę.",
-      "must_be_at_least_1": "Interwał aktualizacji musi wynosić co najmniej 1 sekundę."
+      "must_be_at_least_1": "Interwał aktualizacji musi wynosić co najmniej 1 sekundę.",
+      "device_address_in_use": "Ten identyfikator urządzenia jest już używany na tym samym hoście i porcie. Wybierz inny identyfikator lub punkt połączenia."
     },
     "abort": {
       "already_configured": "Ten system Sigenergy jest już skonfigurowany.",
@@ -129,7 +130,8 @@
         "description": "Skonfiguruj opcje integracji Sigenergy.",
         "menu_options": {
           "select_device": "Ustawienia urządzeń",
-          "display_settings": "Ustawienia wyświetlania"
+          "display_settings": "Ustawienia wyświetlania",
+          "power_flow_settings": "Wskaźniki przepływu mocy"
         }
       },
       "select_device": {
@@ -208,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Opcja automatyczna używa języka serwera Home Assistant. Własne nazwy, identyfikatory encji i historia zostają zachowane. Zmiana języka przeładowuje integrację."
         }
+      },
+      "power_flow_settings": {
+        "title": "Wskaźniki przepływu mocy",
+        "description": "Opcjonalne filtrowanie tylko wskaźników binarnych. Odczyty mocy i energii pozostają bez zmian.",
+        "data": {
+          "power_flow_hysteresis": "Włącz histerezę",
+          "power_flow_on_w": "Włącz powyżej (W)",
+          "power_flow_off_w": "Wyłącz przy lub poniżej (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "Gdy wyłączona, używany jest dotychczasowy próg 10 W."
+        }
       }
     },
     "error": {
@@ -225,7 +239,9 @@
       "required_value": "Wprowadź wartość.",
       "must_be_number": "Wprowadź liczbę.",
       "must_be_at_least_1": "Interwał aktualizacji musi wynosić co najmniej 1 sekundę.",
-      "invalid_entity_name_language": "Wybierz obsługiwany język lub opcję automatyczną."
+      "invalid_entity_name_language": "Wybierz obsługiwany język lub opcję automatyczną.",
+      "device_address_in_use": "Ten identyfikator urządzenia jest już używany na tym samym hoście i porcie. Wybierz inny identyfikator lub punkt połączenia.",
+      "invalid_power_flow_thresholds": "Użyj poprawnych progów, z progiem wyłączenia niższym od progu włączenia."
     },
     "abort": {
       "already_configured": "Ten system Sigenergy jest już skonfigurowany.",
@@ -358,7 +374,24 @@
         "name": "Moc oddawana do sieci"
       },
       "plant_battery_time_remaining": {
-        "name": "Pozostały czas pracy akumulatora"
+        "name": "Pozostały czas pracy akumulatora",
+        "state_attributes": {
+          "battery_soc_percent": {
+            "name": "Poziom naładowania akumulatora (%)"
+          },
+          "backup_soc_percent": {
+            "name": "Rezerwowy poziom naładowania (%)"
+          },
+          "rated_capacity_kwh": {
+            "name": "Pojemność znamionowa akumulatora (kWh)"
+          },
+          "consumed_power_kw": {
+            "name": "Zużycie energii w domu (kW)"
+          },
+          "usable_energy_kwh": {
+            "name": "Energia dostępna powyżej rezerwy (kWh)"
+          }
+        }
       },
       "plant_consumed_power": {
         "name": "Moc zużywana"
@@ -1805,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "Nie można ustawić prądu ładowania na {value} A. Użyj wartości od 6 do {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "Nie można ustawić współczynnika mocy PCC na {value}. Użyj wartości od -0.999 do -0.8 lub od 0.8 do 1."
     },

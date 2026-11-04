@@ -138,7 +138,7 @@ class TestLanguageOptions(unittest.IsolatedAsyncioTestCase):
     async def test_configure_menu_exposes_device_and_display_settings(self):
         result = await self.flow.async_step_init()
         self.assertEqual("menu", result["type"])
-        self.assertEqual(["select_device", "display_settings"], result["menu_options"])
+        self.assertEqual(["select_device", "display_settings", "power_flow_settings"], result["menu_options"])
 
     async def test_form_has_all_eleven_languages_and_automatic_with_current_default(self):
         for choice in ("auto", *self.scope["ENTITY_NAME_LANGUAGES"]):

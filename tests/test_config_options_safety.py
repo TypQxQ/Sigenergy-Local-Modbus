@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import runpy
 from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
@@ -28,13 +29,18 @@ def load_flows():
                 scope[node.targets[0].id] = ast.literal_eval(node.value)
             except (ValueError, TypeError):
                 pass
+    pure = runpy.run_path(str(SOURCE / 'power_flow.py'))
+    scope.update({k:v for k,v in pure.items() if k.startswith(('CONF_', 'DEFAULT_')) or k == 'power_flow_thresholds'})
     tree = ast.parse((SOURCE / "config_flow.py").read_text(encoding="utf-8"))
     methods = {"_data", "_async_load_devices", "async_step_select_device",
                "async_step_accumulated_energy_config", "async_step_plant_config",
-               "async_step_init", "async_step_display_settings"}
+               "async_step_init", "async_step_display_settings",
+               "async_step_inverter_config", "async_step_ac_charger_config",
+               "async_step_power_flow_settings"}
     nodes = [ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)]
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == "validate_host_port":
+        if isinstance(node, ast.FunctionDef) and node.name in {
+                "validate_host_port", "validate_slave_id", "device_address_in_use"}:
             nodes.append(node)
         elif isinstance(node, ast.Assign) and any(
                 isinstance(t, ast.Name) and t.id == "DEFAULT_PLANT_CONNECTION" for t in node.targets):

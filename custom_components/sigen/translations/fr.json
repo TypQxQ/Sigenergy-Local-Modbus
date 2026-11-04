@@ -105,7 +105,8 @@
       "invalid_port": "Numéro de port non valide. Il doit être compris entre 1 et 65535.",
       "required_value": "Saisissez une valeur.",
       "must_be_number": "Saisissez un nombre.",
-      "must_be_at_least_1": "L’intervalle de mise à jour doit être d’au moins 1 seconde."
+      "must_be_at_least_1": "L’intervalle de mise à jour doit être d’au moins 1 seconde.",
+      "device_address_in_use": "Cet identifiant est déjà utilisé sur le même hôte et le même port. Choisissez un autre identifiant ou point de connexion."
     },
     "abort": {
       "already_configured": "Ce système Sigenergy est déjà configuré.",
@@ -129,7 +130,8 @@
         "description": "Configurez les options de l’intégration Sigenergy.",
         "menu_options": {
           "select_device": "Paramètres des appareils",
-          "display_settings": "Paramètres d’affichage"
+          "display_settings": "Paramètres d’affichage",
+          "power_flow_settings": "Indicateurs de flux de puissance"
         }
       },
       "select_device": {
@@ -208,6 +210,18 @@
         "data_description": {
           "entity_name_language": "Automatique utilise la langue du serveur Home Assistant. Les noms personnalisés, identifiants d’entités et historiques sont conservés. Un changement de langue recharge l’intégration."
         }
+      },
+      "power_flow_settings": {
+        "title": "Indicateurs de flux de puissance",
+        "description": "Filtrage facultatif des indicateurs binaires uniquement. Les mesures de puissance et d’énergie restent inchangées.",
+        "data": {
+          "power_flow_hysteresis": "Activer l’hystérésis",
+          "power_flow_on_w": "Activer au-dessus de (W)",
+          "power_flow_off_w": "Désactiver à ou en dessous de (W)"
+        },
+        "data_description": {
+          "power_flow_hysteresis": "Si désactivé, le seuil existant de 10 W est utilisé."
+        }
       }
     },
     "error": {
@@ -225,7 +239,9 @@
       "required_value": "Saisissez une valeur.",
       "must_be_number": "Saisissez un nombre.",
       "must_be_at_least_1": "L’intervalle de mise à jour doit être d’au moins 1 seconde.",
-      "invalid_entity_name_language": "Sélectionnez une langue prise en charge ou Automatique."
+      "invalid_entity_name_language": "Sélectionnez une langue prise en charge ou Automatique.",
+      "device_address_in_use": "Cet identifiant est déjà utilisé sur le même hôte et le même port. Choisissez un autre identifiant ou point de connexion.",
+      "invalid_power_flow_thresholds": "Utilisez des seuils valides, avec le seuil de désactivation inférieur au seuil d’activation."
     },
     "abort": {
       "already_configured": "Ce système Sigenergy est déjà configuré.",
@@ -358,7 +374,24 @@
         "name": "Puissance injectée dans le réseau"
       },
       "plant_battery_time_remaining": {
-        "name": "Autonomie restante de la batterie"
+        "name": "Autonomie restante de la batterie",
+        "state_attributes": {
+          "battery_soc_percent": {
+            "name": "État de charge de la batterie (%)"
+          },
+          "backup_soc_percent": {
+            "name": "État de charge de réserve (%)"
+          },
+          "rated_capacity_kwh": {
+            "name": "Capacité nominale de la batterie (kWh)"
+          },
+          "consumed_power_kw": {
+            "name": "Consommation du foyer (kW)"
+          },
+          "usable_energy_kwh": {
+            "name": "Énergie utilisable au-dessus de la réserve (kWh)"
+          }
+        }
       },
       "plant_consumed_power": {
         "name": "Puissance consommée"
@@ -1805,6 +1838,9 @@
     }
   },
   "exceptions": {
+    "invalid_ac_charger_current": {
+      "message": "Impossible de régler le courant de charge sur {value} A. Utilisez une valeur comprise entre 6 et {maximum} A."
+    },
     "invalid_pcc_power_factor": {
       "message": "Impossible de régler le facteur de puissance PCC sur {value}. Utilisez une valeur de -0.999 à -0.8 ou de 0.8 à 1."
     },

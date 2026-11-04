@@ -30,6 +30,12 @@ from homeassistant.helpers.entity_registry import (
     async_entries_for_device,
 )
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
+from .common import generate_device_id
+from .device_lifecycle import removal_device_ids
+from .power_flow import (
+    CONF_POWER_FLOW_HYSTERESIS, CONF_POWER_FLOW_ON_W, CONF_POWER_FLOW_OFF_W,
+    DEFAULT_POWER_FLOW_ON_W, DEFAULT_POWER_FLOW_OFF_W, power_flow_thresholds,
+)
 from .const import (
     DOMAIN,
     DEFAULT_PORT,
@@ -74,6 +80,40 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def device_address_in_use(
+    data: dict, connection: dict, exclude: tuple[str, str] | None = None,
+) -> bool:
+    """Check a Modbus address without resolving DNS or probing hardware.
+
+    DC chargers share their inverter's address and are not separate bindings.
+    Ignore the device being edited; other endpoints may reuse the same unit ID.
+    """
+    plant = data.get(CONF_PLANT_CONNECTION, {})
+
+    def address(info):
+        host = info.get(CONF_HOST, plant.get(CONF_HOST, ""))
+        if not isinstance(host, str) or not host.strip():
+            return None
+        try:
+            return (host.strip().lower().rstrip("."),
+                    int(info.get(CONF_PORT, plant.get(CONF_PORT, DEFAULT_PORT))),
+                    int(info[CONF_SLAVE_ID]))
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    candidate = address(connection)
+    if candidate is None:
+        return False
+    if candidate == address(plant):
+        return True
+    for group in (CONF_INVERTER_CONNECTIONS, CONF_AC_CHARGER_CONNECTIONS):
+        for name, info in data.get(group, {}).items():
+            if exclude != (group, name) and candidate == address(info):
+                return True
+    return False
+
 
 DEFAULT_PLANT_CONNECTION = {
                 CONF_HOST: "",
@@ -706,7 +746,14 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         except (ValueError, TypeError):
             errors[CONF_SLAVE_ID] = "invalid_integer_value"
 
-        errors.update(await self.async_test_connection(user_input[CONF_HOST],
+        plant_entry = self.hass.config_entries.async_get_entry(self._selected_plant_entry_id)
+        if plant_entry is None:
+            return self.async_abort(reason="parent_plant_not_found")
+        if not errors and device_address_in_use(plant_entry.data, user_input):
+            errors[CONF_SLAVE_ID] = "device_address_in_use"
+
+        if not errors:
+            errors.update(await self.async_test_connection(user_input[CONF_HOST],
                                                        user_input[CONF_PORT],
                                                        user_input[CONF_SLAVE_ID],
                                                        DEVICE_CHECKS[DEVICE_TYPE_INVERTER]))
@@ -814,6 +861,9 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
             ac_charger_connections = plant_entry.data.get(
                 CONF_AC_CHARGER_CONNECTIONS, {}
             )
+
+            if device_address_in_use(plant_entry.data, user_input):
+                errors[CONF_SLAVE_ID] = "device_address_in_use"
 
             # Check connection if not already errors
             if not errors:
@@ -1087,7 +1137,38 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Choose device configuration or integration display settings."""
         return self.async_show_menu(
-            step_id="init", menu_options=["select_device", "display_settings"],
+            step_id="init", menu_options=["select_device", "display_settings", "power_flow_settings"],
+        )
+
+    async def async_step_power_flow_settings(self, user_input=None) -> ConfigFlowResult:
+        """Configure binary indicators without modifying readings or device data."""
+        current = dict(self.config_entry.options)
+        errors = {}
+        if user_input is not None:
+            current.update(user_input)
+            enabled = user_input.get(CONF_POWER_FLOW_HYSTERESIS) is True
+            checked = power_flow_thresholds(current)
+            if enabled and checked is None:
+                errors["base"] = "invalid_power_flow_thresholds"
+            else:
+                options = dict(self.config_entry.options)
+                for key in (CONF_POWER_FLOW_HYSTERESIS, CONF_POWER_FLOW_ON_W, CONF_POWER_FLOW_OFF_W):
+                    options.pop(key, None)
+                if enabled:
+                    assert checked is not None
+                    options.update({CONF_POWER_FLOW_HYSTERESIS: True,
+                                    CONF_POWER_FLOW_ON_W: float(checked[0]),
+                                    CONF_POWER_FLOW_OFF_W: float(checked[1])})
+                return self.async_create_entry(title="", data=options)
+        thresholds = power_flow_thresholds({**current, CONF_POWER_FLOW_HYSTERESIS: True})
+        on, off = thresholds if thresholds is not None else (DEFAULT_POWER_FLOW_ON_W, DEFAULT_POWER_FLOW_OFF_W)
+        return self.async_show_form(
+            step_id="power_flow_settings",
+            data_schema=vol.Schema({
+                vol.Required(CONF_POWER_FLOW_HYSTERESIS, default=current.get(CONF_POWER_FLOW_HYSTERESIS) is True): bool,
+                vol.Required(CONF_POWER_FLOW_ON_W, default=float(on)): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000000)),
+                vol.Required(CONF_POWER_FLOW_OFF_W, default=float(off)): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000000)),
+            }), errors=errors,
         )
 
     async def async_step_display_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -1311,13 +1392,16 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             # Validate host, port, and slave ID
             host_port = user_input.get(CONF_PORT, "")
             host_port_errors = validate_host_port(
-                host_port, user_input.get(CONF_PORT, 0)
+                user_input.get(CONF_HOST), user_input.get(CONF_PORT, 0)
             )
             errors.update(host_port_errors)
 
             # Validate slave ID
             slave_id = user_input.get(CONF_SLAVE_ID)
             errors.update(validate_slave_id(slave_id or 0) or {})
+
+            if not errors and device_address_in_use(self._data, user_input, (CONF_INVERTER_CONNECTIONS, inverter_name)):
+                errors[CONF_SLAVE_ID] = "device_address_in_use"
 
             if errors:
                 return self.async_show_form(
@@ -1336,6 +1420,9 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 ),
             }
 
+            if new_connection == inverter_details:
+                return self.async_create_entry(title="Sigenergy", data=dict(self.config_entry.options))
+
             # If the inverter connections have changed
             if new_connection != inverter_details:
                 # Update the inverter configuration
@@ -1351,11 +1438,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Update the configuration entry (Ensure correct arguments and remove duplicate)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
-        # Wipe all old entities and devices
-        _LOGGER.debug(
-            "Inverter config updated (removed), removing existing devices/entities before reload."
-        )
-        await self._async_remove_devices_and_entities(inverter_name)
+        # Address changes keep registry identities and customizations. Cleanup
+        # is reserved for an explicit removal of this device and its children.
+        if user_input.get(CONF_REMOVE_DEVICE, False):
+            await self._async_remove_devices_and_entities(DEVICE_TYPE_INVERTER, inverter_name)
 
         # Save configuration to file
         self.hass.config_entries._async_schedule_save()
@@ -1433,13 +1519,16 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             # Validate host, port, and slave ID
             host_port = user_input.get(CONF_PORT, "")
             host_port_errors = validate_host_port(
-                host_port, user_input.get(CONF_PORT, 0)
+                user_input.get(CONF_HOST), user_input.get(CONF_PORT, 0)
             )
             errors.update(host_port_errors)
 
             # Validate slave ID
             slave_id = user_input.get(CONF_SLAVE_ID)
             errors.update(validate_slave_id(slave_id or 0) or {})
+
+            if not errors and device_address_in_use(self._data, user_input, (CONF_AC_CHARGER_CONNECTIONS, ac_charger_name)):
+                errors[CONF_SLAVE_ID] = "device_address_in_use"
 
             if errors:
                 return self.async_show_form(
@@ -1455,6 +1544,9 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_SLAVE_ID: slave_id,
             }
 
+            if new_connection == ac_charger_details:
+                return self.async_create_entry(title="Sigenergy", data=dict(self.config_entry.options))
+
             # If the AC Charger connection has changed
             if new_connection != ac_charger_details:
                 new_ac_charger_connections = dict(ac_charger_connections)
@@ -1467,8 +1559,8 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         # Update the configuration entry (Ensure correct arguments and remove duplicate)
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
-        # Wipe all old entities and devices
-        await self._async_remove_devices_and_entities(ac_charger_name)
+        if user_input.get(CONF_REMOVE_DEVICE, False):
+            await self._async_remove_devices_and_entities(DEVICE_TYPE_AC_CHARGER, ac_charger_name)
 
         # Save configuration to file
         self.hass.config_entries._async_schedule_save()
@@ -1530,7 +1622,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 "Inverter config updated (removed), "
                 "removing existing devices/entities before reload."
             )
-            await self._async_remove_devices_and_entities(f"{inverter_name} DC Charger")
+            await self._async_remove_devices_and_entities(DEVICE_TYPE_DC_CHARGER, inverter_name)
 
             # Save configuration to file
             self.hass.config_entries._async_schedule_save()
@@ -1550,19 +1642,16 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         )  # Existing return for non-removal
 
     async def _async_remove_devices_and_entities(
-        self, device_name: str | None = None
+        self, device_type: str, device_name: str
     ) -> None:
-        """Remove all devices and entities associated with this config entry."""
+        """Remove only the explicitly selected device subtree for this entry."""
         device_registry = async_get_device_registry(self.hass)
         entity_registry = async_get_entity_registry(self.hass)
 
-        _LOGGER.info(
-            "Removing all devices and entities for config entry %s prior to reload",
-            self.config_entry.entry_id,
-        )
-        devices_in_config = async_entries_for_config_entry(
-            device_registry, self.config_entry.entry_id
-        )
+        devices_in_config = [
+            device for device in async_entries_for_config_entry(device_registry, self.config_entry.entry_id)
+            if device.config_entry_id == self.config_entry.entry_id
+        ]
 
         if not devices_in_config:
             _LOGGER.debug(
@@ -1571,15 +1660,14 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             )
             return
 
-        _LOGGER.debug("Found total of %d devices.", len(devices_in_config))
-
-        for device_entry in devices_in_config:
-            if (
-                device_name
-                and device_entry.name
-                and not device_entry.name.startswith(device_name)
-            ):
-                continue
+        identifier = f"{self.config_entry.entry_id}_{generate_device_id(device_name)}"
+        if device_type == DEVICE_TYPE_DC_CHARGER:
+            identifier += "_dc_charger"
+        elif device_type not in (DEVICE_TYPE_INVERTER, DEVICE_TYPE_AC_CHARGER):
+            return
+        devices = {device.id: device for device in devices_in_config}
+        for device_id in removal_device_ids(devices_in_config, (DOMAIN, identifier)):
+            device_entry = devices[device_id]
             entity_entries = async_entries_for_device(
                 entity_registry, device_entry.id, include_disabled_entities=True
             )
@@ -1591,10 +1679,12 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 device_entry.name or "",
             )
             for entity_entry in entity_entries:
-                _LOGGER.debug("Removing entity: %s", entity_entry.entity_id)
-                entity_registry.async_remove(entity_entry.entity_id)
+                if entity_entry.config_entry_id == self.config_entry.entry_id:
+                    entity_registry.async_remove(entity_entry.entity_id)
 
-            _LOGGER.debug("Removing device: %s", device_entry.id)
+            if any(entity.config_entry_id != self.config_entry.entry_id for entity in entity_entries):
+                _LOGGER.warning("Keeping registry device %s because another entry still has entities on it", device_entry.id)
+                continue
             device_registry.async_remove_device(device_entry.id)
 
         _LOGGER.info(
