@@ -23,9 +23,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .modbusregisterdefinitions import (
-    RunningState,
-    DCChargerRunningState,
     ALARM_CODES,
+    ENUM_SENSOR_STATES,
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .device_registry_compat import parent_device_info
@@ -48,7 +47,7 @@ from .const import (
     CONF_INVERTER_HAS_DCCHARGER,
 )
 from .sigen_entity import SigenergyEntity
-from .alarm import unknown_alarm_value
+from .alarm import ALARM_REGISTER_GROUPS, alarm_state_attributes, unknown_alarm_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -234,15 +233,19 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Explain the unknown alarm bitmap while retaining the entity's identity."""
+        """Expose cached calculation inputs and translatable alarm details."""
         attributes = super().extra_state_attributes
-        if unknown_alarm_value(self.entity_description.key, self._get_raw_value()):
-            return {
-                **(attributes or {}),
-                "alarm_status": "unknown",
-                "alarm_reason": "all_bits_set",
-                "raw_value": 0xFFFF,
-            }
+        key = self.entity_description.key
+        if key == "plant_battery_time_remaining":
+            inputs = SC.battery_time_remaining_inputs(self.coordinator.data)
+            return {**(attributes or {}), **{
+                name: float(value) if value is not None else None
+                for name, value in inputs.items()
+            }}
+        if group := ALARM_REGISTER_GROUPS.get(key):
+            details = alarm_state_attributes(key, self._get_raw_value(), ALARM_CODES[group])
+            if details is not None:
+                return {**(attributes or {}), **details}
         return attributes
 
     def _is_near_daily_reset(self) -> bool:
@@ -338,6 +341,8 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 # Call transformation function, trying 3,2,1 args for compatibility
                 fn = self.entity_description.value_fn
                 extra_params = {**(getattr(self.entity_description, "extra_params", {}) or {}), "device_name": self._device_name}
+                if self.entity_description.key == "plant_photovoltaic_power":
+                    extra_params["hub"] = self.hub
                 transformed = None
                 for args in [(raw_value, data, extra_params), (raw_value, data), (raw_value,)]:
                     try:
@@ -394,18 +399,14 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
             elif self.entity_description.key == "ac_charger_alarm3":
                 return self._decode_alarm_bits(raw_value, ALARM_CODES["AC_CHARGER_ALARM_CODES3"])
 
-        # Handle enums
-        enum_maps = {
-            "plant_on_off_grid_status": {0: "On Grid", 1: "Off Grid (Auto)", 2: "Off Grid (Manual)"},
-            "plant_running_state": {s.value: s.name.replace("_", " ").title() for s in RunningState},
-            "inverter_running_state": {s.value: s.name.replace("_", " ").title() for s in RunningState},
-            "ac_charger_system_state": {0: "Initializing", 1: "Not Connected", 2: "Reserving", 3: "Preparing", 4: "EV Ready", 5: "Charging", 6: "Fault", 7: "Error"},
-            "dc_charger_running_state": {s.value: s.name.replace("_", " ").title() for s in DCChargerRunningState},
-            "inverter_output_type":  {0: "L/N", 1: "L1/L2/L3", 2: "L1/L2/L3/N", 3: "L1/L2/N"},
-            "plant_grid_sensor_status": {0: "Offline", 1: "Online"},
-        }
-        if self.entity_description.key in enum_maps:
-            return enum_maps[self.entity_description.key].get(raw_value, f"Unknown: {raw_value}")
+        # Handle enums. An unrecognised value reports as unknown, because an
+        # enum sensor may only report one of its declared options.
+        enum_states = ENUM_SENSOR_STATES.get(self.entity_description.key)
+        if enum_states is not None:
+            state = enum_states.get(raw_value)
+            if state is None:
+                _LOGGER.debug("Unrecognised value %s for %s", raw_value, self.entity_id)
+            return state
 
         if self._round_digits is not None:
             try:

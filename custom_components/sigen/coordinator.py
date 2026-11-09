@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=syntax-error
 
 from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
-from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL
+from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL, MIN_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,10 +46,12 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.latest_update_timing: dict[str, Any] = {}
         self._degraded_devices: set[str] = set()
         self.pv_restore_states: dict[str, dict[str, Any]] = {}
+        self.entity_name_translations: dict[str, str] | None = None
 
-        if scan_interval <= 1:
+        if scan_interval < MIN_SCAN_INTERVAL:
             scan_interval = DEFAULT_SCAN_INTERVAL
-            logger.warning("Invalid scan_interval <= 1, defaulting to %s", DEFAULT_SCAN_INTERVAL)
+            logger.warning("Invalid scan_interval below %s, defaulting to %s",
+                           MIN_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
         super().__init__(
             hass,
@@ -161,6 +163,16 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                         ac_charger_data[name] = await task
                     except Exception:
                         ac_charger_data[name] = {}
+
+                # Unknown/unsupported registers during discovery are expected.
+                # A poll with actual read failures and no usable readings is
+                # a total outage, not a successful partial update. Keep the old
+                # snapshot until HA marks the coordinator unavailable.
+                readings = [plant_data, *inverter_data.values(),
+                            *dc_charger_data.values(), *ac_charger_data.values()]
+                if (any(item["status"] in {"partial", "error"} for item in device_timings.values())
+                        and not any(value is not None for values in readings for value in values.values())):
+                    raise UpdateFailed("No Sigenergy register readings succeeded")
 
                 # Merge fetched data into existing coordinator data
                 # Preserve the _sensors_initialized flag across updates

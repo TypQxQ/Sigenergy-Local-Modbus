@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import asyncio
 from dataclasses import dataclass
+from math import isfinite
 from typing import Any, Callable, Dict, Optional, Coroutine
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberEntityDescription, NumberMode
@@ -40,13 +41,23 @@ from .sigen_entity import SigenergyEntity # Import the new base class
 _LOGGER = logging.getLogger(__name__)
 
 
+def _power_limit_value(value: float | None) -> float | None:
+    """Hide the all-ones U32 power-limit marker, keeping raw readback intact.
+
+    The control can still accept a valid limit. Missing reads retain their
+    separate availability checks; this marker does not prove unsupported or
+    unlimited operation.
+    """
+    return None if value == 0xFFFFFFFF / 1000 else value
+
+
 @dataclass(frozen=True)
 class SigenergyNumberEntityDescription(NumberEntityDescription):
     """Class describing Sigenergy number entities."""
 
     # Provide default lambdas instead of None to satisfy type checker
     # The second argument 'identifier' will be device_name for inverters, device_id otherwise
-    value_fn: Callable[[Dict[str, Any], Optional[Any]], float] = lambda data, identifier: 0.0
+    value_fn: Callable[[Dict[str, Any], Optional[Any]], float | None] = lambda data, identifier: 0.0
     # Make set_value_fn async and update type hint
     # Make set_value_fn async and update type hint to accept coordinator
     set_value_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any], float], Coroutine[Any, Any, None]] = lambda coordinator, identifier, value: asyncio.sleep(0) # Placeholder async lambda
@@ -136,7 +147,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_ess_max_charging_limit", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_ess_max_charging_limit")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_ess_max_charging_limit", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -151,7 +162,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_ess_max_discharging_limit", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_ess_max_discharging_limit")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_ess_max_discharging_limit", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -166,7 +177,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_pv_max_power_limit", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_pv_max_power_limit")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pv_max_power_limit", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -182,7 +193,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_grid_point_maximum_export_limitation", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_grid_point_maximum_export_limitation")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_grid_point_maximum_export_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -198,7 +209,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_grid_maximum_import_limitation", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_grid_maximum_import_limitation")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_grid_maximum_import_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -213,7 +224,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_export_limitation", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_pcs_maximum_export_limitation")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcs_maximum_export_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -228,7 +239,7 @@ PLANT_NUMBERS = [
         native_max_value=100,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data, _: data["plant"].get("plant_pcs_maximum_import_limitation", 0),
+        value_fn=lambda data, _: _power_limit_value(data["plant"].get("plant_pcs_maximum_import_limitation")),
         set_value_fn=lambda coordinator, _, value: coordinator.async_write_parameter("plant", None, "plant_pcs_maximum_import_limitation", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -614,7 +625,7 @@ PLANT_NUMBERS = [
         key="plant_pcc_power_factor_grid_import",
         name="Grid Import Power Factor Adjustment",
         icon="mdi:sine-wave",
-        native_min_value=-1,
+        native_min_value=-0.999,
         native_max_value=1,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
@@ -627,7 +638,7 @@ PLANT_NUMBERS = [
         key="plant_pcc_power_factor_grid_export",
         name="Grid Export Power Factor Adjustment",
         icon="mdi:sine-wave",
-        native_min_value=-1,
+        native_min_value=-0.999,
         native_max_value=1,
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
@@ -658,6 +669,8 @@ for i in range(1, 31):
         SigenergyNumberEntityDescription(
             key=f"plant_ess_preheating_tou_{i}_start_time",
             name=f"ESS Preheating TOU Slot {i} Start Time",
+            translation_key="plant_ess_preheating_tou_start_time",
+            translation_placeholders={"slot": str(i)},
             icon="mdi:clock-start",
             native_min_value=0,
             native_max_value=2147483647,
@@ -673,6 +686,8 @@ for i in range(1, 31):
         SigenergyNumberEntityDescription(
             key=f"plant_ess_preheating_tou_{i}_end_time",
             name=f"ESS Preheating TOU Slot {i} End Time",
+            translation_key="plant_ess_preheating_tou_end_time",
+            translation_placeholders={"slot": str(i)},
             icon="mdi:clock-end",
             native_min_value=0,
             native_max_value=2147483647,
@@ -688,6 +703,8 @@ for i in range(1, 31):
         SigenergyNumberEntityDescription(
             key=f"plant_ess_preheating_tou_{i}_target_power",
             name=f"ESS Preheating TOU Slot {i} Target Power",
+            translation_key="plant_ess_preheating_tou_target_power",
+            translation_placeholders={"slot": str(i)},
             icon="mdi:radiator",
             device_class=NumberDeviceClass.POWER,
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -774,7 +791,7 @@ INVERTER_NUMBERS = [
         native_step=0.001,
         entity_category=EntityCategory.CONFIG,
         # Use identifier (device_name for inverters)
-        value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_power_factor_adjustment", 0) / 1000,
+        value_fn=lambda data, identifier: data["inverters"].get(identifier, {}).get("inverter_power_factor_adjustment"),
         set_value_fn=lambda coordinator, identifier, value: coordinator.async_write_parameter("inverter", identifier, "inverter_power_factor_adjustment", value),
         entity_registry_enabled_default=False,
         mode=NumberMode.BOX,
@@ -787,7 +804,7 @@ AC_CHARGER_NUMBERS = [
         icon="mdi:current-ac",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         native_min_value=6,
-        native_max_value=32,  # This will be adjusted dynamically based on rated current
+        native_max_value=6,  # Replaced by the live charger and breaker limits below.
         native_step=1,
         entity_category=EntityCategory.CONFIG,
         # identifier here will be ac_charger_name
@@ -924,10 +941,33 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
         )
         # No number-specific init needed for now
 
+    def _ac_charger_max_current(self) -> float | None:
+        """Use both live S32/100 ratings; never guess a missing safe limit."""
+        data = (self.coordinator.data or {}).get("ac_chargers", {}).get(self._device_name, {})
+        limits = []
+        for key in ("ac_charger_rated_current", "ac_charger_input_breaker_rated_current"):
+            raw = data.get(key)
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                return None
+            # Reject nonfinite values, invalid ratings and the S32 invalid marker.
+            if not isfinite(raw) or not 6 <= raw < 0x7FFFFFFF / 100:
+                return None
+            limits.append(float(raw))
+        return min(limits)
+
+    @property
+    def native_max_value(self) -> float:
+        """Expose the smaller charger/breaker rating for this specific device."""
+        if self.entity_description.key == "ac_charger_output_current":
+            limit = self._ac_charger_max_current()
+            # HA still needs a well-formed range while the control is unavailable.
+            return limit if limit is not None else 6
+        return super().native_max_value
+
     @property
     def native_value(self) -> float | None:
         """Return the value of the number."""
-        if self.coordinator.data is None:
+        if not self._control_reading_available():
             return None
             
         # Use device_name as the primary identifier passed to the lambda/function
@@ -935,7 +975,7 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
         try:
             value = self.entity_description.value_fn(self.coordinator.data, identifier)
             # Ensure the value is a float
-            return float(value) if value is not None else 0.0
+            return float(value) if value is not None else None
         except (TypeError, ValueError, KeyError) as e:
             _LOGGER.error(
                 "Error getting native value for %s (identifier: %s): %s",
@@ -949,7 +989,10 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        if not super().available:
+        if not super().available or not self._control_reading_available():
+            return False
+        if (self.entity_description.key == "ac_charger_output_current"
+                and self._ac_charger_max_current() is None):
             return False
             
         # Use device_name as the primary identifier passed to the lambda/function
@@ -958,8 +1001,33 @@ class SigenergyNumber(SigenergyEntity, NumberEntity): # pylint: disable=abstract
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the value of the number."""
-        if self.coordinator.data is None:
-            raise HomeAssistantError(f"Cannot set value for {self.entity_id}: Coordinator data is unavailable")
+        if self.coordinator.data is None or not self.available:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="coordinator_unavailable",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
+
+        if self.entity_description.key == "ac_charger_output_current":
+            maximum = self.native_max_value
+            if isinstance(value, bool) or not isfinite(value) or not 6 <= value <= maximum:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_ac_charger_current",
+                    translation_placeholders={"value": str(value), "maximum": str(maximum)},
+                )
+
+        # PCC registers 40157/40158 have a disjoint protocol range. HA's
+        # ordinary min/max validation cannot reject its forbidden middle.
+        # At 0.001 resolution, lower inputs can round to the excluded -1.
+        if self.entity_description.key in {
+            "plant_pcc_power_factor_grid_import", "plant_pcc_power_factor_grid_export",
+        } and not (-0.999 <= value <= -0.8 or 0.8 <= value <= 1):
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_pcc_power_factor",
+                translation_placeholders={"value": str(value)},
+            )
 
         # Use device_name as the primary identifier passed to the lambda/function
         identifier = self._device_name

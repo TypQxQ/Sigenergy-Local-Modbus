@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import Enum
+from math import isfinite
 from time import monotonic
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
@@ -22,6 +23,7 @@ from homeassistant.const import (
     EntityCategory,
     UnitOfPower,
     UnitOfElectricCurrent,
+    UnitOfTime,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
@@ -33,8 +35,8 @@ from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import state_changes_during_period
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_VALUES_TO_INIT, DEFAULT_MIN_INTEGRATION_TIME
-from .modbusregisterdefinitions import EMSWorkMode
+from .const import CONF_VALUES_TO_INIT, DEFAULT_MIN_INTEGRATION_TIME, DEVICE_TYPE_PLANT
+from .modbusregisterdefinitions import ENUM_SENSOR_STATES, enum_sensor_options
 
 from .common import (
     SigenergySensorEntityDescription,
@@ -156,29 +158,29 @@ class SigenergyCalculations:
 
     @staticmethod
     def calculate_total_pv_power(
-        _,  # value is not used for this calculation
+        _,
         coordinator_data: Optional[Dict[str, Any]] = None,
-        extra_params: Optional[Dict[str, Any]] = None, # Not used here, but kept for consistency
+        extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
-        """Calculate the total PV power from plant and party sources."""
+        """Sum PV power only when every potentially supported source has a reading."""
         if not coordinator_data or "plant" not in coordinator_data:
-            _LOGGER.debug("[CS][Total PV Power] Missing plant data in coordinator_data for total PV power calculation")
             return None
 
-        plant_data = coordinator_data.get("plant", {})
-
-        plant_pv_power = safe_float(
-            plant_data.get("plant_sigen_photovoltaic_power"))
-        thirdparty_pv_power = safe_float(
-            plant_data.get("plant_third_party_photovoltaic_power"))
-
-        # If either value is None after safe_float, it means it was invalid or missing.
-        # We treat missing as 0 for summation, but if both are missing, return None.
-        if plant_pv_power is None and thirdparty_pv_power is None:
-            _LOGGER.debug("[CS][Total PV Power] Both plant_photovoltaic_power and thirdparty_pv_power are unavailable.")
-            return None
-
-        return safe_float((plant_pv_power or 0.0) + (thirdparty_pv_power or 0.0))
+        plant_data = coordinator_data["plant"]
+        hub = (extra_params or {}).get("hub")
+        readings = []
+        for key in ("plant_sigen_photovoltaic_power", "plant_third_party_photovoltaic_power"):
+            if hub is not None and hub.get_register_support(DEVICE_TYPE_PLANT, None, key) is False:
+                continue
+            raw = plant_data.get(key)
+            if raw is None or isinstance(raw, bool):
+                return None
+            power = safe_float(raw)
+            if power is None or not isfinite(power):
+                return None
+            readings.append(power)
+        total = sum(readings)
+        return round(total, 6) if readings and isfinite(total) else None
 
     @staticmethod
     def calculate_pv_power(
@@ -378,10 +380,14 @@ class SigenergyCalculations:
 
         total_ac_charger_power = 0.0
         ac_chargers: dict[str, Any] = coordinator_data.get("ac_chargers", {})
-        for _, ac_charger_data in ac_chargers.items():
-            ac_power = safe_float(ac_charger_data.get("ac_charger_charging_power"))
-            if ac_power is not None:
-                total_ac_charger_power += ac_power
+        for ac_charger_data in ac_chargers.values():
+            raw_power = ac_charger_data.get("ac_charger_charging_power")
+            if raw_power is None or isinstance(raw_power, bool):
+                return None
+            ac_power = safe_float(raw_power)
+            if ac_power is None or not isfinite(ac_power):
+                return None
+            total_ac_charger_power += ac_power
 
         plant_power = plant_data.get("plant_active_power")
         grid_power = plant_data.get("plant_grid_sensor_active_power")
@@ -420,6 +426,82 @@ class SigenergyCalculations:
             return None
 
         return consumed_power
+
+    @staticmethod
+    def battery_time_remaining_inputs(
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> dict[str, Decimal | None]:
+        """Share validated cached inputs between the estimate and its attributes."""
+        inputs: dict[str, Decimal | None] = {
+            "battery_soc_percent": None,
+            "backup_soc_percent": None,
+            "rated_capacity_kwh": None,
+            "consumed_power_kw": None,
+            "usable_energy_kwh": None,
+        }
+        plant = (coordinator_data or {}).get("plant")
+        if not isinstance(plant, dict):
+            return inputs
+
+        fields = (
+            ("plant_ess_soc", "battery_soc_percent"),
+            ("plant_backup_soc", "backup_soc_percent"),
+            ("plant_ess_rated_energy_capacity", "rated_capacity_kwh"),
+        )
+        for key, attribute in fields:
+            raw = plant.get(key)
+            # safe_decimal(None) is zero for other callers; missing data must
+            # remain unknown here instead of implying a depleted battery.
+            if raw is None or isinstance(raw, bool):
+                continue
+            number = safe_decimal(raw)
+            if number is None or not number.is_finite():
+                continue
+            if attribute == "rated_capacity_kwh":
+                if number <= 0:
+                    continue
+            elif not 0 <= number <= 100:
+                continue
+            inputs[attribute] = number
+
+        soc = inputs["battery_soc_percent"]
+        reserve = inputs["backup_soc_percent"]
+        capacity = inputs["rated_capacity_kwh"]
+        if soc is not None and reserve is not None and capacity is not None:
+            inputs["usable_energy_kwh"] = max(soc - reserve, Decimal(0)) / Decimal(100) * capacity
+
+        consumed_power = SigenergyCalculations.calculate_plant_consumed_power(
+            None, coordinator_data, extra_params
+        )
+        if consumed_power is not None and not isinstance(consumed_power, bool):
+            consumption = safe_decimal(consumed_power)
+            if consumption is not None and consumption.is_finite():
+                inputs["consumed_power_kw"] = consumption
+        return inputs
+
+    @staticmethod
+    def calculate_battery_time_remaining(
+        value,
+        coordinator_data: Optional[Dict[str, Any]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Decimal]:
+        """Estimate hours above reserve using current household consumption.
+
+        This is battery-only autonomy, independent of current battery charging
+        or discharging power and future solar/grid contributions. All inputs
+        use coordinator-native units (percent, kWh and kW).
+        """
+        inputs = SigenergyCalculations.battery_time_remaining_inputs(coordinator_data, extra_params)
+        energy = inputs["usable_energy_kwh"]
+        if energy is None:
+            return None
+        if energy == 0:
+            return Decimal(0)
+        consumption = inputs["consumed_power_kw"]
+        if consumption is None or consumption <= 0:
+            return None
+        return energy / consumption
 
     @staticmethod
     def _calculate_total_inverter_energy(
@@ -2175,21 +2257,15 @@ class SigenergyCalculatedSensors:
             value_fn=lambda value, _, __: SigenergyCalculations.minutes_to_gmt(value),
             entity_registry_enabled_default=False,
         ),
-        # EMS Work Mode sensor with value mapping
         SigenergySensorEntityDescription(
             key="plant_ems_work_mode",
             name="EMS Work Mode",
             icon="mdi:home-battery",
+            device_class=SensorDeviceClass.ENUM,
+            options=enum_sensor_options("plant_ems_work_mode"),
+            translation_key="plant_ems_work_mode",
             # Adapt function signature
-            value_fn=lambda value, _, __: {
-                EMSWorkMode.MAX_SELF_CONSUMPTION: "Maximum Self Consumption",
-                EMSWorkMode.AI_MODE: "AI Mode",
-                EMSWorkMode.TOU: "Time of Use",
-                EMSWorkMode.FULL_FEED_IN_TO_GRID: "Full Feed-In to Grid",
-                EMSWorkMode.VPP_SCHEDULING: "VPP Scheduling",
-                EMSWorkMode.REMOTE_EMS: "Remote EMS",
-                EMSWorkMode.CUSTOM: "Custom",
-            }.get(value, f"Unknown: ({value})"), # Fallback to original value
+            value_fn=lambda value, _, __: ENUM_SENSOR_STATES["plant_ems_work_mode"].get(value),
         ),
         SigenergySensorEntityDescription(
             key="plant_photovoltaic_power",
@@ -2252,6 +2328,25 @@ class SigenergyCalculatedSensors:
                 ),
             ),
             suggested_display_precision=3,
+            round_digits=6,
+        ),
+        SigenergySensorEntityDescription(
+            key="plant_battery_time_remaining",
+            name="Battery Time Remaining",
+            translation_key="plant_battery_time_remaining",
+            device_class=SensorDeviceClass.DURATION,
+            native_unit_of_measurement=UnitOfTime.HOURS,
+            icon="mdi:battery-clock-outline",
+            value_fn=SigenergyCalculations.calculate_battery_time_remaining,
+            extra_fn_data=True,
+            register_support_alternatives=(
+                ("plant_ess_soc", "plant_backup_soc", "plant_ess_rated_energy_capacity",
+                 "plant_general_load_power"),
+                ("plant_ess_soc", "plant_backup_soc", "plant_ess_rated_energy_capacity",
+                 "plant_active_power", "plant_grid_sensor_active_power",
+                 "plant_third_party_photovoltaic_power"),
+            ),
+            suggested_display_precision=1,
             round_digits=6,
         ),
         SigenergySensorEntityDescription(

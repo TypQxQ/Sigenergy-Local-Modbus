@@ -36,7 +36,7 @@ class SigenergySwitchEntityDescription(SwitchEntityDescription):
 
     # Provide default lambdas instead of None to satisfy type checker
     # The second argument 'identifier' will be device_name for inverters, device_id otherwise
-    is_on_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, identifier: False # Remains synchronous
+    is_on_fn: Callable[[Dict[str, Any], Optional[Any]], bool | None] = lambda data, identifier: None
     # Make turn_on/off functions async and update type hint
     # Make turn_on/off functions async and update type hint to accept coordinator
     turn_on_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any]], Coroutine[Any, Any, None]] = lambda coordinator, identifier: asyncio.sleep(0) # Placeholder async lambda
@@ -63,7 +63,7 @@ def _deprecated_dc_charger_switch_available(data: Dict[str, Any], identifier: Op
     return state != DCChargerRunningState.UNAVAILABLE
 
 
-def _deprecated_dc_charger_switch_is_on(data: Dict[str, Any], identifier: Optional[Any]) -> bool:
+def _deprecated_dc_charger_switch_is_on(data: Dict[str, Any], identifier: Optional[Any]) -> bool | None:
     """Return the DC charging state with a legacy telemetry fallback."""
     charger_data = data.get("dc_chargers", {}).get(identifier, {})
     state = charger_data.get("dc_charger_running_state")
@@ -74,12 +74,13 @@ def _deprecated_dc_charger_switch_is_on(data: Dict[str, Any], identifier: Option
         )
 
     output_power = charger_data.get("dc_charger_output_power")
-    return output_power is not None and output_power != 0
+    return output_power != 0 if output_power is not None else None
 
 
 PLANT_SWITCHES: list[SigenergySwitchEntityDescription] = [
     SigenergySwitchEntityDescription(
         key="plant_start_stop",
+        register_support_keys=("plant_running_state",),
         name="Plant Power",
         icon="mdi:power",
         is_on_fn=lambda data, _: data["plant"].get("plant_running_state") == 1, # Sync
@@ -129,6 +130,7 @@ PLANT_SWITCHES: list[SigenergySwitchEntityDescription] = [
 INVERTER_SWITCHES: list[SigenergySwitchEntityDescription] = [
     SigenergySwitchEntityDescription(
         key="inverter_start_stop",
+        register_support_keys=("inverter_running_state",),
         name="Inverter Power",
         icon="mdi:power",
         # Use device_name (inverter_name) instead of device_id (now passed as the second arg 'identifier')
@@ -273,7 +275,7 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        if not super().available:
+        if not super().available or not self._control_reading_available():
             return False
 
         # Use device_name as the primary identifier passed to the lambda/function
@@ -283,21 +285,29 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
-        if self.coordinator.data is None:
+        if not self._control_reading_available():
             return None
         identifier = self._device_name
         return self.entity_description.is_on_fn(self.coordinator.data, identifier)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
-        if self.coordinator.data is None:
-            raise HomeAssistantError(f"Cannot turn on {self.entity_id}: Coordinator data is unavailable")
+        if self.coordinator.data is None or not self.available:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="coordinator_unavailable",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
         identifier = self._device_name
         await self.entity_description.turn_on_fn(self.coordinator, identifier)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
-        if self.coordinator.data is None:
-            raise HomeAssistantError(f"Cannot turn off {self.entity_id}: Coordinator data is unavailable")
+        if self.coordinator.data is None or not self.available:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="coordinator_unavailable",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
         identifier = self._device_name
         await self.entity_description.turn_off_fn(self.coordinator, identifier)

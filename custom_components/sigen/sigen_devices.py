@@ -104,6 +104,21 @@ def _group_contiguous_blocks(spans: list[tuple[int, int]]) -> list[tuple[int, in
     return blocks
 
 
+class _ReadInterruptedByWrite(ModbusError):
+    """A discarded read may be retried once after endpoint writes drain."""
+
+
+class _EndpointWrites:
+    """Track protected wire writes, never their callers or refreshes."""
+
+    def __init__(self) -> None:
+        self.pending: set[asyncio.Task[Any]] = set()
+
+    async def async_drain(self) -> None:
+        while pending := {task for task in self.pending if not task.done()}:
+            await asyncio.wait(pending)
+
+
 class _ComponentGroup:
     """Probe, read and write one named set of components sharing a unit.
 
@@ -148,6 +163,11 @@ class _ComponentGroup:
         self.cache_age: float | None = None
         self._poll_lock = asyncio.Lock()
         self._read_round = None
+        self._reset_epoch = 0
+        self._endpoint_writes = _EndpointWrites()
+        self.poll_write_restarts = 0
+        self.poll_write_recoveries = 0
+        self.poll_write_recovery_failures = 0
         self._identity_snapshot = lambda: None
         self._confirm_endpoint_identity = None
         self.poll_resumes = 0
@@ -158,7 +178,7 @@ class _ComponentGroup:
             "failed_fields": [], "failed_blocks": [],
             "last_failure": None, "last_recovery": None,
         }
-        self._on_write = self.reset_poll_progress
+        self._on_write = lambda: self.reset_poll_progress(reason="write")
 
     def fingerprint(self) -> str:
         # Field objects have address-bearing reprs, which change on restart.
@@ -425,6 +445,9 @@ class _ComponentGroup:
                 "discovery_time": self.discovery_time,
                 "retry_in": max(0, self.discovery_retry_at - time.monotonic()),
                 "poll_recovery": {"resumes": self.poll_resumes,
+                    "write_restarts": self.poll_write_restarts,
+                    "write_recoveries": self.poll_write_recoveries,
+                    "write_recovery_failures": self.poll_write_recovery_failures,
                     "expired_rounds": self.poll_expired_rounds,
                     "last_round_span": self.poll_last_round_span,
                     "saved_fields": sum(len(words) for words in self._read_round["words"].values())
@@ -434,13 +457,16 @@ class _ComponentGroup:
                 "in_flight": len(self._pending_requests),
                 "poll_quality": self.poll_diagnostics()}
 
-    async def _async_request(self, operation: Coroutine[Any, Any, Any]) -> Any:
+    async def _async_request(self, operation: Coroutine[Any, Any, Any], *, write: bool = False) -> Any:
         """Let a broker request finish even if its caller is cancelled."""
         task = asyncio.create_task(operation)
         self._pending_requests.add(task)
+        if write:
+            self._endpoint_writes.pending.add(task)
 
         def _consume_result(completed: asyncio.Task[Any]) -> None:
             self._pending_requests.discard(completed)
+            self._endpoint_writes.pending.discard(completed)
             if not completed.cancelled():
                 completed.exception()
 
@@ -476,10 +502,31 @@ class _ComponentGroup:
         Raises `ModbusConnectionError` if the link itself is down.
         """
         async with self._poll_lock:
-            return await self._async_update_locked()
+            try:
+                return await self._async_update_locked()
+            except _ReadInterruptedByWrite:
+                reset_epoch = self._reset_epoch
+                self.poll_write_restarts += 1
+                _LOGGER.debug("Restarting read after endpoint write")
+                try:
+                    # The coordinator's existing deadline bounds this wait and
+                    # the one retry. Never wait for the writer's refresh here.
+                    await self._endpoint_writes.async_drain()
+                    if self._reset_epoch != reset_epoch:
+                        raise ModbusError("Read recovery invalidated by device reset")
+                    result = await self._async_update_locked()
+                except BaseException:
+                    self.poll_write_recovery_failures += 1
+                    _LOGGER.debug("Write-interrupted read recovery did not complete")
+                    raise
+                self.poll_write_recoveries += 1
+                _LOGGER.debug("Write-interrupted read recovered")
+                return result
 
-    def reset_poll_progress(self) -> None:
+    def reset_poll_progress(self, *, reason: str = "reset") -> None:
         """Invalidate pre-write/identity samples without losing capabilities."""
+        if reason != "write":
+            self._reset_epoch += 1
         self._read_round = None
         self._prefetched.clear()
         self._prefetched_at.clear()
@@ -491,6 +538,7 @@ class _ComponentGroup:
         return await self._confirm_endpoint_identity(progress.get("identity"))
 
     async def _async_update_locked(self) -> dict[str, Any]:
+        reset_epoch = self._reset_epoch
         # A cancelled poll can leave a request queued in the shared broker,
         # as well as one already on the wire. Do not enqueue another round
         # behind those survivors. Cancelling this wait must leave them intact;
@@ -520,6 +568,8 @@ class _ComponentGroup:
                     self.reset_poll_progress()
                     raise
                 if saved_round is not self._read_round:
+                    if reset_epoch == self._reset_epoch:
+                        raise _ReadInterruptedByWrite("Read round interrupted by a write")
                     raise ModbusError("Read round invalidated during identity validation")
                 if not confirmed:
                     self.reset_poll_progress()
@@ -527,6 +577,10 @@ class _ComponentGroup:
                 oldest = min([time.monotonic(), *self._prefetched_at.values()])
                 self._read_round = {"started": oldest, "words": {}, "attempted": {}, "failures": {},
                                     "identity": deepcopy(self._identity_snapshot())}
+                # Rejecting saved samples can advance the reset epoch. This
+                # fresh round must compare against its own epoch, while the
+                # identity-validation checks above retain the earlier one.
+                reset_epoch = self._reset_epoch
             else:
                 self.poll_resumes += 1
             progress = self._read_round
@@ -541,6 +595,8 @@ class _ComponentGroup:
                 name, component, values, prefetched, progress=progress, failures=failures
             )
             if progress is not None and progress is not self._read_round:
+                if reset_epoch == self._reset_epoch:
+                    raise _ReadInterruptedByWrite("Read round interrupted by a write")
                 raise ModbusError("Read round invalidated by a write or identity change")
         if progress is not None:
             self.poll_last_round_span = time.monotonic() - progress["started"]
@@ -573,7 +629,7 @@ class _ComponentGroup:
                         # the actual protected wire write was still pending.
                         self._on_write()
 
-                await self._async_request(write_and_invalidate())
+                await self._async_request(write_and_invalidate(), write=True)
                 return
         raise AttributeError(f"unknown register {register_name!r}")
 

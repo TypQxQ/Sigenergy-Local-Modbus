@@ -21,6 +21,7 @@ from .const import (
 )
 from .coordinator import SigenergyDataUpdateCoordinator
 from .device_registry_compat import parent_device_info
+from .entity_language import translated_entity_name
 from .common import (
     generate_device_id,
     generate_unique_entity_id,
@@ -98,8 +99,12 @@ class SigenergyEntity(CoordinatorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self.hub = coordinator.hub
-        # Note: _attr_name is handled by _attr_has_entity_name = True and description.name
-        # self._attr_name = name # We might not need this if using has_entity_name=True
+        # Keep legacy description names as a fallback and for identity generation.
+        # Automatic uses HA's server language; the optional override is applied
+        # before registry setup. User-defined names remain owned by the registry.
+        self._attr_translation_key = (
+            getattr(description, "translation_key", None) or description.key
+        )
         self._device_type = device_type
         self._device_id = device_id  # Store original ID (e.g., slave ID for AC charger)
         self._device_name = device_name  # Store device name (e.g., "Inverter 1", "Plant", "AC Charger 1")
@@ -119,6 +124,31 @@ class SigenergyEntity(CoordinatorEntity):
             self._attr_device_info = _generate_device_info(
                 device_type, device_name, coordinator
             )
+
+    async def async_prepare_to_add_to_hass(self) -> None:
+        """Apply the selected display language before registry/name resolution."""
+        await super().async_prepare_to_add_to_hass()
+        translations = getattr(self.coordinator, "entity_name_translations", None)
+        if not translations:
+            return
+        name = translated_entity_name(
+            translations, self.platform_data.domain, self.translation_key,
+            self.translation_placeholders,
+        )
+        if name is None:
+            return
+        # Keep HA's normal suggested ID even for newly discovered entities.
+        # Setting _attr_name alone would also localize ID generation.
+        if not hasattr(self, "_language_suggested_object_id"):
+            self._language_suggested_object_id = super().suggested_object_id
+        self._attr_name = name
+
+    @property
+    def suggested_object_id(self) -> str | None:
+        """Keep display-language overrides out of entity ID generation."""
+        if hasattr(self, "_language_suggested_object_id"):
+            return self._language_suggested_object_id
+        return super().suggested_object_id
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -179,6 +209,32 @@ class SigenergyEntity(CoordinatorEntity):
             return
 
         super()._handle_coordinator_update()
+
+    def _control_reading_available(self) -> bool:
+        """Require live backing values for readable controls, preserving zero.
+
+        Register support is a capability, not proof of a successful current
+        read. Explicitly dependency-free write-only controls retain their own
+        availability rules. Calculated sensors do not use this control guard.
+        """
+        data = self.coordinator.data
+        if data is None:
+            return False
+        if self._device_type == DEVICE_TYPE_PLANT:
+            values = data.get("plant", {})
+        elif self._device_type == DEVICE_TYPE_INVERTER:
+            values = data.get("inverters", {}).get(self._device_name, {})
+        elif self._device_type == DEVICE_TYPE_AC_CHARGER:
+            values = data.get("ac_chargers", {}).get(self._device_name, {})
+        elif self._device_type == DEVICE_TYPE_DC_CHARGER:
+            name = self._device_name.replace(" DC Charger", "").strip()
+            values = data.get("dc_chargers", {}).get(name, {})
+        else:
+            return False
+        keys = getattr(self.entity_description, "register_support_keys", None)
+        if keys is None:
+            keys = (self.entity_description.key,)
+        return all(values.get(key) is not None for key in keys)
 
     @property
     def available(self) -> bool:

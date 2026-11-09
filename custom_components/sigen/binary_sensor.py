@@ -13,7 +13,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry # pylint: disable=syntax-error
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityDescription, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -22,6 +22,7 @@ from .coordinator import SigenergyDataUpdateCoordinator
 from .sigen_entity import SigenergyEntity
 from .common import generate_sigen_entity, safe_decimal
 from .calculated_sensor import SigenergyCalculations
+from .power_flow import power_flow_thresholds, hysteresis_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,21 +47,11 @@ PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
         name="PV Generating",
         device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:solar-power",
-        source_key=None,  # No longer a direct key, calculated from multiple values
         register_support_keys=(
             "plant_sigen_photovoltaic_power",
             "plant_third_party_photovoltaic_power",
         ),
         register_support_mode="any",
-        value_fn=lambda data: (
-            (
-                power := SigenergyCalculations.calculate_total_pv_power(
-                    None, coordinator_data={"plant": data}
-                )
-            )
-            is not None
-            and power > 0.01
-        ),
     ),
     SigenergyBinarySensorEntityDescription(
         key="plant_battery_charging",
@@ -86,7 +77,7 @@ PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
         # 'tower-import' icon means 'energy to grid'
         icon="mdi:transmission-tower-import",
         source_key="plant_grid_sensor_active_power",
-        # Exporting is when grid power is positive (Sigenergy convention)
+        # Negative grid power is exporting.
         value_fn=lambda data: (dec_val := safe_decimal(data.get("plant_grid_sensor_active_power"))) is not None and dec_val < Decimal("-0.01"),
     ),
     SigenergyBinarySensorEntityDescription(
@@ -96,7 +87,7 @@ PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
         # 'tower-export' icon means 'energy from grid'
         icon="mdi:transmission-tower-export",
         source_key="plant_grid_sensor_active_power",
-        # Importing is when grid power is negative (Sigenergy convention)
+        # Positive grid power is importing.
         value_fn=lambda data: (dec_val := safe_decimal(data.get("plant_grid_sensor_active_power"))) is not None and dec_val > Decimal("0.01"),
     ),
 ]
@@ -158,22 +149,47 @@ class SigenergyBinarySensor(SigenergyEntity, BinarySensorEntity):
             pv_string_idx=pv_string_idx,
         )
         self._source_entity_id = source_entity_id
+        self._flow_state: bool | None = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Never carry a remembered on-state across loss of source data."""
+        if not self.available:
+            self._flow_state = None
+        super()._handle_coordinator_update()
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
         if self.coordinator.data is None or "plant" not in self.coordinator.data:
+            self._flow_state = None
             return None
 
         plant_data = self.coordinator.data["plant"]
 
-        if self.entity_description.value_fn is None:
-            _LOGGER.error("[%s] value_fn is not defined", self.entity_id)
-            return None
-
         try:
-            return self.entity_description.value_fn(plant_data)
+            thresholds = power_flow_thresholds(self.coordinator.hub.config_entry.options)
+            key = self.entity_description.key
+            if key == "plant_pv_generating":
+                power = SigenergyCalculations.calculate_total_pv_power(
+                    None, self.coordinator.data, {"hub": self.hub}
+                )
+                if thresholds is None:
+                    return None if power is None else power > 0.01
+            elif thresholds is None:
+                if self.entity_description.value_fn is None:
+                    _LOGGER.error("[%s] value_fn is not defined", self.entity_id)
+                    return None
+                return self.entity_description.value_fn(plant_data)
+            else:
+                raw = plant_data.get(self.entity_description.source_key)
+                power = None if raw is None or isinstance(raw, bool) else safe_decimal(raw)
+                if power is not None and key in ("plant_exporting_to_grid", "plant_battery_discharging"):
+                    power = -power
+            self._flow_state = hysteresis_state(power, self._flow_state, thresholds)
+            return self._flow_state
         except (InvalidOperation, TypeError, ValueError) as ex:
+            self._flow_state = None
             _LOGGER.warning(
                 "[%s] Could not calculate state for key '%s': %s",
                 self.entity_id,
@@ -182,6 +198,7 @@ class SigenergyBinarySensor(SigenergyEntity, BinarySensorEntity):
             )
             return None
         except Exception as ex:
+            self._flow_state = None
             _LOGGER.exception(
                 "[%s] Unexpected error calculating state: %s", self.entity_id, ex
             )

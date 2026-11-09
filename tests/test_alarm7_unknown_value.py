@@ -39,6 +39,8 @@ def sensor_class():
     namespace = {
         "SigenergyEntity": Base, "SensorEntity": type("SensorEntity", (), {}),
         "unknown_alarm_value": alarm.unknown_alarm_value,
+        "ALARM_REGISTER_GROUPS": alarm.ALARM_REGISTER_GROUPS,
+        "alarm_state_attributes": alarm.alarm_state_attributes,
         "SensorDeviceClass": SimpleNamespace(TIMESTAMP="timestamp"),
         "ALARM_CODES": ast.literal_eval(mappings),
         "DEVICE_TYPE_PLANT": "plant", "DEVICE_TYPE_INVERTER": "inverter",
@@ -70,7 +72,7 @@ class TestAlarm7UnknownValue(unittest.TestCase):
         self.assertTrue(entity.available)
         self.assertEqual("Unknown Alarm", entity.native_value)
         self.assertEqual({"alarm_status": "unknown", "alarm_reason": "all_bits_set",
-                          "raw_value": 65535}, entity.extra_state_attributes)
+                          "raw_value": 65535, "alarm_codes": ["unknown"]}, entity.extra_state_attributes)
         self.assertEqual(65535, entity.coordinator.data["plant"]["plant_general_alarm7"])
 
     def test_each_documented_bitmap_still_reports_its_real_alarm(self):
@@ -80,7 +82,8 @@ class TestAlarm7UnknownValue(unittest.TestCase):
                 entity = self.sensor(value)
                 self.assertTrue(entity.available)
                 self.assertEqual(expected, entity.native_value)
-                self.assertIsNone(entity.extra_state_attributes)
+                self.assertEqual(value, entity.extra_state_attributes["raw_value"])
+                self.assertEqual("active" if value else "no_problem", entity.extra_state_attributes["alarm_status"])
 
     def test_missing_data_still_has_no_alarm_reading(self):
         entity = self.sensor(None)
@@ -97,7 +100,7 @@ class TestAlarm7UnknownValue(unittest.TestCase):
                 entity.coordinator.data["plant"]["plant_general_alarm7"] = value
                 self.assertTrue(entity.available)
                 self.assertNotEqual("Unknown Alarm", entity.native_value)
-                self.assertIsNone(entity.extra_state_attributes)
+                self.assertNotIn("alarm_reason", entity.extra_state_attributes)
 
     def test_other_alarm_registers_keep_all_bits_set(self):
         for key in ("plant_general_alarm1", "plant_general_alarm2", "plant_general_alarm6"):
@@ -105,7 +108,8 @@ class TestAlarm7UnknownValue(unittest.TestCase):
                 entity = self.sensor(0xFFFF, key)
                 self.assertTrue(entity.available)
                 self.assertIsNotNone(entity.native_value)
-                self.assertIsNone(entity.extra_state_attributes)
+                self.assertEqual(16, len(entity.extra_state_attributes["alarm_codes"]))
+                self.assertNotIn("alarm_reason", entity.extra_state_attributes)
 
     def test_parent_unavailability_and_existing_attributes_are_preserved(self):
         entity = self.sensor(0)

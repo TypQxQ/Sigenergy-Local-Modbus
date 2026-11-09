@@ -49,7 +49,7 @@ from .const import (
     DEVICE_TYPE_PLANT,
 )
 from .sigen_devices import PROBE_RETRY_DELAY, SigenergyACCharger, SigenergyInverter, SigenergyPlant
-from .sigen_devices import IDENTITY_REGISTERS
+from .sigen_devices import IDENTITY_REGISTERS, _EndpointWrites
 from .support_cache import SupportCache, device_cache_key
 
 _LOGGER = logging.getLogger(__name__)
@@ -153,8 +153,10 @@ class SigenergyModbusHub:
             name: SigenergyACCharger(_acquire_unit(hass, config_entry, info, info[CONF_SLAVE_ID]))
             for name, info in self.ac_charger_connections.items()
         }
+        endpoint_writes = {}
         for _role, info, group in self._all_groups():
             endpoint = (info[CONF_HOST], info[CONF_PORT])
+            group._endpoint_writes = endpoint_writes.setdefault(endpoint, _EndpointWrites())
             group._on_write = lambda ep=endpoint: self._reset_poll_progress(ep)
             group._identity_snapshot = lambda ep=endpoint: self._endpoint_identity.get(ep, {})
             group._confirm_endpoint_identity = (
@@ -165,7 +167,7 @@ class SigenergyModbusHub:
         """Discard every pre-write sample on the affected physical link."""
         for _role, info, group in self._all_groups():
             if (info[CONF_HOST], info[CONF_PORT]) == endpoint:
-                group.reset_poll_progress()
+                group.reset_poll_progress(reason="write")
 
     async def _async_confirm_endpoint_identity(self, endpoint, expected):
         """Validate a saved round's endpoint before any sibling reuses it."""

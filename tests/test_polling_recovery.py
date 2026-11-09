@@ -280,8 +280,8 @@ class TestPollingRecovery(unittest.IsolatedAsyncioTestCase):
             await self.group.async_write("set_first", 999)
             self.unit.load_raw({"input": {100: 999}})
             finish.set()
-            with self.assertRaises(self.devices.ModbusError):
-                await old
+            self.assertEqual(999, (await old)["first"])
+            self.assertEqual(1, self.group.poll_write_recoveries)
             self.assertEqual(999, (await self.group.async_update())["first"])
 
     async def test_persisted_split_jobs_resume_without_repeating_the_rejected_parent(self):
@@ -391,7 +391,8 @@ class TestStartupRecovery(unittest.IsolatedAsyncioTestCase):
             "DEFAULT_SCAN_INTERVAL": 5, "CONF_HOST": "host", "CONF_PORT": "port",
             "CONF_NAME": "name", "DOMAIN": "sigen", "PLATFORMS": ["sensor"],
             "register_parent_devices": Mock(), "generate_device_id": Mock(),
-            "async_update_options": Mock()}
+            "async_update_options": Mock(),
+            "async_load_entity_name_translations": AsyncMock(return_value=None)}
         exec(compile(ast.Module(body=[setup], type_ignores=[]), "__init__.py", "exec",
                      flags=__future__.annotations.compiler_flag), namespace)
         return namespace
