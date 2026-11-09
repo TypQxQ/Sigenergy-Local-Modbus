@@ -68,61 +68,13 @@ applicable protocol when reporting compatibility. Start with read-only mode.
 
 ## Home Assistant Energy Dashboard
 
-Use **Settings → Dashboards → Energy** to select your actual entity IDs. The
-labels below identify integration entities; IDs can differ between installations.
-Enable required disabled sensors in entity settings and retain their Recorder
-history. Check for statistics errors if a sensor is missing from the selector.
-
-For accumulated **energy** (kWh), use one source for each flow:
-
-| Energy setting | Integration sensor |
-|---|---|
-| Grid import | Plant **Total imported energy** (`plant_accumulated_grid_import_energy`) |
-| Grid export | Plant **Total exported energy** (`plant_accumulated_grid_export_energy`) |
-| Solar production | Plant **Total PV generation** (`plant_accumulated_pv_energy`) |
-| Energy into battery | Plant **Total charged energy of the ESS** (`plant_accumulated_battery_charge_energy`) |
-| Energy out of battery | Plant **Total discharged energy of the ESS** (`plant_accumulated_battery_discharge_energy`) |
-
-For the **Now** view, configure **power** measurements (kW):
-
-| Power setting | Integration sensor and sign |
-|---|---|
-| Grid connection | Plant **Grid active power** (`plant_grid_sensor_active_power`): positive import, negative export; use Standard. |
-| Solar | Plant **PV power** (`plant_photovoltaic_power`): non-negative generation. |
-| Battery | Plant **Battery power** (`plant_ess_power`): positive charging, negative discharging; use Inverted to match HA's positive-discharge convention. |
-
-Do not assign **Consumed power** to the grid connection: it measures household
-consumption, not grid import/export. Use the signed grid sensor once, rather
-than adding its split import/export power sensors as additional grid sources.
-Likewise, choose either the plant's PV total or individual PV energy sensors;
-adding both counts the same generation twice. Third-party PV or separate meters
-may require a different topology; confirm what each meter includes first.
-
-After setup, check direction during a known import, export, charge and discharge
-period, and check that kWh totals and the kW Now view agree with those directions.
-No manual template or history migration is needed for this mapping. See Home
-Assistant's [energy guidance](https://www.home-assistant.io/docs/energy/faq/).
+See the [Energy Dashboard setup guide](ENERGY_DASHBOARD.md) for plant and
+inverter sensor mappings, the Now view, and the inverter power balance example.
 
 ### Third-party PV
 
-External/AC-coupled inverter energy already has dedicated sensors:
-
-| Sensor | Register key / calculation |
-|---|---|
-| Plant **Total generation of third-party inverter** | `plant_total_generation_of_third_party_inverter`, lifetime counter; disabled by default |
-| Plant **Daily third-party inverter energy** | `plant_daily_third_party_inverter_energy_from_lifetime`, derived from that lifetime counter |
-
-If the total sensor is absent from your dashboard, find it in the integration's
-entity list and enable it. Enable and record the total source when using its
-daily derivative. No write controls or new Riemann-sum helper are needed when
-the device supplies this counter. Native readings use kWh; HA may display a
-converted unit such as MWh. Do not apply another scaling factor to the reading.
-
-The normal **Daily PV energy** calculation sums Sigenergy inverter daily
-counters; it does not add the separate third-party daily counter. For the Energy
-Dashboard, establish whether your selected plant PV total includes external PV
-before adding another source: overlapping totals would double count production.
-Available registers depend on the installation. See [the third-party PV report](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/255).
+See [third-party solar setup](ENERGY_DASHBOARD.md#third-party-pv) for the
+matching energy and power entities.
 
 ## Power flow indicators
 

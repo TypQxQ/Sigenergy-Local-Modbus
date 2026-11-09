@@ -47,21 +47,11 @@ PLANT_BINARY_SENSORS: list[SigenergyBinarySensorEntityDescription] = [
         name="PV Generating",
         device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:solar-power",
-        source_key=None,  # No longer a direct key, calculated from multiple values
         register_support_keys=(
             "plant_sigen_photovoltaic_power",
             "plant_third_party_photovoltaic_power",
         ),
         register_support_mode="any",
-        value_fn=lambda data: (
-            (
-                power := SigenergyCalculations.calculate_total_pv_power(
-                    None, coordinator_data={"plant": data}
-                )
-            )
-            is not None
-            and power > 0.01
-        ),
     ),
     SigenergyBinarySensorEntityDescription(
         key="plant_battery_charging",
@@ -177,24 +167,27 @@ class SigenergyBinarySensor(SigenergyEntity, BinarySensorEntity):
 
         plant_data = self.coordinator.data["plant"]
 
-        if self.entity_description.value_fn is None:
-            _LOGGER.error("[%s] value_fn is not defined", self.entity_id)
-            return None
-
         try:
             thresholds = power_flow_thresholds(self.coordinator.hub.config_entry.options)
-            if thresholds is not None:
-                key = self.entity_description.key
-                if key == "plant_pv_generating":
-                    power = SigenergyCalculations.calculate_total_pv_power(None, {"plant": plant_data})
-                else:
-                    raw = plant_data.get(self.entity_description.source_key)
-                    power = None if raw is None or isinstance(raw, bool) else safe_decimal(raw)
-                    if power is not None and key in ("plant_exporting_to_grid", "plant_battery_discharging"):
-                        power = -power
-                self._flow_state = hysteresis_state(power, self._flow_state, thresholds)
-                return self._flow_state
-            return self.entity_description.value_fn(plant_data)
+            key = self.entity_description.key
+            if key == "plant_pv_generating":
+                power = SigenergyCalculations.calculate_total_pv_power(
+                    None, self.coordinator.data, {"hub": self.hub}
+                )
+                if thresholds is None:
+                    return None if power is None else power > 0.01
+            elif thresholds is None:
+                if self.entity_description.value_fn is None:
+                    _LOGGER.error("[%s] value_fn is not defined", self.entity_id)
+                    return None
+                return self.entity_description.value_fn(plant_data)
+            else:
+                raw = plant_data.get(self.entity_description.source_key)
+                power = None if raw is None or isinstance(raw, bool) else safe_decimal(raw)
+                if power is not None and key in ("plant_exporting_to_grid", "plant_battery_discharging"):
+                    power = -power
+            self._flow_state = hysteresis_state(power, self._flow_state, thresholds)
+            return self._flow_state
         except (InvalidOperation, TypeError, ValueError) as ex:
             self._flow_state = None
             _LOGGER.warning(

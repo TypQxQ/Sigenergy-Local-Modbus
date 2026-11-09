@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import Enum
+from math import isfinite
 from time import monotonic
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
@@ -34,7 +35,7 @@ from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import state_changes_during_period
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_VALUES_TO_INIT, DEFAULT_MIN_INTEGRATION_TIME
+from .const import CONF_VALUES_TO_INIT, DEFAULT_MIN_INTEGRATION_TIME, DEVICE_TYPE_PLANT
 from .modbusregisterdefinitions import ENUM_SENSOR_STATES, enum_sensor_options
 
 from .common import (
@@ -157,29 +158,29 @@ class SigenergyCalculations:
 
     @staticmethod
     def calculate_total_pv_power(
-        _,  # value is not used for this calculation
+        _,
         coordinator_data: Optional[Dict[str, Any]] = None,
-        extra_params: Optional[Dict[str, Any]] = None, # Not used here, but kept for consistency
+        extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[float]:
-        """Calculate the total PV power from plant and party sources."""
+        """Sum PV power only when every potentially supported source has a reading."""
         if not coordinator_data or "plant" not in coordinator_data:
-            _LOGGER.debug("[CS][Total PV Power] Missing plant data in coordinator_data for total PV power calculation")
             return None
 
-        plant_data = coordinator_data.get("plant", {})
-
-        plant_pv_power = safe_float(
-            plant_data.get("plant_sigen_photovoltaic_power"))
-        thirdparty_pv_power = safe_float(
-            plant_data.get("plant_third_party_photovoltaic_power"))
-
-        # If either value is None after safe_float, it means it was invalid or missing.
-        # We treat missing as 0 for summation, but if both are missing, return None.
-        if plant_pv_power is None and thirdparty_pv_power is None:
-            _LOGGER.debug("[CS][Total PV Power] Both plant_photovoltaic_power and thirdparty_pv_power are unavailable.")
-            return None
-
-        return safe_float((plant_pv_power or 0.0) + (thirdparty_pv_power or 0.0))
+        plant_data = coordinator_data["plant"]
+        hub = (extra_params or {}).get("hub")
+        readings = []
+        for key in ("plant_sigen_photovoltaic_power", "plant_third_party_photovoltaic_power"):
+            if hub is not None and hub.get_register_support(DEVICE_TYPE_PLANT, None, key) is False:
+                continue
+            raw = plant_data.get(key)
+            if raw is None or isinstance(raw, bool):
+                return None
+            power = safe_float(raw)
+            if power is None or not isfinite(power):
+                return None
+            readings.append(power)
+        total = sum(readings)
+        return round(total, 6) if readings and isfinite(total) else None
 
     @staticmethod
     def calculate_pv_power(

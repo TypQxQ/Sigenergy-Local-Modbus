@@ -341,6 +341,8 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
                 # Call transformation function, trying 3,2,1 args for compatibility
                 fn = self.entity_description.value_fn
                 extra_params = {**(getattr(self.entity_description, "extra_params", {}) or {}), "device_name": self._device_name}
+                if self.entity_description.key == "plant_photovoltaic_power":
+                    extra_params["hub"] = self.hub
                 transformed = None
                 for args in [(raw_value, data, extra_params), (raw_value, data), (raw_value,)]:
                     try:

@@ -88,7 +88,8 @@ details, see the [usage guide](docs/USAGE.md).
 ## Dashboards and tools
 
 - [Energy Flow Dashboard](Dashboards/energy_flow_gauge/readme.md)
-- [Energy Dashboard sensor mapping and Recorder advice](docs/USAGE.md#home-assistant-energy-dashboard)
+- [Energy Dashboard setup and sensor mapping](docs/ENERGY_DASHBOARD.md)
+- [Recorder advice](docs/USAGE.md#recorder-storage)
 - [Energy price and charging chart](Dashboards/nordpool_energy_chart/readme.md)
 - [Si-GCG's projects](https://github.com/Si-GCG/sigenergy_projects)
 - [EMHASS guide](https://sigenergy.annable.me/)
