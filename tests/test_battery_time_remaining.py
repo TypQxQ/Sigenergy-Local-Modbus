@@ -4,6 +4,7 @@ from __future__ import annotations
 import ast
 from decimal import Decimal, InvalidOperation
 import json
+from math import isfinite
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -22,7 +23,7 @@ def load_calculation():
         'battery_time_remaining_inputs'}]
     common = ast.parse((COMPONENT / 'common.py').read_text(encoding='utf-8'))
     helpers = [n for n in common.body if isinstance(n, ast.FunctionDef) and n.name in {'safe_decimal', 'safe_float'}]
-    scope = {'Decimal': Decimal, 'InvalidOperation': InvalidOperation, '_LOGGER': Mock(),
+    scope = {'Decimal': Decimal, 'InvalidOperation': InvalidOperation, '_LOGGER': Mock(), 'isfinite': isfinite,
              'SensorDeviceClass': SimpleNamespace(DURATION='duration'),
              'UnitOfTime': SimpleNamespace(HOURS='h'),
              'SigenergySensorEntityDescription': lambda **kw: SimpleNamespace(state_class=None, **kw)}
@@ -78,9 +79,35 @@ class TestBatteryTimeRemaining(unittest.TestCase):
         data['ac_chargers'] = {'Charger': {'ac_charger_charging_power': 2}}
         self.assertEqual(Decimal(3), self.value(data))
 
+    def test_fallback_requires_a_valid_reading_from_each_configured_charger(self):
+        data = self.data(plant_general_load_power=None, plant_active_power=1,
+                         plant_grid_sensor_active_power=2, plant_third_party_photovoltaic_power=1)
+        data['ac_chargers'] = {'First': {'ac_charger_charging_power': 1}, 'Second': {}}
+        sensor = self.sensor(data)
+        for missing in ({}, {'ac_charger_charging_power': None}, {'ac_charger_charging_power': True},
+                        {'ac_charger_charging_power': 'invalid'}, {'ac_charger_charging_power': float('nan')},
+                        {'ac_charger_charging_power': float('inf')}):
+            with self.subTest(reading=missing):
+                data['ac_chargers']['Second'] = missing
+                self.assertIsNone(sensor.native_value)
+                self.assertIsNone(sensor.extra_state_attributes['consumed_power_kw'])
+        data['ac_chargers']['Second'] = {'ac_charger_charging_power': 0}
+        self.assertEqual(Decimal(2), sensor.native_value)
+        self.assertEqual(3.0, sensor.extra_state_attributes['consumed_power_kw'])
+        data['ac_chargers']['Second']['ac_charger_charging_power'] = 1
+        self.assertEqual(Decimal(3), sensor.native_value)
+
+    def test_fallback_works_without_configured_chargers(self):
+        data = self.data(plant_general_load_power=None, plant_active_power=1,
+                         plant_grid_sensor_active_power=2, plant_third_party_photovoltaic_power=1)
+        data['ac_chargers'] = {}
+        self.assertEqual(Decimal('1.5'), self.value(data))
+
     def test_direct_consumption_wins_over_fallback(self):
-        self.assertEqual(Decimal(3), self.value(self.data(plant_active_power=100,
-            plant_grid_sensor_active_power=100, plant_third_party_photovoltaic_power=100)))
+        data = self.data(plant_active_power=100, plant_grid_sensor_active_power=100,
+                         plant_third_party_photovoltaic_power=100)
+        data['ac_chargers'] = {'Charger': {}}
+        self.assertEqual(Decimal(3), self.value(data))
 
     def test_at_or_below_reserve_is_zero(self):
         for soc in (20, 19, 0):
