@@ -15,13 +15,13 @@ Localized names, status labels and setup dialogs in
 [11 languages](docs/migrations/2.0.md#localized-names-and-alarm-details).
 
 > **Before upgrading to 2.0.** Update to **Home Assistant Core 2026.10.0 or
-> later** (Python **3.14.2 or later**). Eight status sensors use new stored
+> later**. Eight status sensors use new stored
 > values. Check the [migration guide](docs/migrations/2.0.md) for automation
 > and template changes.
 
 ## Requirements
 
-- Home Assistant **2026.10+** (Python **3.14.2+**).
+- Home Assistant Core **2026.10.0 or later**.
 - **Modbus TCP enabled** and firmware compatible with your model. SigenStor
   normally requires **SPC109+**; see [model and firmware notes](docs/USAGE.md#model-and-firmware-notes)
   for the SigenMate SPC101 field report.
