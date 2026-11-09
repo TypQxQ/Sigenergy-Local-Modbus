@@ -380,10 +380,14 @@ class SigenergyCalculations:
 
         total_ac_charger_power = 0.0
         ac_chargers: dict[str, Any] = coordinator_data.get("ac_chargers", {})
-        for _, ac_charger_data in ac_chargers.items():
-            ac_power = safe_float(ac_charger_data.get("ac_charger_charging_power"))
-            if ac_power is not None:
-                total_ac_charger_power += ac_power
+        for ac_charger_data in ac_chargers.values():
+            raw_power = ac_charger_data.get("ac_charger_charging_power")
+            if raw_power is None or isinstance(raw_power, bool):
+                return None
+            ac_power = safe_float(raw_power)
+            if ac_power is None or not isfinite(ac_power):
+                return None
+            total_ac_charger_power += ac_power
 
         plant_power = plant_data.get("plant_active_power")
         grid_power = plant_data.get("plant_grid_sensor_active_power")

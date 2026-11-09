@@ -173,6 +173,8 @@ The estimate is available while charging, discharging or idle. It assumes no
 further contribution from solar or the grid, and constant household demand.
 It uses the same consumption calculation as **Consumed power**, including its
 fallback for older firmware. No additional Modbus requests are made.
+When using the fallback, a missing or invalid reading from a configured AC
+charger makes the household load unknown until the reading recovers.
 
 At or below the reserve it reports `0`. With energy above reserve, zero/negative
 or missing consumption reports `unknown`. Missing/invalid SOC, reserve or
