@@ -76,6 +76,60 @@ class TestIncrementalDiscovery(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(original, self.group._field_support["telemetry"])
         self.assertTrue(self.group._probe_queue)
 
+    async def test_silent_address_does_not_hide_healthy_neighbours(self):
+        original = self.unit.read_input_registers
+        requests = []
+        async def read(address, count):
+            requests.append((address, count))
+            if address <= 101 < address + count:
+                raise ModbusTimeoutError("silent optional address")
+            return await original(address, count)
+        self.group.queue_discovery()
+        with patch.object(self.unit, "read_input_registers", read):
+            for _ in range(6):
+                before = len(requests)
+                try:
+                    await self.group.async_discover_one()
+                except ModbusTimeoutError:
+                    self.assertGreater(self.group.discovery_retry_at, self.devices.time.monotonic())
+                self.assertEqual(before + 1, len(requests), "fallback waits for later steps")
+        self.assertIs(self.group.is_supported("first"), True)
+        self.assertIs(self.group.is_supported("separate"), True)
+        self.assertIsNone(self.group.is_supported("second"), "timeout is not unsupported")
+        self.assertEqual([("telemetry", ("second",))], list(self.group._probe_queue))
+        values = await self.group.async_update()
+        self.assertEqual(123, values["first"])
+        self.assertEqual(789, values["separate"])
+
+    async def test_connection_failure_keeps_block_intact_and_backs_off(self):
+        self.group.queue_discovery()
+        read = AsyncMock(side_effect=ModbusConnectionError("offline"))
+        with patch.object(self.unit, "read_input_registers", read):
+            with self.assertRaises(ModbusConnectionError):
+                await self.group.async_discover_one()
+        read.assert_awaited_once_with(100, 2)
+        self.assertEqual([("telemetry", ("separate",)),
+                          ("telemetry", ("first", "second"))], list(self.group._probe_queue))
+        self.assertGreater(self.group.discovery_retry_at, self.devices.time.monotonic())
+        self.assertEqual({}, self.group._field_support["telemetry"])
+
+    async def test_incomplete_block_splits_and_pending_fallback_survives_reload(self):
+        self.group.queue_discovery()
+        with patch.object(self.unit, "read_input_registers", AsyncMock(return_value=[])):
+            with self.assertRaisesRegex(ModbusError, "Incomplete discovery response"):
+                await self.group.async_discover_one()
+        progress = self.group.discovery_progress("same-boot")
+        restored = self.devices._ComponentGroup(self.group._readable, {})
+        restored.enable_incremental({}, lambda: None, "miss")
+        restored.restore_discovery(progress, "same-boot")
+        self.assertGreater(restored.discovery_retry_at, self.devices.time.monotonic())
+        self.assertEqual([("telemetry", ("separate",)), ("telemetry", ("first",)),
+                          ("telemetry", ("second",))], list(restored._probe_queue))
+        for _ in range(3):
+            await restored.async_discover_one()
+        self.assertTrue(all(restored.is_supported(field) is True
+                            for field in ("first", "second", "separate")))
+
     async def test_rejected_known_block_only_suspends_affected_fields(self):
         self.group._field_support["telemetry"].update(first=True, second=True, separate=True)
         self.unit.fail_read(101, IllegalDataAddressError(2), register_type="input")
