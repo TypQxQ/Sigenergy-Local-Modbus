@@ -3,6 +3,7 @@ import __future__
 import ast
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
+from math import isfinite
 from pathlib import Path
 import runpy
 from types import SimpleNamespace as NS
@@ -10,23 +11,28 @@ import unittest
 from unittest.mock import Mock
 
 from test_config_options_safety import load_flows, options_flow, vol
+import test_enum_sensor_values as enum_values
 
 SOURCE=Path(__file__).resolve().parents[1]/'custom_components/sigen'
 PURE=runpy.run_path(str(SOURCE/'power_flow.py'))
 OPTIONS={'power_flow_hysteresis':True,'power_flow_on_w':50,'power_flow_off_w':10}
+SIGEN_PV='plant_sigen_photovoltaic_power'
+EXTERNAL_PV='plant_third_party_photovoltaic_power'
 
 
 def binary_class():
     class Base:
         def __init__(self,coordinator,**kw):
             self.coordinator=coordinator
+            self.hub=coordinator.hub
             self.entity_description=kw['description']
             self.available=True
         def _handle_coordinator_update(self):
             self.updated=True
     scope={**PURE,'Decimal':Decimal,'InvalidOperation':InvalidOperation,'_LOGGER':Mock(),
+           'isfinite':isfinite,'DEVICE_TYPE_PLANT':'plant',
            'callback':lambda fn:fn,'SigenergyEntity':Base,'BinarySensorEntity':type('Binary',(),{}),
-           'SigenergyBinarySensorEntityDescription':lambda **kw:NS(**kw),
+           'SigenergyBinarySensorEntityDescription':lambda **kw:NS(**{'source_key':None,**kw}),
            'BinarySensorDeviceClass':NS(POWER='power',BATTERY_CHARGING='battery_charging')}
     common=ast.parse((SOURCE/'common.py').read_text(encoding='utf-8'))
     nodes=[n for n in common.body if isinstance(n,ast.FunctionDef) and n.name in ('safe_float','safe_decimal')]
@@ -41,13 +47,15 @@ def binary_class():
         or (isinstance(n,ast.ClassDef) and n.name=='SigenergyBinarySensor')]
     exec(compile(ast.Module(body=nodes,type_ignores=[]),'binary_sensor','exec',
                  flags=__future__.annotations.compiler_flag),scope)
-    return scope['SigenergyBinarySensor'],scope['PLANT_BINARY_SENSORS']
+    return scope['SigenergyBinarySensor'],scope['PLANT_BINARY_SENSORS'],scope['SigenergyCalculations']
 
 
 class TestHysteresis(unittest.TestCase):
     def entity(self,key,options=None):
-        cls,descriptions=binary_class()
-        coordinator=NS(data={'plant':{}},hub=NS(config_entry=NS(options=options or {})))
+        cls,descriptions,_=binary_class()
+        hub=NS(config_entry=NS(options=options or {}),
+               get_register_support=lambda role,name,key:key != EXTERNAL_PV)
+        coordinator=NS(data={'plant':{}},hub=hub)
         entity=cls(coordinator,next(d for d in descriptions if d.key==key),'Test','plant')
         entity.entity_id='binary_sensor.fixture'
         return entity
@@ -98,6 +106,54 @@ class TestHysteresis(unittest.TestCase):
                         {'power_flow_hysteresis':'true'}):
             entity=self.entity('plant_importing_from_grid',{**OPTIONS,**changes})
             self.assertTrue(self.reading(entity,.02))
+
+    def test_missing_pv_source_is_unknown_and_clears_hysteresis(self):
+        for options in (None, OPTIONS):
+            entity=self.entity('plant_pv_generating',options)
+            entity.hub.get_register_support=lambda role,name,key:True
+            values=entity.coordinator.data['plant']
+            values.update({SIGEN_PV:.06,EXTERNAL_PV:0})
+            self.assertTrue(entity.is_on)
+            values[EXTERNAL_PV]=None
+            self.assertIsNone(entity.is_on)
+            values.update({SIGEN_PV:.03,EXTERNAL_PV:0})
+            self.assertEqual(options is None,entity.is_on)
+            values[SIGEN_PV]=0
+            self.assertFalse(entity.is_on)
+
+
+class TestCombinedPVPower(unittest.TestCase):
+    sensor=enum_values.TestEnumSensorValues.sensor
+
+    def test_power_sensor_distinguishes_support_from_missing_readings(self):
+        self.sensor_type=enum_values._sensor_type(enum_values._load_register_definitions())
+        self.descriptions={}
+        sensor,values=self.sensor('plant_photovoltaic_power')
+        _,_,calculations=binary_class()
+        sensor.entity_description.value_fn=calculations.calculate_total_pv_power
+        support={}
+        sensor.hub=NS(get_register_support=lambda role,name,key:support.get(key))
+
+        cases=[
+            ((True,True),(None,None),None),
+            ((True,True),(0,0),0),
+            ((True,True),(1.2,2.3),3.5),
+            ((True,True),(1.2,None),None),
+            ((True,True),(None,2.3),None),
+            ((True,None),(1.2,None),None),
+            ((True,False),(1.2,None),1.2),
+            ((False,True),(None,2.3),2.3),
+            ((False,False),(None,None),None),
+            ((True,True),(1.2,float('nan')),None),
+            ((True,True),(1.2,float('inf')),None),
+            ((True,True),(1.2,True),None),
+            ((True,True),(1.2,'unknown'),None),
+        ]
+        for (sigen_support,external_support),(sigen,external),expected in cases:
+            with self.subTest(support=(sigen_support,external_support),readings=(sigen,external)):
+                support.update({SIGEN_PV:sigen_support,EXTERNAL_PV:external_support})
+                values.update({SIGEN_PV:sigen,EXTERNAL_PV:external})
+                self.assertEqual(expected,sensor.native_value)
 
 
 @unittest.skipUnless(vol is not None,'Install voluptuous')
