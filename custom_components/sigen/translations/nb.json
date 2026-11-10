@@ -389,7 +389,7 @@
             "name": "Husets forbruk (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Tilgjengelig energi over reserven (kWh)"
+            "name": "Anslått gjenværende energi (kWh)"
           }
         }
       },

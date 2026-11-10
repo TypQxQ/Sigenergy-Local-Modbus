@@ -350,7 +350,7 @@
             "name": "Husets förbrukning (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Tillgänglig energi över reservnivån (kWh)"
+            "name": "Beräknad återstående energi (kWh)"
           }
         }
       },

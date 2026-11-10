@@ -389,7 +389,7 @@
             "name": "Consumo domestico (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Energia utilizzabile sopra la riserva (kWh)"
+            "name": "Energia residua stimata (kWh)"
           }
         }
       },

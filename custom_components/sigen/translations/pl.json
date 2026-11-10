@@ -389,7 +389,7 @@
             "name": "Zużycie energii w domu (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Energia dostępna powyżej rezerwy (kWh)"
+            "name": "Szacowana pozostała energia (kWh)"
           }
         }
       },

@@ -389,7 +389,7 @@
             "name": "Consumo del hogar (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Energía utilizable por encima de la reserva (kWh)"
+            "name": "Energía restante estimada (kWh)"
           }
         }
       },

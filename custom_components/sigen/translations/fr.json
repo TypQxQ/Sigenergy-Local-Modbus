@@ -389,7 +389,7 @@
             "name": "Consommation du foyer (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Énergie utilisable au-dessus de la réserve (kWh)"
+            "name": "Énergie restante estimée (kWh)"
           }
         }
       },
