@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import asyncio
 import time
+from collections import deque
 from contextlib import AsyncExitStack, asynccontextmanager
 from uuid import uuid4
 from typing import Any, Dict, Optional, Union
@@ -49,7 +50,7 @@ from .const import (
     DEVICE_TYPE_PLANT,
 )
 from .sigen_devices import PROBE_RETRY_DELAY, SigenergyACCharger, SigenergyInverter, SigenergyPlant
-from .sigen_devices import IDENTITY_REGISTERS, _EndpointWrites
+from .sigen_devices import IDENTITY_REGISTERS, _EndpointWrites, _MAX_BLOCK_SPAN
 from .support_cache import SupportCache, device_cache_key
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,6 +67,45 @@ class SigenergyModbusError(HomeAssistantError):
 #: -- surfacing as a "Received unexpected response" transaction-ID mismatch
 #: and a dropped connection.
 _REQUEST_TIMEOUT = 20.0
+_DISCOVERY_TIMING_SAMPLES = 8
+_MIN_DISCOVERY_PAUSE = 0.01
+_MAX_PV_STRINGS = 36
+
+_PRIORITY_DISCOVERY_FIELDS = {
+    "plant_accumulated_pv_energy", "plant_daily_consumed_energy",
+    "plant_ess_max_charging_limit", "plant_grid_point_maximum_export_limitation",
+    "plant_charge_cut_off_soc", "inverter_daily_pv_energy", "inverter_accumulated_pv_energy",
+}
+
+
+class _DiscoveryTiming:
+    """Pace the shared connection and adapt the size of discovery reads."""
+
+    def __init__(self):
+        self.samples = deque(maxlen=_DISCOVERY_TIMING_SAMPLES)
+        self.max_span = _MAX_BLOCK_SPAN
+        self.fast_checks = 0
+
+    def observe(self, duration, span, interval):
+        self.samples.append(duration)
+        if duration >= interval / 2:
+            self.max_span = max(1, min(self.max_span, span) // 2)
+            self.fast_checks = 0
+        elif duration <= interval / 4:
+            self.fast_checks += 1
+            if self.fast_checks == 4:
+                self.max_span = min(_MAX_BLOCK_SPAN, self.max_span * 2)
+                self.fast_checks = 0
+        else:
+            self.fast_checks = 0
+
+    def delays(self):
+        if not self.samples:
+            return _MIN_DISCOVERY_PAUSE, 0.0
+        average = sum(self.samples) / len(self.samples)
+        deviation = sum(abs(sample - average) for sample in self.samples) / len(self.samples)
+        pause = min(10 * average, 4 * average + 6 * deviation)
+        return max(_MIN_DISCOVERY_PAUSE, pause), max(10 * average, max(self.samples))
 
 # Entry setup retries share a pass; a complete HA restart starts a new pass
 # over cached negatives. Nothing here is shared register support or live data.
@@ -108,7 +148,8 @@ class SigenergyModbusHub:
         self._discovery_tasks = {}
         self._discovery_cursor = {}
         self._discovery_backoff = {}
-        self._last_discovery = {}
+        self._last_discovery_batch = {}
+        self._discovery_timing = {}
         self._active_polls = 0
         self._active_writes = 0
         self._stopping = False
@@ -319,8 +360,8 @@ class SigenergyModbusHub:
                 self._discovery_backoff.get(endpoint, 0), group.discovery_retry_at
             )
             if group.last_discovery_at is not None:
-                self._last_discovery[endpoint] = max(
-                    self._last_discovery.get(endpoint, -float("inf")), group.last_discovery_at
+                self._last_discovery_batch[endpoint] = max(
+                    self._last_discovery_batch.get(endpoint, -float("inf")), group.last_discovery_at
                 )
             self._checkpoint(key, endpoint, group)
         await self._cache.async_flush()
@@ -376,6 +417,7 @@ class SigenergyModbusHub:
         self._identities[name] = identity
         self._refresh_endpoint_identities()
         self._discovery_backoff.pop(endpoint, None)
+        self._discovery_timing.pop(endpoint, None)
         rebuild = []
         for key, binding_endpoint, role, group in self._bindings:
             if binding_endpoint != endpoint:
@@ -384,6 +426,7 @@ class SigenergyModbusHub:
                 states.clear()
             group._probe_queue.clear()
             group._queued_fields.clear()
+            group._deferred_probe_fields.clear()
             group._rejected_blocks.clear()
             group.reset_poll_progress()
             group._checked_fields.clear()
@@ -423,46 +466,95 @@ class SigenergyModbusHub:
         self.async_schedule_discovery()
 
     def async_schedule_discovery(self):
-        """At most one background request per endpoint after a successful poll."""
+        """Schedule a bounded background batch per endpoint after a successful poll."""
         if self._stopping or not self._coordinator.last_update_success:
             return
+        interval = self._coordinator.update_interval.total_seconds()
+        now = time.monotonic()
+        # HA can round the scheduled refresh down by almost a second. Keep
+        # room for that and still leave a discovery window on a 1-second poll.
+        deadline = now + interval - min(1.0, interval / 2)
         for endpoint in self._endpoint_identity:
             if not any(ep == endpoint and group._probe_queue
                        for _key, ep, _role, group in self._bindings):
                 continue
-            interval = self._coordinator.update_interval.total_seconds()
-            if time.monotonic() - self._last_discovery.get(endpoint, -float("inf")) < interval:
+            # Rate-limit extra refreshes without skipping normal polls due to
+            # small differences between the poll and background task clocks.
+            if now - self._last_discovery_batch.get(endpoint, -float("inf")) < interval / 2:
                 continue
             task = self._discovery_tasks.get(endpoint)
             if task is not None and not task.done():
                 continue
-            if time.monotonic() < self._discovery_backoff.get(endpoint, 0):
+            if now < self._discovery_backoff.get(endpoint, 0):
                 continue
             task = self.config_entry.async_create_background_task(
-                self.hass, self._async_discover_endpoint(endpoint),
+                self.hass, self._async_discover_endpoint(endpoint, deadline, interval),
                 name="Sigenergy capability discovery",
             )
             self._discovery_tasks[endpoint] = task
 
-    async def _async_discover_endpoint(self, endpoint):
+    async def _async_discover_endpoint(self, endpoint, deadline, interval):
         rebuild_lock = self._identity_rebuild_locks.get(endpoint)
-        if rebuild_lock is not None and rebuild_lock.locked():
-            return
         groups = [group for _key, ep, _role, group in self._bindings if ep == endpoint]
-        if self._active_polls or self._active_writes or any(g._pending_requests for g in groups):
-            return
-        start = self._discovery_cursor.get(endpoint, 0)
-        for offset in range(len(groups)):
-            index = (start + offset) % len(groups)
-            if not groups[index]._probe_queue:
-                continue
+        timing = self._discovery_timing.setdefault(endpoint, _DiscoveryTiming())
+        preferred = self._discovery_preferences()
+        for group in groups:
+            group.prioritize_discovery(preferred.get(group, _PRIORITY_DISCOVERY_FIELDS))
+        first = True
+        while True:
+            now = time.monotonic()
+            _, reserve = timing.delays()
+            if (
+                now >= deadline
+                # Allow one attempt after a healthy poll when recent slow
+                # replies make the full margin larger than the window.
+                or (not first and now + reserve >= deadline)
+                or self._stopping
+                or self._active_polls
+                or self._active_writes
+                or (rebuild_lock is not None and rebuild_lock.locked())
+                or any(group._pending_requests for group in groups)
+            ):
+                return
+
+            start = self._discovery_cursor.get(endpoint, 0)
+            order = (*range(start, len(groups)), *range(start))
+            pending = [index for index in order if groups[index]._probe_queue]
+            if not pending:
+                return
+            index = min(pending, key=lambda index: groups[index].next_discovery_priority(
+                preferred.get(groups[index], _PRIORITY_DISCOVERY_FIELDS)))
+            group = groups[index]
+            if first:
+                self._last_discovery_batch[endpoint] = now
+                first = False
             self._discovery_cursor[endpoint] = (index + 1) % len(groups)
-            self._last_discovery[endpoint] = time.monotonic()
             try:
-                await groups[index].async_discover_one()
+                await group.async_discover_one(timing.max_span)
             except ModbusError:
-                self._discovery_backoff[endpoint] = groups[index].discovery_retry_at
-            return
+                self._discovery_backoff[endpoint] = group.discovery_retry_at
+                return
+            timing.observe(time.monotonic() - now, group.last_discovery_span, interval)
+            group.prioritize_discovery(preferred.get(group, _PRIORITY_DISCOVERY_FIELDS))
+            pause, reserve = timing.delays()
+            if time.monotonic() + pause + reserve >= deadline:
+                return
+            await asyncio.sleep(pause)
+
+    def _discovery_preferences(self):
+        """Prefer PV strings the current inverter reports having."""
+        data = getattr(getattr(self, "_coordinator", None), "data", None) or {}
+        preferred = {}
+        for name, values in data.get("inverters", {}).items():
+            inverter = self._inverters.get(name)
+            count = values.get("inverter_pv_string_count")
+            if inverter is not None and isinstance(count, (int, float)) and count > 0:
+                preferred[inverter._inverter_group] = _PRIORITY_DISCOVERY_FIELDS | {
+                    f"inverter_pv{index}_{suffix}"
+                    for index in range(1, int(min(count, _MAX_PV_STRINGS)) + 1)
+                    for suffix in ("voltage", "current")
+                }
+        return preferred
 
     def get_poll_diagnostics(self, device: str) -> dict:
         """Return the most recent completed read's quality for one group."""
