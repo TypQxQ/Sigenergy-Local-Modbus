@@ -136,6 +136,7 @@ class TestIncrementalDiscovery(unittest.IsolatedAsyncioTestCase):
         restored.enable_incremental({}, lambda: None, "miss")
         restored.restore_discovery(progress, "same-boot")
         self.assertGreater(restored.discovery_retry_at, self.devices.time.monotonic())
+        restored.prioritize_discovery({"first"})
         self.assertEqual([("telemetry", ("separate",)), ("telemetry", ("first",)),
                           ("telemetry", ("second",))], list(restored._probe_queue))
         for _ in range(3):
@@ -451,6 +452,48 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
             schedule.assert_called_once()
             await self.hub._discovery_tasks[("test", 502)]
         self.assertGreater(sum(group.discovery_requests for _, _, _, group in self.hub._bindings), 1)
+
+    async def test_repeated_preferred_timeout_does_not_block_fresh_probes(self):
+        await self.hub.async_initialize(self.cache())
+        for _, _, _, group in self.hub._bindings:
+            group._probe_queue.clear()
+            group._queued_fields.clear()
+        plant = self.hub._plant._group
+        inverter = self.hub._inverters["Inverter"]._inverter_group
+        preferred = "plant_ess_max_charging_limit"
+        other_plant = "plant_pcs_maximum_export_limitation"
+        other_inverter = "inverter_pv1_voltage"
+        plant._enqueue("parameters", (preferred,))
+        plant._enqueue("parameters", (other_plant,))
+        inverter._enqueue("running_info", (other_inverter,))
+
+        field = plant._readable["parameters"].declared_fields[preferred]
+        read = self.plant_unit.read_holding_registers
+        timed_out = []
+
+        async def read_with_timeout(address, count):
+            if address == field.address:
+                timed_out.append(address)
+                raise ModbusTimeoutError("silent preferred register")
+            return await read(address, count)
+
+        endpoint = ("test", 502)
+        with patch.object(self.plant_unit, "read_holding_registers", read_with_timeout):
+            await self.hub._async_discover_endpoint(endpoint, float("inf"), 5)
+            self.assertEqual(1, len(timed_out))
+            self.assertIsNone(plant.is_supported(other_plant))
+            self.assertIsNone(inverter.is_supported(other_inverter))
+            resumed_at = plant.discovery_retry_at
+            with patch.object(self.modbus, "time", types.SimpleNamespace(
+                monotonic=lambda: resumed_at
+            )):
+                await self.hub._async_discover_endpoint(endpoint, float("inf"), 5)
+
+        self.assertEqual(2, len(timed_out))
+        self.assertIsNone(plant.is_supported(preferred))
+        self.assertIs(plant.is_supported(other_plant), True)
+        self.assertIs(inverter.is_supported(other_inverter), True)
+        self.assertEqual([("parameters", (preferred,))], list(plant._probe_queue))
 
     async def test_changed_firmware_does_not_restore_cached_negatives(self):
         await self.hub.async_initialize(self.cache())

@@ -426,6 +426,7 @@ class SigenergyModbusHub:
                 states.clear()
             group._probe_queue.clear()
             group._queued_fields.clear()
+            group._deferred_probe_fields.clear()
             group._rejected_blocks.clear()
             group.reset_poll_progress()
             group._checked_fields.clear()
