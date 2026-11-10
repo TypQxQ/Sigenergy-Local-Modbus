@@ -5,7 +5,7 @@ import asyncio
 import types
 import unittest
 from datetime import timedelta
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, Mock
 
 from modbus_connection import ModbusError, ModbusTimeoutError, ModbusConnectionError
 from modbus_connection.exceptions import IllegalDataAddressError
@@ -39,6 +39,19 @@ class TestIncrementalDiscovery(unittest.IsolatedAsyncioTestCase):
         await self.group.async_discover_one()
         self.assertEqual(1, self.group.discovery_requests)
         self.assertIs(self.group.is_supported("first"), True)
+        self.assertIs(self.group.is_supported("second"), True)
+
+    async def test_adaptive_span_keeps_pending_tail_and_prioritizes_unknowns(self):
+        self.group._field_support["telemetry"]["separate"] = False
+        self.group.queue_discovery()
+        self.group.prioritize_discovery({"separate"})
+        await self.group.async_discover_one(max_span=1)
+        self.assertEqual(1, self.group.last_discovery_span)
+        self.assertIs(self.group.is_supported("first"), True)
+        self.assertIsNone(self.group.is_supported("second"))
+        self.assertEqual([("telemetry", ("second",)), ("telemetry", ("separate",))],
+                         list(self.group._probe_queue))
+        await self.group.async_discover_one()
         self.assertIs(self.group.is_supported("second"), True)
 
     async def test_schema_fingerprint_uses_layout_instead_of_field_object_identity(self):
@@ -243,7 +256,7 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("new-live-version", (await warm.async_read_inverter_data("Inverter"))[
             "inverter_machine_firmware_version"])
 
-    async def test_manual_refreshes_cannot_exceed_one_discovery_per_interval(self):
+    async def test_manual_refreshes_respect_cooldown_without_skipping_normal_polls(self):
         await self.hub.async_initialize(self.cache())
         tasks = []
         def create_task(hass, coro, **kwargs):
@@ -253,12 +266,22 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
         self.hub.config_entry.async_create_background_task = create_task
         self.hub._coordinator = types.SimpleNamespace(
             last_update_success=True, update_interval=timedelta(seconds=5))
-        with patch.object(self.modbus, "time", types.SimpleNamespace(monotonic=lambda: 100)):
+        async def remember_window(endpoint, deadline, interval):
+            self.hub._last_discovery_batch[endpoint] = self.modbus.time.monotonic()
+
+        with (
+            patch.object(self.hub, "_async_discover_endpoint", remember_window),
+            patch.object(self.modbus, "time", types.SimpleNamespace(monotonic=lambda: 100)),
+        ):
             self.hub.async_schedule_discovery()
             await asyncio.gather(*tasks)
             self.hub.async_schedule_discovery()
             self.assertEqual(1, len(tasks))
-        with patch.object(self.modbus, "time", types.SimpleNamespace(monotonic=lambda: 105)):
+        # A normal poll can finish a little under one interval later.
+        with (
+            patch.object(self.hub, "_async_discover_endpoint", remember_window),
+            patch.object(self.modbus, "time", types.SimpleNamespace(monotonic=lambda: 104.99)),
+        ):
             self.hub.async_schedule_discovery()
             await asyncio.gather(*tasks)
             self.assertEqual(2, len(tasks))
@@ -315,15 +338,119 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
         self.assertIs(hub._inverters["Inverter"].is_supported("inverter_pv_string_count"), False)
         await hub.async_close()
 
-    async def test_one_endpoint_round_is_one_request_across_all_device_groups(self):
+    async def test_endpoint_checks_can_exceed_eight_and_rotate_through_device_groups(self):
         await self.hub.async_initialize(self.cache())
-        before = sum(group.discovery_requests for _, _, _, group in self.hub._bindings)
-        await self.hub._async_discover_endpoint(("test", 502))
-        after = sum(group.discovery_requests for _, _, _, group in self.hub._bindings)
-        self.assertEqual(1, after-before)
-        self.hub._active_writes = 1
-        await self.hub._async_discover_endpoint(("test", 502))
-        self.assertEqual(after, sum(group.discovery_requests for _, _, _, group in self.hub._bindings))
+        groups = [group for _, _, _, group in self.hub._bindings if group._probe_queue]
+        await self.hub._async_discover_endpoint(("test", 502), float("inf"), 5)
+        self.assertGreater(sum(group.discovery_requests for group in groups), 8)
+        self.assertTrue(all(group.discovery_requests > 0 for group in groups))
+        self.assertFalse(any(group._probe_queue for group in groups))
+
+    async def test_discovery_timing_adapts_to_poll_interval_and_recovers(self):
+        for interval in (1, 5, 60):
+            with self.subTest(interval=interval):
+                timing = self.modbus._DiscoveryTiming()
+                timing.observe(interval / 2, 20, interval)
+                self.assertEqual(10, timing.max_span)
+                for _ in range(4):
+                    timing.observe(0.019, 10, interval)
+                self.assertEqual(20, timing.max_span)
+                pause, reserve = timing.delays()
+                self.assertGreater(pause, 4 * (interval / 2 + 4 * 0.019) / 5)
+                self.assertGreaterEqual(reserve, interval / 2)
+                for _ in range(8):
+                    timing.observe(0.019, 20, interval)
+                pause, reserve = timing.delays()
+                self.assertAlmostEqual(4 * 0.019, pause)
+                self.assertAlmostEqual(10 * 0.019, reserve)
+
+    async def test_discovery_prioritizes_the_full_declared_pv_string_range(self):
+        self.hub._coordinator = types.SimpleNamespace(data={"inverters": {
+            "Inverter": {"inverter_pv_string_count": 36.0},
+        }})
+        group = self.hub._inverters["Inverter"]._inverter_group
+        fields = self.hub._discovery_preferences()[group]
+        self.assertIn("inverter_pv36_voltage", fields)
+        self.assertIn("inverter_pv36_current", fields)
+        self.assertNotIn("inverter_pv37_voltage", fields)
+
+    async def test_batch_yields_to_a_write_queued_during_discovery(self):
+        await self.hub.async_initialize(self.cache())
+        plant = self.hub._plant._group
+        original_probe = plant.async_discover_one
+        write_started, finish_write = asyncio.Event(), asyncio.Event()
+        writes = []
+
+        async def write(*args):
+            write_started.set()
+            await finish_write.wait()
+
+        async def probe(max_span):
+            result = await original_probe(max_span)
+            writes.append(asyncio.create_task(
+                self.hub.async_write_parameter("plant", None, "plant_remote_ems_enable", 1)
+            ))
+            return result
+
+        with (
+            patch.object(plant, "async_discover_one", probe),
+            patch.object(self.hub, "_async_write_parameter", write),
+        ):
+            try:
+                await self.hub._async_discover_endpoint(("test", 502), float("inf"), 5)
+                self.assertTrue(write_started.is_set())
+                self.assertEqual(1, sum(group.discovery_requests for _, _, _, group in self.hub._bindings))
+            finally:
+                finish_write.set()
+                await asyncio.gather(*writes)
+
+    async def test_batch_does_not_start_another_request_after_deadline(self):
+        await self.hub.async_initialize(self.cache())
+        plant = self.hub._plant._group
+        original_probe = plant.async_discover_one
+        now = 100
+
+        async def slow_probe(max_span):
+            nonlocal now
+            result = await original_probe(max_span)
+            now = 131
+            return result
+
+        with (
+            patch.object(self.modbus, "time", types.SimpleNamespace(monotonic=lambda: now)),
+            patch.object(plant, "async_discover_one", slow_probe),
+        ):
+            await self.hub._async_discover_endpoint(("test", 502), 130, 60)
+        self.assertEqual(1, sum(group.discovery_requests for _, _, _, group in self.hub._bindings))
+
+    async def test_timeout_ends_batch_and_backoff_preserves_pending_probes(self):
+        await self.hub.async_initialize(self.cache())
+        plant = self.hub._plant._group
+        plant.prioritize_discovery(self.modbus._PRIORITY_DISCOVERY_FIELDS)
+        component, names = plant._probe_queue[0]
+        plant_component = plant._readable[component]
+        method = f"read_{plant_component.register_space}_registers"
+        with patch.object(self.plant_unit, method, AsyncMock(side_effect=ModbusTimeoutError("slow"))):
+            await self.hub._async_discover_endpoint(("test", 502), float("inf"), 5)
+
+        self.assertEqual(1, sum(group.discovery_requests for _, _, _, group in self.hub._bindings))
+        self.assertTrue(all(plant.is_supported(name) is None for name in names))
+        self.assertTrue(all((component, name) in plant._queued_fields for name in names))
+        self.hub._coordinator = types.SimpleNamespace(
+            last_update_success=True, update_interval=timedelta(seconds=5))
+        now = plant.discovery_retry_at - 1
+        with (
+            patch.object(self.modbus, "time", types.SimpleNamespace(monotonic=lambda: now)),
+            patch.object(self.hub.config_entry, "async_create_background_task", create=True,
+                         new=Mock(side_effect=lambda hass, coro, **kwargs: asyncio.create_task(coro))) as schedule,
+        ):
+            self.hub.async_schedule_discovery()
+            schedule.assert_not_called()
+            now += 1
+            self.hub.async_schedule_discovery()
+            schedule.assert_called_once()
+            await self.hub._discovery_tasks[("test", 502)]
+        self.assertGreater(sum(group.discovery_requests for _, _, _, group in self.hub._bindings), 1)
 
     async def test_changed_firmware_does_not_restore_cached_negatives(self):
         await self.hub.async_initialize(self.cache())
@@ -517,7 +644,7 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
                 await asyncio.sleep(0)
                 self.assertFalse(poll.done())
                 before = sum(group.discovery_requests for _, _, _, group in self.hub._bindings)
-                await self.hub._async_discover_endpoint(("test", 502))
+                await self.hub._async_discover_endpoint(("test", 502), float("inf"), 5)
                 self.assertEqual(before, sum(group.discovery_requests for _, _, _, group in self.hub._bindings))
                 finish.set()
                 await asyncio.wait_for(asyncio.gather(*tasks), 2)

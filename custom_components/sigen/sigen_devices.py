@@ -334,17 +334,39 @@ class _ComponentGroup:
             if words:
                 self._prefetched_at[name] = min(self._prefetched_at.get(name, started), started)
 
-    async def async_discover_one(self) -> bool:
-        """Issue at most one request; fallback work goes into later intervals."""
+    def _discovery_priority(self, job, preferred):
+        name, names = job
+        if all(self._field_support[name].get(field) is False for field in names):
+            return 2
+        return 0 if preferred.intersection(names) else 1
+
+    def prioritize_discovery(self, preferred) -> None:
+        """Order contiguous jobs by likelihood and usefulness, preserving ties."""
+        self._probe_queue = deque(sorted(
+            self._probe_queue, key=lambda job: self._discovery_priority(job, preferred)
+        ))
+
+    def next_discovery_priority(self, preferred) -> int:
+        return self._discovery_priority(self._probe_queue[0], preferred)
+
+    async def async_discover_one(self, max_span: int = _MAX_BLOCK_SPAN) -> bool:
+        """Issue at most one request and queue any fallback work."""
         if not self._probe_queue or self._pending_requests:
             return False
         name, names = self._probe_queue.popleft()
-        self._current_probe = (name, names)
-        self._queued_fields.difference_update((name, field) for field in names)
         component = self._readable[name]
         fields = [component.declared_fields[field] for field in names]
-        start = min(field.address for field in fields)
+        start = fields[0].address
+        for index, field in enumerate(fields[1:], 1):
+            if field.address + field.count - start > max_span:
+                self._probe_queue.appendleft((name, names[index:]))
+                names = names[:index]
+                fields = fields[:index]
+                break
+        self._current_probe = (name, names)
+        self._queued_fields.difference_update((name, field) for field in names)
         count = max(field.address + field.count for field in fields) - start
+        self.last_discovery_span = count
         read = (component.modbus_unit.read_input_registers if component.register_space == "input"
                 else component.modbus_unit.read_holding_registers)
         started = time.monotonic()
@@ -382,9 +404,8 @@ class _ComponentGroup:
             if len(names) > 1 and not isinstance(error, ModbusConnectionError):
                 # Some optional addresses stay silent instead of rejecting a
                 # read. Narrow the block after backoff so healthy neighbours
-                # can be discovered. Each child still costs a later interval;
-                # an outage keeps the original block and no support decision
-                # is made from a timeout or incomplete response.
+                # can be discovered. An outage keeps the original block.
+                # A timeout or incomplete response makes no support decision.
                 middle = len(names) // 2
                 self._enqueue(name, names[:middle])
                 self._enqueue(name, names[middle:])
