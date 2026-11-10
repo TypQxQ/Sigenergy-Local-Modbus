@@ -466,10 +466,9 @@ class SigenergyCalculations:
             inputs[attribute] = number
 
         soc = inputs["battery_soc_percent"]
-        reserve = inputs["backup_soc_percent"]
         capacity = inputs["rated_capacity_kwh"]
-        if soc is not None and reserve is not None and capacity is not None:
-            inputs["usable_energy_kwh"] = max(soc - reserve, Decimal(0)) / Decimal(100) * capacity
+        if soc is not None and capacity is not None:
+            inputs["usable_energy_kwh"] = soc / Decimal(100) * capacity
 
         consumed_power = SigenergyCalculations.calculate_plant_consumed_power(
             None, coordinator_data, extra_params
@@ -486,7 +485,7 @@ class SigenergyCalculations:
         coordinator_data: Optional[Dict[str, Any]] = None,
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Optional[Decimal]:
-        """Estimate hours above reserve using current household consumption.
+        """Estimate hours to 0% SOC using current household consumption.
 
         This is battery-only autonomy, independent of current battery charging
         or discharging power and future solar/grid contributions. All inputs
@@ -2340,9 +2339,9 @@ class SigenergyCalculatedSensors:
             value_fn=SigenergyCalculations.calculate_battery_time_remaining,
             extra_fn_data=True,
             register_support_alternatives=(
-                ("plant_ess_soc", "plant_backup_soc", "plant_ess_rated_energy_capacity",
+                ("plant_ess_soc", "plant_ess_rated_energy_capacity",
                  "plant_general_load_power"),
-                ("plant_ess_soc", "plant_backup_soc", "plant_ess_rated_energy_capacity",
+                ("plant_ess_soc", "plant_ess_rated_energy_capacity",
                  "plant_active_power", "plant_grid_sensor_active_power",
                  "plant_third_party_photovoltaic_power"),
             ),

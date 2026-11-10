@@ -389,7 +389,7 @@
             "name": "Household consumption (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Usable energy above reserve (kWh)"
+            "name": "Estimated remaining energy (kWh)"
           }
         }
       },

@@ -389,7 +389,7 @@
             "name": "Husstandens forbrug (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Tilgængelig energi over reserven (kWh)"
+            "name": "Estimeret resterende energi (kWh)"
           }
         }
       },

@@ -65,10 +65,10 @@ class TestBatteryTimeRemaining(unittest.TestCase):
     def test_uses_house_consumption_during_charging_discharging_and_idle(self):
         for power in (5, -5, 0, None):
             with self.subTest(battery_power=power):
-                self.assertEqual(Decimal(3), self.value(self.data(plant_ess_power=power)))
+                self.assertEqual(Decimal(4), self.value(self.data(plant_ess_power=power)))
 
     def test_uses_unrounded_consumption_and_hours(self):
-        self.assertEqual(Decimal('2.000667'), self.value(self.data(plant_general_load_power='2.999')))
+        self.assertEqual(Decimal('2.667556'), self.value(self.data(plant_general_load_power='2.999')))
         self.assertEqual('duration', self.description.device_class)
         self.assertEqual('h', self.description.native_unit_of_measurement)
         self.assertIsNone(self.description.state_class)  # Estimate, not an accumulating counter.
@@ -77,7 +77,7 @@ class TestBatteryTimeRemaining(unittest.TestCase):
         data = self.data(plant_general_load_power=None, plant_active_power=1,
                          plant_grid_sensor_active_power=2, plant_third_party_photovoltaic_power=1)
         data['ac_chargers'] = {'Charger': {'ac_charger_charging_power': 2}}
-        self.assertEqual(Decimal(3), self.value(data))
+        self.assertEqual(Decimal(4), self.value(data))
 
     def test_fallback_requires_a_valid_reading_from_each_configured_charger(self):
         data = self.data(plant_general_load_power=None, plant_active_power=1,
@@ -92,29 +92,41 @@ class TestBatteryTimeRemaining(unittest.TestCase):
                 self.assertIsNone(sensor.native_value)
                 self.assertIsNone(sensor.extra_state_attributes['consumed_power_kw'])
         data['ac_chargers']['Second'] = {'ac_charger_charging_power': 0}
-        self.assertEqual(Decimal(2), sensor.native_value)
+        self.assertEqual(Decimal('2.666667'), sensor.native_value)
         self.assertEqual(3.0, sensor.extra_state_attributes['consumed_power_kw'])
         data['ac_chargers']['Second']['ac_charger_charging_power'] = 1
-        self.assertEqual(Decimal(3), sensor.native_value)
+        self.assertEqual(Decimal(4), sensor.native_value)
 
     def test_fallback_works_without_configured_chargers(self):
         data = self.data(plant_general_load_power=None, plant_active_power=1,
                          plant_grid_sensor_active_power=2, plant_third_party_photovoltaic_power=1)
         data['ac_chargers'] = {}
-        self.assertEqual(Decimal('1.5'), self.value(data))
+        self.assertEqual(Decimal(2), self.value(data))
 
     def test_direct_consumption_wins_over_fallback(self):
         data = self.data(plant_active_power=100, plant_grid_sensor_active_power=100,
                          plant_third_party_photovoltaic_power=100)
         data['ac_chargers'] = {'Charger': {}}
-        self.assertEqual(Decimal(3), self.value(data))
+        self.assertEqual(Decimal(4), self.value(data))
 
-    def test_at_or_below_reserve_is_zero(self):
-        for soc in (20, 19, 0):
-            self.assertEqual(Decimal(0), self.value(self.data(plant_ess_soc=soc)))
+    def test_runtime_counts_energy_below_backup_reserve_and_reaches_zero_at_empty(self):
+        for soc, hours in ((20, "1"), (19, "0.95"), (0, "0")):
+            self.assertEqual(Decimal(hours), self.value(self.data(plant_ess_soc=soc)))
+
+    def test_backup_reserve_is_optional_context(self):
+        for reserve in (None, 'unknown', 'unavailable', 'NaN', 'Infinity', True, -1, 101):
+            with self.subTest(reserve=reserve):
+                sensor = self.sensor(self.data(plant_backup_soc=reserve))
+                self.assertEqual(Decimal(4), sensor.native_value)
+                self.assertIsNone(sensor.extra_state_attributes['backup_soc_percent'])
+
+    def test_grid_supplied_load_example_estimates_runtime_to_zero(self):
+        data = self.data(plant_ess_soc=100, plant_backup_soc=20, plant_ess_rated_energy_capacity=27.12,
+                         plant_general_load_power=10.111, plant_ess_power=-0.001)
+        self.assertEqual(Decimal('2.682227'), self.value(data))
 
     def test_missing_or_invalid_battery_inputs_remain_unknown(self):
-        for field in ('plant_ess_soc', 'plant_backup_soc', 'plant_ess_rated_energy_capacity'):
+        for field in ('plant_ess_soc', 'plant_ess_rated_energy_capacity'):
             for value in (None, 'unknown', 'unavailable', 'NaN', 'Infinity', True):
                 with self.subTest(field=field, value=value):
                     self.assertIsNone(self.value(self.data(**{field: value})))
@@ -123,7 +135,6 @@ class TestBatteryTimeRemaining(unittest.TestCase):
 
     def test_invalid_ranges_remain_unknown(self):
         for key, value in [('plant_ess_soc', -1), ('plant_ess_soc', 101),
-                           ('plant_backup_soc', -1), ('plant_backup_soc', 101),
                            ('plant_ess_rated_energy_capacity', 0), ('plant_ess_rated_energy_capacity', -1)]:
             self.assertIsNone(self.value(self.data(**{key: value})))
 
@@ -133,26 +144,27 @@ class TestBatteryTimeRemaining(unittest.TestCase):
                 self.assertIsNone(self.value(self.data(plant_general_load_power=power)))
 
     def test_low_positive_consumption_still_has_an_estimate(self):
-        self.assertEqual(Decimal(6000), self.value(self.data(plant_general_load_power='0.001')))
+        self.assertEqual(Decimal(8000), self.value(self.data(plant_general_load_power='0.001')))
 
     def test_recovers_after_missing_inputs_without_reusing_old_estimate(self):
-        self.assertEqual(Decimal(3), self.value(self.data()))
+        self.assertEqual(Decimal(4), self.value(self.data()))
         self.assertIsNone(self.value(self.data(plant_general_load_power=None)))
-        self.assertEqual(Decimal(6), self.value(self.data(plant_general_load_power=1)))
+        self.assertEqual(Decimal(8), self.value(self.data(plant_general_load_power=1)))
 
     def test_required_registers_cover_both_consumption_paths(self):
-        required = {'plant_ess_soc', 'plant_backup_soc', 'plant_ess_rated_energy_capacity'}
+        required = {'plant_ess_soc', 'plant_ess_rated_energy_capacity'}
         self.assertEqual(2, len(self.description.register_support_alternatives))
         for alternative in self.description.register_support_alternatives:
             self.assertLessEqual(required, set(alternative))
-        self.assertIn((*('plant_ess_soc', 'plant_backup_soc', 'plant_ess_rated_energy_capacity'),
+            self.assertNotIn('plant_backup_soc', alternative)
+        self.assertIn((*('plant_ess_soc', 'plant_ess_rated_energy_capacity'),
                        'plant_general_load_power'), self.description.register_support_alternatives)
 
     def test_attributes_explain_the_same_estimate_and_keep_existing_attributes(self):
         sensor = self.sensor(self.data())
         self.assertEqual({'existing': 'preserved', 'battery_soc_percent': 80.0,
                           'backup_soc_percent': 20.0, 'rated_capacity_kwh': 10.0,
-                          'consumed_power_kw': 2.0, 'usable_energy_kwh': 6.0}, sensor.extra_state_attributes)
+                          'consumed_power_kw': 2.0, 'usable_energy_kwh': 8.0}, sensor.extra_state_attributes)
         attributes = sensor.extra_state_attributes
         self.assertEqual(float(sensor.native_value), attributes['usable_energy_kwh'] / attributes['consumed_power_kw'])
         json.dumps(attributes, allow_nan=False)
@@ -163,31 +175,31 @@ class TestBatteryTimeRemaining(unittest.TestCase):
         data['ac_chargers'] = {'Charger': {'ac_charger_charging_power': 2}}
         sensor = self.sensor(data)
         self.assertEqual(2.0, sensor.extra_state_attributes['consumed_power_kw'])
-        self.assertEqual(Decimal(3), sensor.native_value)
+        self.assertEqual(Decimal(4), sensor.native_value)
 
     def test_reported_field_example_matches_the_exposed_inputs(self):
         data = self.data(plant_ess_soc=65.4, plant_backup_soc=10,
                          plant_ess_rated_energy_capacity=32, plant_general_load_power=5.41)
         data['ac_chargers'] = {'Charger': {'ac_charger_charging_power': 6.83}}
         sensor = self.sensor(data)
-        self.assertAlmostEqual(17.728, sensor.extra_state_attributes['usable_energy_kwh'])
-        self.assertAlmostEqual(3.276895, float(sensor.native_value), places=6)
+        self.assertAlmostEqual(20.928, sensor.extra_state_attributes['usable_energy_kwh'])
+        self.assertAlmostEqual(3.868392, float(sensor.native_value), places=6)
         self.assertEqual(5.41, sensor.extra_state_attributes['consumed_power_kw'])
 
-    def test_attributes_preserve_valid_zeroes_and_reserve_behavior(self):
-        for soc, reserve in ((0, 0), (20, 20), (19, 20)):
-            sensor = self.sensor(self.data(plant_ess_soc=soc, plant_backup_soc=reserve,
+    def test_attributes_preserve_valid_zeroes(self):
+        for reserve in (0, 20):
+            sensor = self.sensor(self.data(plant_ess_soc=0, plant_backup_soc=reserve,
                                            plant_general_load_power=0))
             self.assertEqual(0.0, sensor.extra_state_attributes['usable_energy_kwh'])
             self.assertEqual(0.0, sensor.extra_state_attributes['consumed_power_kw'])
-            self.assertEqual(float(soc), sensor.extra_state_attributes['battery_soc_percent'])
+            self.assertEqual(0.0, sensor.extra_state_attributes['battery_soc_percent'])
             self.assertEqual(Decimal(0), sensor.native_value)
         sensor = self.sensor(self.data(plant_general_load_power=0))
-        self.assertEqual(6.0, sensor.extra_state_attributes['usable_energy_kwh'])
+        self.assertEqual(8.0, sensor.extra_state_attributes['usable_energy_kwh'])
         self.assertIsNone(sensor.native_value)
 
     def test_bad_battery_inputs_remain_null_without_hiding_other_valid_inputs(self):
-        fields = {'plant_ess_soc': 'battery_soc_percent', 'plant_backup_soc': 'backup_soc_percent',
+        fields = {'plant_ess_soc': 'battery_soc_percent',
                   'plant_ess_rated_energy_capacity': 'rated_capacity_kwh'}
         for field, attribute in fields.items():
             for invalid in (None, 'unknown', 'unavailable', 'NaN', 'Infinity', True, -1):
@@ -204,7 +216,7 @@ class TestBatteryTimeRemaining(unittest.TestCase):
         for power in (None, 'NaN', 'Infinity'):
             sensor = self.sensor(self.data(plant_general_load_power=power))
             self.assertIsNone(sensor.extra_state_attributes['consumed_power_kw'])
-            self.assertEqual(6.0, sensor.extra_state_attributes['usable_energy_kwh'])
+            self.assertEqual(8.0, sensor.extra_state_attributes['usable_energy_kwh'])
             self.assertIsNone(sensor.native_value)
             json.dumps(sensor.extra_state_attributes, allow_nan=False)
         sensor = self.sensor(self.data(plant_general_load_power=-1))
@@ -225,7 +237,7 @@ class TestBatteryTimeRemaining(unittest.TestCase):
         data['plant']['plant_general_load_power'] = 1
         sensor.coordinator.data = data
         self.assertEqual(1.0, sensor.extra_state_attributes['consumed_power_kw'])
-        self.assertEqual(Decimal(6), sensor.native_value)
+        self.assertEqual(Decimal(8), sensor.native_value)
         self.assertEqual(2.0, first['consumed_power_kw'])
 
 

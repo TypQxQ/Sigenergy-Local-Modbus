@@ -165,9 +165,9 @@ See [Recorder filtering](https://www.home-assistant.io/integrations/recorder/#co
 ## Battery time remaining
 
 The plant's **Battery time remaining** sensor estimates how long the battery
-could supply the current household consumption above the configured backup SOC:
+could supply the current household consumption down to **0% charge**.
 
-`hours = max(SOC - backup SOC, 0) / 100 × rated capacity (kWh) / consumed power (kW)`
+`hours = SOC / 100 × rated capacity (kWh) / consumed power (kW)`
 
 The estimate is available while charging, discharging or idle. It assumes no
 further contribution from solar or the grid, and constant household demand.
@@ -176,25 +176,25 @@ fallback for older firmware. No additional Modbus requests are made.
 When using the fallback, a missing or invalid reading from a configured AC
 charger makes the household load unknown until the reading recovers.
 
-At or below the reserve it reports `0`. With energy above reserve, zero/negative
-or missing consumption reports `unknown`. Missing/invalid SOC, reserve or
-capacity also reports `unknown`. This is an estimate, not a guaranteed backup
-duration; rated capacity does not account for all losses or battery ageing.
+At 0% charge it reports `0`. With charge remaining, zero, negative, or missing
+consumption gives `unknown`. Missing or invalid SOC or rated capacity also gives
+`unknown`. A configured discharge cutoff above 0% can stop the battery sooner,
+and losses or battery ageing can reduce the actual runtime.
 
-From B4, its attributes show the inputs used in the calculation:
+The sensor exposes its calculation inputs and the configured backup reserve.
 
 | Attribute | Meaning |
 |---|---|
 | `battery_soc_percent` | Current battery state of charge (%) |
-| `backup_soc_percent` | Configured backup reserve (%) |
+| `backup_soc_percent` | Configured backup reserve (%) for reference |
 | `rated_capacity_kwh` | Rated battery capacity (kWh) |
 | `consumed_power_kw` | Current household consumption (kW), using the same calculation as **Consumed power** |
-| `usable_energy_kwh` | Energy above the reserve: `max(SOC − backup SOC, 0) / 100 × rated capacity` |
+| `usable_energy_kwh` | Estimated remaining energy down to 0% (kWh) |
 
 The attributes use the existing cached readings and make no additional Modbus
 requests. Missing or invalid inputs are `null`, rather than an assumed zero.
 Other valid inputs remain visible when the estimate is unknown. A valid zero
-consumption is shown as `0`, while the estimate remains unknown above reserve.
+consumption is shown as `0`, while the estimate remains unknown if charge is left.
 Attribute labels follow the interface language.
 
 The native unit is **hours**. Existing dashboard templates such as

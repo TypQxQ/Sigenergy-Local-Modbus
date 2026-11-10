@@ -389,7 +389,7 @@
             "name": "Huishoudelijk verbruik (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Bruikbare energie boven de reserve (kWh)"
+            "name": "Geschatte resterende energie (kWh)"
           }
         }
       },

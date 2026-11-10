@@ -389,7 +389,7 @@
             "name": "Kotitalouden kulutus (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Käytettävissä oleva energia varauksen vähimmäistason yläpuolella (kWh)"
+            "name": "Arvioitu jäljellä oleva energia (kWh)"
           }
         }
       },

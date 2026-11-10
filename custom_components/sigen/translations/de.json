@@ -389,7 +389,7 @@
             "name": "Hausverbrauch (kW)"
           },
           "usable_energy_kwh": {
-            "name": "Nutzbare Energie oberhalb der Reserve (kWh)"
+            "name": "Geschätzte verbleibende Energie (kWh)"
           }
         }
       },
