@@ -162,13 +162,6 @@ entities. Changing `commit_interval` batches writes; it does not reduce the
 number of state changes stored. Purging or editing old data is not required.
 See [Recorder filtering](https://www.home-assistant.io/integrations/recorder/#configure-filter).
 
-## Battery time remaining
-
-The built-in estimate is paused starting with 2.0.2 Beta 2. Dashboard cards and
-automations that reference the entity will have no live estimate in this beta.
-Share feedback on names and measurements in the
-[Battery runtime discussion](https://github.com/TypQxQ/Sigenergy-Local-Modbus/discussions/497).
-
 ## Controls and Remote EMS
 
 Read-only mode is enabled by default. Write controls and many diagnostic entities
