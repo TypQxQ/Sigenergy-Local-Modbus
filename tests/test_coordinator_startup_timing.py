@@ -189,29 +189,55 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("slow", coordinator._ac_charger_retry_at)
         self.assertEqual("success", coordinator.latest_update_timing["status"])
 
-    async def test_charger_exhausting_runtime_deadline_preserves_healthy_data(self):
+    async def test_charger_deadline_preserves_healthy_data_and_defers_each_failed_charger(self):
         coordinator, hub, namespace = _make_coordinator()
         await coordinator.async_refresh()
         namespace["AC_CHARGER_PUBLISH_GRACE"] = 0
-        namespace["async_timeout"].timeout = lambda _seconds: asyncio.timeout(0.03)
-        hub.ac_charger_connections = {"slow": {}}
+        namespace["async_timeout"].timeout = lambda _seconds: asyncio.timeout(0.05)
+        hub.ac_charger_connections = {
+            "stalled": {}, "timed out": {}, "disconnected": {}, "healthy": {},
+        }
         hub.registers["soc"] = 51
         cancelled = asyncio.Event()
+        attempts = []
 
-        async def read_charger(_name):
-            try:
-                await asyncio.Future()
-            finally:
-                cancelled.set()
+        async def read_charger(name):
+            attempts.append(name)
+            if name == "stalled":
+                try:
+                    await asyncio.Future()
+                finally:
+                    cancelled.set()
+            if name == "disconnected":
+                raise ModbusConnectionError()
+            return {"ac_charger_charging_power": 2} if name == "healthy" else {}
+
+        class ModbusConnectionError(Exception):
+            pass
+
+        def quality(device):
+            if device == "ac_charger:timed out":
+                return {
+                    "status": "partial",
+                    "failed_blocks": [{"error_type": "ModbusTimeoutError"}],
+                }
+            return {}
 
         hub.async_read_ac_charger_data = read_charger
+        hub.get_poll_diagnostics = quality
         await coordinator.async_refresh()
         self.assertTrue(cancelled.is_set())
         self.assertTrue(coordinator.last_update_success)
         self.assertEqual(51, coordinator.data["plant"]["soc"])
-        self.assertEqual({}, coordinator.data["ac_chargers"]["slow"])
+        self.assertEqual({}, coordinator.data["ac_chargers"]["stalled"])
+        self.assertEqual({"ac_charger_charging_power": 2}, coordinator.data["ac_chargers"]["healthy"])
         self.assertEqual("partial", coordinator.latest_update_timing["status"])
-        self.assertIn("slow", coordinator._ac_charger_retry_at)
+        self.assertEqual({"stalled", "timed out", "disconnected"}, set(coordinator._ac_charger_retry_at))
+
+        hub.registers["soc"] = 52
+        await coordinator.async_refresh()
+        self.assertEqual(52, coordinator.data["plant"]["soc"])
+        self.assertEqual(["stalled", "timed out", "disconnected", "healthy", "healthy"], attempts)
 
     @staticmethod
     async def _read_inverter(_name):

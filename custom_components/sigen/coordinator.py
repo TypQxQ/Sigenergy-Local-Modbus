@@ -90,6 +90,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         snapshot: dict[str, Any] | None = None
         early_data: dict[str, Any] | None = None
         can_publish_without_charger = False
+        charger_deadline_expired = False
         degraded_statuses = {"partial", "error", "deferred"}
         ac_tasks: dict[str, asyncio.Task] = {}
         device_timings: dict[str, dict[str, Any]] = {}
@@ -215,17 +216,6 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                         ac_charger_data[name] = await task
                     except Exception:
                         pass  # Preserve the empty charger row.
-                    timing = device_timings[f"ac_charger:{name}"]
-                    error_types = {
-                        timing.get("error_type"), timing.get("cause_type"),
-                        *(block.get("error_type") for block in timing.get("failed_blocks", [])),
-                    }
-                    if error_types & {"ModbusTimeoutError", "ModbusConnectionError"}:
-                        # The broker serializes requests to one endpoint. Give
-                        # healthy units several polls before retrying this charger.
-                        self._ac_charger_retry_at[name] = time.perf_counter() + AC_CHARGER_RETRY_DELAY
-                    else:
-                        self._ac_charger_retry_at.pop(name, None)
 
                 # Unknown/unsupported registers during discovery are expected.
                 # A poll with actual read failures and no usable readings is
@@ -256,10 +246,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # The primary data is usable even if a charger consumed the
                 # rest of the coordinator deadline. The finally block stops
                 # pending workflows and lets wire requests finish safely.
-                retry_at = time.perf_counter() + AC_CHARGER_RETRY_DELAY
-                for name, task in ac_tasks.items():
-                    if task.cancelled() or not task.done():
-                        self._ac_charger_retry_at[name] = retry_at
+                charger_deadline_expired = True
                 status = "partial"
                 self.partial_update_count += 1
                 self._last_successful_update_sequence = update_sequence
@@ -289,6 +276,27 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 if device_tasks:
                     await asyncio.gather(*device_tasks, return_exceptions=True)
             finally:
+                # Use every result, including chargers that finished while the
+                # coordinator was waiting for a different charger.
+                if ac_tasks:
+                    retry_at = time.perf_counter() + AC_CHARGER_RETRY_DELAY
+                    for name, task in ac_tasks.items():
+                        if task.cancelled():
+                            if charger_deadline_expired:
+                                self._ac_charger_retry_at[name] = retry_at
+                            continue
+                        timing = device_timings.get(f"ac_charger:{name}", {})
+                        error_types = {
+                            timing.get("error_type"), timing.get("cause_type"),
+                            *(block.get("error_type") for block in timing.get("failed_blocks", [])),
+                        }
+                        if error_types & {"ModbusTimeoutError", "ModbusConnectionError"}:
+                            # Give healthy units several polls on the shared
+                            # connection before retrying the failed charger.
+                            self._ac_charger_retry_at[name] = retry_at
+                        else:
+                            self._ac_charger_retry_at.pop(name, None)
+
                 # Include failed attempts, and keep workflow cleanup separate
                 # from the fetch deadline. Device times include broker waits;
                 # they overlap and must not be summed as wire transaction time.
