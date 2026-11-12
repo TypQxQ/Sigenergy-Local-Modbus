@@ -373,26 +373,6 @@
       "plant_grid_export_power": {
         "name": "Verkkoon syötetty teho"
       },
-      "plant_battery_time_remaining": {
-        "name": "Akun jäljellä oleva käyttöaika",
-        "state_attributes": {
-          "battery_soc_percent": {
-            "name": "Akun varaustaso (%)"
-          },
-          "backup_soc_percent": {
-            "name": "Varauksen vähimmäistaso (%)"
-          },
-          "rated_capacity_kwh": {
-            "name": "Akun nimelliskapasiteetti (kWh)"
-          },
-          "consumed_power_kw": {
-            "name": "Kotitalouden kulutus (kW)"
-          },
-          "usable_energy_kwh": {
-            "name": "Arvioitu jäljellä oleva energia (kWh)"
-          }
-        }
-      },
       "plant_consumed_power": {
         "name": "Kulutusteho"
       },

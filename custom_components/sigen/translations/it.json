@@ -373,26 +373,6 @@
       "plant_grid_export_power": {
         "name": "Potenza immessa in rete"
       },
-      "plant_battery_time_remaining": {
-        "name": "Autonomia residua della batteria",
-        "state_attributes": {
-          "battery_soc_percent": {
-            "name": "Stato di carica della batteria (%)"
-          },
-          "backup_soc_percent": {
-            "name": "Stato di carica di riserva (%)"
-          },
-          "rated_capacity_kwh": {
-            "name": "Capacità nominale della batteria (kWh)"
-          },
-          "consumed_power_kw": {
-            "name": "Consumo domestico (kW)"
-          },
-          "usable_energy_kwh": {
-            "name": "Energia residua stimata (kWh)"
-          }
-        }
-      },
       "plant_consumed_power": {
         "name": "Potenza consumata"
       },

@@ -162,52 +162,6 @@ entities. Changing `commit_interval` batches writes; it does not reduce the
 number of state changes stored. Purging or editing old data is not required.
 See [Recorder filtering](https://www.home-assistant.io/integrations/recorder/#configure-filter).
 
-## Battery time remaining
-
-The plant's **Battery time remaining** sensor estimates how long the battery
-could supply the current household consumption down to **0% charge**.
-
-`hours = SOC / 100 × rated capacity (kWh) / consumed power (kW)`
-
-The estimate is available while charging, discharging or idle. It assumes no
-further contribution from solar or the grid, and constant household demand.
-It uses the same consumption calculation as **Consumed power**, including its
-fallback for older firmware. No additional Modbus requests are made.
-When using the fallback, a missing or invalid reading from a configured AC
-charger makes the household load unknown until the reading recovers.
-
-At 0% charge it reports `0`. With charge remaining, zero, negative, or missing
-consumption gives `unknown`. Missing or invalid SOC or rated capacity also gives
-`unknown`. A configured discharge cutoff above 0% can stop the battery sooner,
-and losses or battery ageing can reduce the actual runtime.
-
-The sensor exposes its calculation inputs and the configured backup reserve.
-
-| Attribute | Meaning |
-|---|---|
-| `battery_soc_percent` | Current battery state of charge (%) |
-| `backup_soc_percent` | Configured backup reserve (%) for reference |
-| `rated_capacity_kwh` | Rated battery capacity (kWh) |
-| `consumed_power_kw` | Current household consumption (kW), using the same calculation as **Consumed power** |
-| `usable_energy_kwh` | Estimated remaining energy down to 0% (kWh) |
-
-The attributes use the existing cached readings and make no additional Modbus
-requests. Missing or invalid inputs are `null`, rather than an assumed zero.
-Other valid inputs remain visible when the estimate is unknown. A valid zero
-consumption is shown as `0`, while the estimate remains unknown if charge is left.
-Attribute labels follow the interface language.
-
-The native unit is **hours**. Existing dashboard templates such as
-`sensor.available_battery_minutes` and user-created helpers are retained. When
-switching a dashboard or automation to the new sensor, check its entity ID and
-unit; convert hours to minutes where the consumer expects minutes. Historical
-helper data is not rewritten or transferred to the new entity.
-
-Entity IDs in examples are placeholders. A new sensor may instead be named
-`sensor.garage_sigen_plant_battery_time_remaining`. Open the sensor's entity
-settings and copy its actual entity ID into your template or dashboard. A
-reference to a nonexistent ID returns `unknown`. No renaming is required.
-
 ## Controls and Remote EMS
 
 Read-only mode is enabled by default. Write controls and many diagnostic entities

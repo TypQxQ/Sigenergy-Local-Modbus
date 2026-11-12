@@ -373,26 +373,6 @@
       "plant_grid_export_power": {
         "name": "Moc oddawana do sieci"
       },
-      "plant_battery_time_remaining": {
-        "name": "Pozostały czas pracy akumulatora",
-        "state_attributes": {
-          "battery_soc_percent": {
-            "name": "Poziom naładowania akumulatora (%)"
-          },
-          "backup_soc_percent": {
-            "name": "Rezerwowy poziom naładowania (%)"
-          },
-          "rated_capacity_kwh": {
-            "name": "Pojemność znamionowa akumulatora (kWh)"
-          },
-          "consumed_power_kw": {
-            "name": "Zużycie energii w domu (kW)"
-          },
-          "usable_energy_kwh": {
-            "name": "Szacowana pozostała energia (kWh)"
-          }
-        }
-      },
       "plant_consumed_power": {
         "name": "Moc zużywana"
       },
