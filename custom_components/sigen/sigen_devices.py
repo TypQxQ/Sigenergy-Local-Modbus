@@ -104,8 +104,11 @@ def _group_contiguous_blocks(spans: list[tuple[int, int]]) -> list[tuple[int, in
     return blocks
 
 
+_MAX_WRITE_INTERRUPTED_READ_RETRIES = 3
+
+
 class _ReadInterruptedByWrite(ModbusError):
-    """A discarded read may be retried once after endpoint writes drain."""
+    """A discarded read may be retried after endpoint writes drain."""
 
 
 class _EndpointWrites:
@@ -539,26 +542,37 @@ class _ComponentGroup:
         Raises `ModbusConnectionError` if the link itself is down.
         """
         async with self._poll_lock:
+            retries = 0
+            recovery_epoch = None
             try:
-                return await self._async_update_locked()
-            except _ReadInterruptedByWrite:
-                reset_epoch = self._reset_epoch
-                self.poll_write_restarts += 1
-                _LOGGER.debug("Restarting read after endpoint write")
-                try:
-                    # The coordinator's existing deadline bounds this wait and
-                    # the one retry. Never wait for the writer's refresh here.
-                    await self._endpoint_writes.async_drain()
-                    if self._reset_epoch != reset_epoch:
-                        raise ModbusError("Read recovery invalidated by device reset")
-                    result = await self._async_update_locked()
-                except BaseException:
+                while True:
+                    try:
+                        result = await self._async_update_locked()
+                        break
+                    except _ReadInterruptedByWrite:
+                        if retries >= _MAX_WRITE_INTERRUPTED_READ_RETRIES:
+                            raise
+                        if recovery_epoch is None:
+                            recovery_epoch = self._reset_epoch
+                            self.poll_write_restarts += 1
+                        retries += 1
+                        _LOGGER.debug("Restarting read after endpoint write (retry %s/%s)",
+                                      retries, _MAX_WRITE_INTERRUPTED_READ_RETRIES)
+                        # The coordinator deadline bounds the wait and retries.
+                        # Drain only wire writes, since their refresh may be
+                        # waiting for the current coordinator update to finish.
+                        await self._endpoint_writes.async_drain()
+                        if self._reset_epoch != recovery_epoch:
+                            raise ModbusError("Read recovery invalidated by device reset")
+            except BaseException:
+                if retries:
                     self.poll_write_recovery_failures += 1
                     _LOGGER.debug("Write-interrupted read recovery did not complete")
-                    raise
+                raise
+            if retries:
                 self.poll_write_recoveries += 1
                 _LOGGER.debug("Write-interrupted read recovered")
-                return result
+            return result
 
     def reset_poll_progress(self, *, reason: str = "reset") -> None:
         """Invalidate pre-write/identity samples without losing capabilities."""
@@ -737,6 +751,8 @@ class _ComponentGroup:
         for start, count in _group_contiguous_blocks(
             [(field.address, field.count) for field in fields.values()]
         ):
+            if progress is not None and progress is not self._read_round:
+                break
             affected = {key: field for key, field in fields.items()
                         if start <= field.address < start + count}
 
@@ -770,6 +786,8 @@ class _ComponentGroup:
             except ModbusConnectionError:
                 raise
             except ModbusError as ex:
+                if progress is not None and progress is not self._read_round:
+                    break
                 if self.incremental and not probing and isinstance(ex, IllegalDataAddressError):
                     affected = [field_name for field_name, field in fields.items()
                                 if start <= field.address < start + count]
@@ -895,6 +913,8 @@ class _ComponentGroup:
         fresh, _errors = await self._async_read_blocks(
             name, component, unread, progress=progress, failures=failures,
         )
+        if progress is not None and progress is not self._read_round:
+            return
         words.update(fresh)
         for field_name in component.declared_fields:
             if field_name in words and field_name in known_fields:

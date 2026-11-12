@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 from modbus_connection import ModbusConnectionError
 import test_polling_recovery as recovery
-from test_remote_ems_write_readback import _make_coordinator
+from test_remote_ems_write_readback import MODE, _make_coordinator
 
 
 class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
@@ -37,8 +37,54 @@ class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
         self.assertEqual(1, write.call_count)
         self.assertEqual(1, self.group.poll_write_recoveries)
 
-    async def test_second_interruption_exhausts_the_one_retry(self):
+    async def test_two_or_three_interruptions_recover_with_fresh_ems_readback(self):
+        for interruptions in (2, 3):
+            with self.subTest(interruptions=interruptions):
+                self.group = self.make_group()
+                self.support_all()
+                self.unit.load_raw({"input": {100: 123}})
+                c, hub, _ = _make_coordinator()
+                original = self.unit.read_input_registers
+                writes_remaining = interruptions
+                calls = []
+
+                async def read_plant():
+                    values = await self.group.async_update()
+                    return {**values, MODE: values["first"]}
+
+                async def write_mode(*, value, **kwargs):
+                    await self.group.async_write("set_first", value)
+                    self.unit.load_raw({"input": {100: value}})
+
+                async def read(address, count):
+                    nonlocal writes_remaining
+                    calls.append(address)
+                    if address == 500 and writes_remaining:
+                        await self.group.async_write("set_first", writes_remaining)
+                        writes_remaining -= 1
+                    return await original(address, count)
+
+                hub.async_read_plant_data = read_plant
+                hub.async_write_parameter = write_mode
+                await c.async_refresh()
+                self.assertEqual(123, c.data["plant"][MODE])
+                with patch.object(self.unit, "read_input_registers", read), \
+                     patch.object(self.unit, "write_register", wraps=self.unit.write_register) as write:
+                    await c.async_write_parameter("plant", None, MODE, 999)
+                self.assertEqual(interruptions + 1, write.call_count)
+                self.assertEqual([100, 500] * (interruptions + 1), calls)
+                self.assertTrue(c.last_update_success)
+                self.assertEqual(999, c.data["plant"][MODE])
+                self.assertEqual(0, c.update_failure_count)
+                self.assertEqual(1, self.group.poll_write_restarts)
+                self.assertEqual(1, self.group.poll_write_recoveries)
+                self.assertEqual(0, self.group.poll_write_recovery_failures)
+
+    async def test_exhausted_retries_fail_the_poll_after_four_interruptions(self):
         self.support_all()
+        c, hub, _ = _make_coordinator()
+        hub.async_read_plant_data = self.group.async_update
+        await c.async_refresh()
         original = self.unit.read_input_registers
         async def read(address, count):
             if address == 500:
@@ -46,12 +92,30 @@ class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
             return await original(address, count)
         with patch.object(self.unit, "read_input_registers", read), \
              patch.object(self.unit, "write_register", wraps=self.unit.write_register) as write:
-            with self.assertRaises(self.devices.ModbusError):
-                await self.group.async_update()
-        self.assertEqual(2, write.call_count)
+            await c.async_refresh()
+        self.assertFalse(c.last_update_success)
+        self.assertEqual(1, c.update_failure_count)
+        self.assertEqual(0, c.update_timeout_count)
+        self.assertEqual(4, write.call_count)
         self.assertEqual(1, self.group.poll_write_restarts)
         self.assertEqual(1, self.group.poll_write_recovery_failures)
         self.assertIsNone(self.group._read_round)
+
+    async def test_abandoned_round_does_not_queue_remaining_blocks(self):
+        self.support_all()
+        original = self.unit.read_input_registers
+        calls = []
+
+        async def read(address, count):
+            calls.append(address)
+            if calls == [100]:
+                await self.group.async_write("set_first", 999)
+                self.unit.load_raw({"input": {100: 999}})
+            return await original(address, count)
+
+        with patch.object(self.unit, "read_input_registers", read):
+            self.assertEqual(999, (await self.group.async_update())["first"])
+        self.assertEqual([100, 100, 500], calls)
 
     async def test_rejected_saved_round_write_gets_one_fresh_retry(self):
         for validator in (AsyncMock(return_value=False), None):
