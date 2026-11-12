@@ -58,7 +58,10 @@ class _CoordinatorBase:
             else:
                 self.last_update_success = True
             # Entity listeners see this same data before async_refresh returns.
-            self.notifications.append(deepcopy(self.data))
+            self.async_update_listeners()
+
+    def async_update_listeners(self):
+        self.notifications.append(deepcopy(self.data))
 
 
 class _Hub:
@@ -114,7 +117,8 @@ def _make_coordinator():
     constants = [
         node for node in tree.body if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id in {
-            "STARTUP_TIMEOUT", "UPDATE_TIMEOUT"
+            "STARTUP_TIMEOUT", "UPDATE_TIMEOUT",
+            "AC_CHARGER_PUBLISH_GRACE", "AC_CHARGER_RETRY_DELAY",
         } for target in node.targets)
     ]
     module = ast.fix_missing_locations(ast.Module(
