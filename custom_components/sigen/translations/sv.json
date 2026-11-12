@@ -334,26 +334,6 @@
       "plant_grid_export_power": {
         "name": "Exporterad effekt till elnätet"
       },
-      "plant_battery_time_remaining": {
-        "name": "Återstående batteritid",
-        "state_attributes": {
-          "battery_soc_percent": {
-            "name": "Batteriets laddningsnivå (%)"
-          },
-          "backup_soc_percent": {
-            "name": "Reservnivå (%)"
-          },
-          "rated_capacity_kwh": {
-            "name": "Nominell batterikapacitet (kWh)"
-          },
-          "consumed_power_kw": {
-            "name": "Husets förbrukning (kW)"
-          },
-          "usable_energy_kwh": {
-            "name": "Beräknad återstående energi (kWh)"
-          }
-        }
-      },
       "plant_consumed_power": {
         "name": "Förbrukad effekt"
       },

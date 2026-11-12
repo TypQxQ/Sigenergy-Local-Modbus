@@ -68,7 +68,6 @@ class TestUICatalogues(unittest.TestCase):
             english = dict(leaves(self.en))
             paths = (("config", "step", "user", "title"),
                      ("options", "abort", "legacy_energy_adjustment_removed"),
-                     ("entity", "sensor", "plant_battery_time_remaining", "name"),
                      ("entity", "sensor", "plant_running_state", "state", "running"),
                      ("entity", "sensor", "plant_general_alarm1", "state_attributes", "alarm_codes", "state", "bit_1"),
                      ("selector", "device_type", "options", "new_plant"),
@@ -98,16 +97,6 @@ class TestUICatalogues(unittest.TestCase):
                 self.assertEqual({"select_device", "display_settings", "power_flow_settings"},
                                  set(catalogue["options"]["step"]["init"]["menu_options"]))
                 self.assertIn("entity_name_language", catalogue["options"]["step"]["display_settings"]["data"])
-
-    def test_battery_input_attributes_have_translated_labels_and_explicit_units(self):
-        units = {"battery_soc_percent": "%", "backup_soc_percent": "%",
-                 "rated_capacity_kwh": "kWh", "consumed_power_kw": "kW",
-                 "usable_energy_kwh": "kWh"}
-        for language, catalogue in self.catalogues.items():
-            attributes = catalogue["entity"]["sensor"]["plant_battery_time_remaining"]["state_attributes"]
-            self.assertEqual(set(units), set(attributes), language)
-            for key, unit in units.items():
-                self.assertIn(f"({unit})", attributes[key]["name"], (language, key))
 
     def test_flow_errors_and_abort_reasons_are_translation_keys(self):
         tree = ast.parse((P / "config_flow.py").read_text(encoding="utf-8"))

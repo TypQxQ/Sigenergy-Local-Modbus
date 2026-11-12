@@ -324,21 +324,6 @@ template:
             {{ none }}
           {% endif %}
 
-      ################################################
-      # Template to to show remaining time on battery.
-      ################################################
-      - name: "Available Battery Minutes"
-        availability: >-
-          {{ is_number(states('sensor.sigen_plant_battery_time_remaining')) }}
-        unit_of_measurement: "min"
-        state: >-
-          {% if is_number(states('sensor.sigen_plant_battery_time_remaining')) %}
-          {% set hours = states('sensor.sigen_plant_battery_time_remaining') %}
-          {{ (hours | float(0) * 60) | int if is_number(hours) else none }}
-          {% else %}
-            {{ none }}
-          {% endif %}
-
 ################################################
 # Sensors to calculate statistics.
 ################################################
