@@ -37,8 +37,8 @@ class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
         self.assertEqual(1, write.call_count)
         self.assertEqual(1, self.group.poll_write_recoveries)
 
-    async def test_two_or_three_interruptions_recover_with_fresh_ems_readback(self):
-        for interruptions in (2, 3):
+    async def test_write_bursts_recover_with_fresh_ems_readback(self):
+        for interruptions in (2, 3, 6):
             with self.subTest(interruptions=interruptions):
                 self.group = self.make_group()
                 self.support_all()
@@ -80,26 +80,43 @@ class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
                 self.assertEqual(1, self.group.poll_write_recoveries)
                 self.assertEqual(0, self.group.poll_write_recovery_failures)
 
-    async def test_exhausted_retries_fail_the_poll_after_four_interruptions(self):
+    async def test_sustained_writes_are_bounded_by_the_coordinator_deadline(self):
         self.support_all()
-        c, hub, _ = _make_coordinator()
+        coordinator, hub, namespace = _make_coordinator()
         hub.async_read_plant_data = self.group.async_update
-        await c.async_refresh()
+        await coordinator.async_refresh()
         original = self.unit.read_input_registers
+        original_timeout = namespace["async_timeout"].timeout
+        deadline = None
+        writes = 0
+
+        def timeout(seconds):
+            nonlocal deadline
+            deadline = original_timeout(seconds)
+            return deadline
+
         async def read(address, count):
+            nonlocal writes
             if address == 500:
                 await self.group.async_write("set_first", 999)
+                writes += 1
+                if writes == 6:
+                    deadline.reschedule(asyncio.get_running_loop().time())
             return await original(address, count)
+
         with patch.object(self.unit, "read_input_registers", read), \
-             patch.object(self.unit, "write_register", wraps=self.unit.write_register) as write:
-            await c.async_refresh()
-        self.assertFalse(c.last_update_success)
-        self.assertEqual(1, c.update_failure_count)
-        self.assertEqual(0, c.update_timeout_count)
-        self.assertEqual(4, write.call_count)
+             patch.object(namespace["async_timeout"], "timeout", timeout):
+            await coordinator.async_refresh()
+
+        self.assertFalse(coordinator.last_update_success)
+        self.assertEqual(1, coordinator.update_failure_count)
+        self.assertEqual(1, coordinator.update_timeout_count)
+        self.assertEqual(6, writes)
         self.assertEqual(1, self.group.poll_write_restarts)
         self.assertEqual(1, self.group.poll_write_recovery_failures)
         self.assertIsNone(self.group._read_round)
+        await coordinator.async_refresh()
+        self.assertTrue(coordinator.last_update_success)
 
     async def test_abandoned_round_does_not_queue_remaining_blocks(self):
         self.support_all()

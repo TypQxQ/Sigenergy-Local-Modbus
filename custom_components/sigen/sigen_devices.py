@@ -104,9 +104,6 @@ def _group_contiguous_blocks(spans: list[tuple[int, int]]) -> list[tuple[int, in
     return blocks
 
 
-_MAX_WRITE_INTERRUPTED_READ_RETRIES = 3
-
-
 class _ReadInterruptedByWrite(ModbusError):
     """A discarded read may be retried after endpoint writes drain."""
 
@@ -550,14 +547,11 @@ class _ComponentGroup:
                         result = await self._async_update_locked()
                         break
                     except _ReadInterruptedByWrite:
-                        if retries >= _MAX_WRITE_INTERRUPTED_READ_RETRIES:
-                            raise
                         if recovery_epoch is None:
                             recovery_epoch = self._reset_epoch
                             self.poll_write_restarts += 1
                         retries += 1
-                        _LOGGER.debug("Restarting read after endpoint write (retry %s/%s)",
-                                      retries, _MAX_WRITE_INTERRUPTED_READ_RETRIES)
+                        _LOGGER.debug("Restarting read after endpoint write (retry %s)", retries)
                         # The coordinator deadline bounds the wait and retries.
                         # Drain only wire writes, since their refresh may be
                         # waiting for the current coordinator update to finish.
