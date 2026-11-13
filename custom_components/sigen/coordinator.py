@@ -18,6 +18,8 @@ _LOGGER = logging.getLogger(__name__)
 
 STARTUP_TIMEOUT = 180
 UPDATE_TIMEOUT = 60
+AC_CHARGER_PUBLISH_GRACE = 2.0
+AC_CHARGER_RETRY_DELAY = 60.0
 
 
 class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
@@ -45,6 +47,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.partial_update_count = 0
         self.latest_update_timing: dict[str, Any] = {}
         self._degraded_devices: set[str] = set()
+        self._ac_charger_retry_at: dict[str, float] = {}
         self.pv_restore_states: dict[str, dict[str, Any]] = {}
         self.entity_name_translations: dict[str, str] | None = None
 
@@ -84,6 +87,12 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         timeout = STARTUP_TIMEOUT if phase == "startup" else UPDATE_TIMEOUT
         start_time = time.perf_counter()
         status = "cancelled"
+        snapshot: dict[str, Any] | None = None
+        early_data: dict[str, Any] | None = None
+        can_publish_without_charger = False
+        charger_deadline_expired = False
+        degraded_statuses = {"partial", "error", "deferred"}
+        ac_tasks: dict[str, asyncio.Task] = {}
         device_timings: dict[str, dict[str, Any]] = {}
 
         async def timed_read(device: str, read, *args) -> Dict[str, Any]:
@@ -113,6 +122,17 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "duration": time.perf_counter() - started,
                     "status": device_status,
                 }
+
+        def completed_charger_data() -> dict[str, Any]:
+            return {
+                name: (
+                    task.result()
+                    if (task := ac_tasks.get(name)) is not None
+                    and task.done() and not task.cancelled() and task.exception() is None
+                    else {}
+                )
+                for name in self.hub.ac_charger_connections
+            }
 
         try:
             async with async_timeout.timeout(timeout):
@@ -149,20 +169,53 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     except Exception:
                         dc_charger_data[name] = {}
 
-                # Fetch AC charger data concurrently
-                ac_tasks = {
-                    name: asyncio.create_task(timed_read(
+                # Keep empty rows for deferred chargers. Calculated consumption
+                # must see missing charging power, rather than assume zero.
+                ac_charger_data: dict[str, Any] = {}
+                now = time.perf_counter()
+                for name in self.hub.ac_charger_connections:
+                    ac_charger_data[name] = {}
+                    retry_at = self._ac_charger_retry_at.get(name, 0.0)
+                    if retry_at > now:
+                        device_timings[f"ac_charger:{name}"] = {
+                            "status": "deferred",
+                            "retry_in": retry_at - now,
+                        }
+                        continue
+                    task = asyncio.create_task(timed_read(
                         f"ac_charger:{name}", self.hub.async_read_ac_charger_data, name
                     ))
-                    for name in self.hub.ac_charger_connections
+                    ac_tasks[name] = task
+                    device_tasks.add(task)
+
+                sensors_initialized = self.data.get("_sensors_initialized", False) if self.data else False
+                snapshot = {
+                    "plant": plant_data,
+                    "inverters": inverter_data,
+                    "ac_chargers": ac_charger_data,
+                    "dc_chargers": dc_charger_data,
+                    "_sensors_initialized": sensors_initialized,
                 }
-                device_tasks.update(ac_tasks.values())
-                ac_charger_data: dict[str, Any] = {}
+                can_publish_without_charger = (
+                    bool(ac_tasks) and phase == "poll"
+                    and any(value is not None for value in plant_data.values())
+                )
+                if can_publish_without_charger and self.last_update_success:
+                    _, pending = await asyncio.wait(
+                        ac_tasks.values(), timeout=AC_CHARGER_PUBLISH_GRACE,
+                    )
+                    if pending:
+                        # Publish the fresh plant/inverter snapshot without moving
+                        # HA's refresh timer or declaring the poll complete.
+                        early_data = {**snapshot, "ac_chargers": completed_charger_data()}
+                        self.data = early_data
+                        self.async_update_listeners()
+
                 for name, task in ac_tasks.items():
                     try:
                         ac_charger_data[name] = await task
                     except Exception:
-                        ac_charger_data[name] = {}
+                        pass  # Preserve the empty charger row.
 
                 # Unknown/unsupported registers during discovery are expected.
                 # A poll with actual read failures and no usable readings is
@@ -170,30 +223,37 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # snapshot until HA marks the coordinator unavailable.
                 readings = [plant_data, *inverter_data.values(),
                             *dc_charger_data.values(), *ac_charger_data.values()]
-                if (any(item["status"] in {"partial", "error"} for item in device_timings.values())
+                if (any(item["status"] in degraded_statuses for item in device_timings.values())
                         and not any(value is not None for values in readings for value in values.values())):
                     raise UpdateFailed("No Sigenergy register readings succeeded")
 
-                # Merge fetched data into existing coordinator data
-                # Preserve the _sensors_initialized flag across updates
-                sensors_initialized = self.data.get("_sensors_initialized", False) if self.data else False
-                self.data = {
-                    "plant": plant_data,
-                    "inverters": inverter_data,
-                    "ac_chargers": ac_charger_data,
-                    "dc_chargers": dc_charger_data,
-                    "_sensors_initialized": sensors_initialized,  # Preserve flag across updates
-                }
+                # A listener may have completed sensor initialization during
+                # the early publication.
+                if early_data is not None:
+                    snapshot["_sensors_initialized"] = early_data["_sensors_initialized"]
+                self.data = snapshot
                 _LOGGER.debug("RBS-coordinator-106-coordinator-post Merged fetched, len: %s data: %s", len(self.data), self.data)
-                
+
                 # Return the updated, complete data structure
-                status = ("partial" if any(item["status"] in {"partial", "error"}
+                status = ("partial" if any(item["status"] in degraded_statuses
                           for item in device_timings.values()) else "success")
                 if status == "partial":
                     self.partial_update_count += 1
                 self._last_successful_update_sequence = update_sequence
                 return self.data
         except asyncio.TimeoutError as exception:
+            if can_publish_without_charger and snapshot is not None:
+                # The primary data is usable even if a charger consumed the
+                # rest of the coordinator deadline. The finally block stops
+                # pending workflows and lets wire requests finish safely.
+                charger_deadline_expired = True
+                status = "partial"
+                self.partial_update_count += 1
+                self._last_successful_update_sequence = update_sequence
+                snapshot["ac_chargers"] = completed_charger_data()
+                if early_data is not None:
+                    snapshot["_sensors_initialized"] = early_data["_sensors_initialized"]
+                return snapshot
             status = "timeout"
             self.update_timeout_count += 1
             self.update_failure_count += 1
@@ -216,6 +276,27 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 if device_tasks:
                     await asyncio.gather(*device_tasks, return_exceptions=True)
             finally:
+                # Use every result, including chargers that finished while the
+                # coordinator was waiting for a different charger.
+                if ac_tasks:
+                    retry_at = time.perf_counter() + AC_CHARGER_RETRY_DELAY
+                    for name, task in ac_tasks.items():
+                        if task.cancelled():
+                            if charger_deadline_expired:
+                                self._ac_charger_retry_at[name] = retry_at
+                            continue
+                        timing = device_timings.get(f"ac_charger:{name}", {})
+                        error_types = {
+                            timing.get("error_type"), timing.get("cause_type"),
+                            *(block.get("error_type") for block in timing.get("failed_blocks", [])),
+                        }
+                        if error_types & {"ModbusTimeoutError", "ModbusConnectionError"}:
+                            # Give healthy units several polls on the shared
+                            # connection before retrying the failed charger.
+                            self._ac_charger_retry_at[name] = retry_at
+                        else:
+                            self._ac_charger_retry_at.pop(name, None)
+
                 # Include failed attempts, and keep workflow cleanup separate
                 # from the fetch deadline. Device times include broker waits;
                 # they overlap and must not be summed as wire transaction time.
@@ -309,6 +390,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 }:
                     await self._async_confirm_remote_ems_write(register_name, value)
                 else:
+                    if device_type == "ac_charger" and device_identifier is not None:
+                        self._ac_charger_retry_at.pop(device_identifier, None)
                     await self.async_request_refresh()
             except SigenergyModbusError as ex:
                 _LOGGER.error("Failed to complete parameter command %s to %s '%s': %s",

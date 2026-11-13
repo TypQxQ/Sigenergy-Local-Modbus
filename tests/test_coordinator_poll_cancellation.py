@@ -39,6 +39,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
         "time": time,
         "STARTUP_TIMEOUT": 180,
         "UPDATE_TIMEOUT": 60,
+        "AC_CHARGER_RETRY_DELAY": 60.0,
         "async_timeout": SimpleNamespace(timeout=lambda _seconds: asyncio.timeout(timeout)),
         "dt_util": SimpleNamespace(utcnow=lambda: datetime.now(timezone.utc)),
         "CONF_INVERTER_HAS_DCCHARGER": "has_dc_charger",
@@ -86,7 +87,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
         hub=hub, data=None, largest_update_interval=0.0, latest_fetch_time=0.0,
         _update_sequence=0, _last_successful_update_sequence=0,
         update_timeout_count=0, update_failure_count=0,
-        partial_update_count=0, _degraded_devices=set(),
+        partial_update_count=0, _degraded_devices=set(), _ac_charger_retry_at={},
     )
     coordinator.poll = MethodType(namespace["_async_update_data"], coordinator)
     return coordinator, child_tasks, all_started, release, events
