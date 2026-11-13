@@ -118,7 +118,7 @@ def _make_coordinator():
         node for node in tree.body if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id in {
             "STARTUP_TIMEOUT", "UPDATE_TIMEOUT",
-            "AC_CHARGER_PUBLISH_GRACE", "AC_CHARGER_RETRY_DELAY",
+            "AC_CHARGER_PUBLISH_GRACE",
         } for target in node.targets)
     ]
     module = ast.fix_missing_locations(ast.Module(

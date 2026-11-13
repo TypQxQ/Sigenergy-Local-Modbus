@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from test_remote_ems_write_readback import _make_coordinator
 
@@ -117,7 +118,7 @@ class TestCoordinatorStartupTiming(unittest.IsolatedAsyncioTestCase):
 
 
 class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
-    async def test_publish_healthy_data_while_charger_waits_and_retry_after_delay(self):
+    async def test_publish_healthy_data_while_charger_waits_and_retry_on_next_poll(self):
         coordinator, hub, namespace = _make_coordinator()
         namespace["AC_CHARGER_PUBLISH_GRACE"] = 0
         await coordinator.async_refresh()
@@ -178,18 +179,17 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         hub.registers["soc"] = 52
         await coordinator.async_refresh()
         self.assertEqual(52, coordinator.data["plant"]["soc"])
-        self.assertEqual({}, coordinator.data["ac_chargers"]["slow"])
-        self.assertEqual("deferred", coordinator.latest_update_timing["devices"]["ac_charger:slow"]["status"])
-        self.assertEqual(["slow", "healthy", "healthy"], attempts)
+        self.assertEqual({"current_limit": 6}, coordinator.data["ac_chargers"]["slow"])
+        self.assertEqual("partial", coordinator.latest_update_timing["devices"]["ac_charger:slow"]["status"])
+        self.assertEqual(["slow", "healthy"] * 2, attempts)
 
         timed_out = False
-        coordinator._ac_charger_retry_at["slow"] = 0
         await coordinator.async_refresh()
         self.assertEqual({"ac_charger_charging_power": 2}, coordinator.data["ac_chargers"]["slow"])
-        self.assertNotIn("slow", coordinator._ac_charger_retry_at)
+        self.assertEqual(["slow", "healthy"] * 3, attempts)
         self.assertEqual("success", coordinator.latest_update_timing["status"])
 
-    async def test_charger_deadline_preserves_healthy_data_and_defers_each_failed_charger(self):
+    async def test_charger_deadline_preserves_healthy_data_and_retries_all_chargers(self):
         coordinator, hub, namespace = _make_coordinator()
         await coordinator.async_refresh()
         namespace["AC_CHARGER_PUBLISH_GRACE"] = 0
@@ -200,9 +200,12 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         hub.registers["soc"] = 51
         cancelled = asyncio.Event()
         attempts = []
+        failing = True
 
         async def read_charger(name):
             attempts.append(name)
+            if not failing:
+                return {"ac_charger_charging_power": 2}
             if name == "stalled":
                 try:
                     await asyncio.Future()
@@ -216,7 +219,7 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
             pass
 
         def quality(device):
-            if device == "ac_charger:timed out":
+            if failing and device == "ac_charger:timed out":
                 return {
                     "status": "partial",
                     "failed_blocks": [{"error_type": "ModbusTimeoutError"}],
@@ -232,12 +235,36 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({}, coordinator.data["ac_chargers"]["stalled"])
         self.assertEqual({"ac_charger_charging_power": 2}, coordinator.data["ac_chargers"]["healthy"])
         self.assertEqual("partial", coordinator.latest_update_timing["status"])
-        self.assertEqual({"stalled", "timed out", "disconnected"}, set(coordinator._ac_charger_retry_at))
+        self.assertEqual({}, coordinator.data["ac_chargers"]["timed out"])
+        self.assertEqual({}, coordinator.data["ac_chargers"]["disconnected"])
 
+        failing = False
         hub.registers["soc"] = 52
         await coordinator.async_refresh()
         self.assertEqual(52, coordinator.data["plant"]["soc"])
-        self.assertEqual(["stalled", "timed out", "disconnected", "healthy", "healthy"], attempts)
+        self.assertEqual(["stalled", "timed out", "disconnected", "healthy"] * 2, attempts)
+        self.assertTrue(all(values == {"ac_charger_charging_power": 2}
+                            for values in coordinator.data["ac_chargers"].values()))
+        self.assertEqual("success", coordinator.latest_update_timing["status"])
+
+    async def test_charger_grace_is_limited_by_polling_interval(self):
+        coordinator, hub, _namespace = _make_coordinator()
+        await coordinator.async_refresh()
+        hub.ac_charger_connections = {"AC": {}}
+
+        async def read_charger(_name):
+            return {"ac_charger_charging_power": 2}
+
+        hub.async_read_ac_charger_data = read_charger
+        for interval, expected in ((1, 1), (2, 2), (5, 2)):
+            with self.subTest(interval=interval):
+                coordinator.update_interval = timedelta(seconds=interval)
+                with patch.object(asyncio, "wait", wraps=asyncio.wait) as wait:
+                    await coordinator.async_refresh()
+                wait.assert_awaited_once()
+                self.assertEqual(expected, wait.await_args.kwargs["timeout"])
+                self.assertEqual({"ac_charger_charging_power": 2},
+                                 coordinator.data["ac_chargers"]["AC"])
 
     @staticmethod
     async def _read_inverter(_name):
