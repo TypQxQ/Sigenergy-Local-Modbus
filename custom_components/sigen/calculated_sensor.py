@@ -40,6 +40,7 @@ from .modbusregisterdefinitions import ENUM_SENSOR_STATES, enum_sensor_options
 
 from .common import (
     SigenergySensorEntityDescription,
+    is_unimplemented_register_marker,
     safe_decimal,
     safe_float,
 )
@@ -368,7 +369,7 @@ class SigenergyCalculations:
         # Try to use the direct register value first (available in newer firmware)
         # plant_general_load_power (30282)
         plant_general_load_power = plant_data.get("plant_general_load_power")
-        if plant_general_load_power is not None:
+        if plant_general_load_power is not None and not is_unimplemented_register_marker(plant_general_load_power):
             try:
                 return float(plant_general_load_power)
             except (ValueError, TypeError):

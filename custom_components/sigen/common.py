@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
+from math import isfinite
 from typing import Any, Optional, Callable, Dict, Literal
 from dataclasses import dataclass
 from homeassistant.helpers.entity_registry import (
@@ -566,6 +567,20 @@ def safe_float(value: Any, precision: int = 6) -> Optional[float]:
     except (InvalidOperation, TypeError, ValueError):
         _LOGGER.warning("Could not convert value %s (type %s) to float", value, type(value).__name__)
         return None
+
+
+def is_unimplemented_register_marker(value: Any) -> bool:
+    """Detect the marker a device returns for an unimplemented power register.
+
+    Some devices answer an unimplemented register with all-ones words. With a
+    `/1000` gain that decodes to `-1` (signed S32) or `4294967295` (unsigned
+    U32), neither of which is a real measurement.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return isfinite(number) and int(round(number * 1000)) in (-1, 0xFFFFFFFF)
     
 def safe_decimal(value: Any) -> Optional[Decimal]:
     """Convert to Decimal only if possible, else None."""

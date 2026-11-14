@@ -19,7 +19,7 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
-from .common import (SigenergySensorEntityDescription)
+from .common import (SigenergySensorEntityDescription, is_unimplemented_register_marker)
 from .modbusregisterdefinitions import enum_sensor_options
 
 class StaticSensors:
@@ -247,6 +247,9 @@ class StaticSensors:
             native_unit_of_measurement=UnitOfPower.KILO_WATT,
             state_class=SensorStateClass.MEASUREMENT,
             icon="mdi:home-lightning-bolt-outline",
+            value_fn=lambda value, *_: (
+                None if is_unimplemented_register_marker(value) else value
+            ),
         ),
         SigenergySensorEntityDescription(
             key="plant_active_power",

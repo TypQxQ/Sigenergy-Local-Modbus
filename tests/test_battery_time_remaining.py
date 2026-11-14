@@ -22,7 +22,7 @@ def load_calculation():
         'calculate_plant_consumed_power', 'calculate_battery_time_remaining',
         'battery_time_remaining_inputs'}]
     common = ast.parse((COMPONENT / 'common.py').read_text(encoding='utf-8'))
-    helpers = [n for n in common.body if isinstance(n, ast.FunctionDef) and n.name in {'safe_decimal', 'safe_float'}]
+    helpers = [n for n in common.body if isinstance(n, ast.FunctionDef) and n.name in {'safe_decimal', 'safe_float', 'is_unimplemented_register_marker'}]
     scope = {'Decimal': Decimal, 'InvalidOperation': InvalidOperation, '_LOGGER': Mock(), 'isfinite': isfinite,
              'SensorDeviceClass': SimpleNamespace(DURATION='duration'),
              'UnitOfTime': SimpleNamespace(HOURS='h'),
