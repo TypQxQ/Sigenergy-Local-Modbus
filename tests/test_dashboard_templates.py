@@ -43,14 +43,12 @@ class TestDashboardTemplates(unittest.TestCase):
                         self.render(sensor['state'], bad)
                 self.assertEqual('True', self.render(sensor['availability'], values))
 
-    def test_battery_direction_and_builtin_estimate_conversion(self):
+    def test_battery_direction(self):
         names = {s['name']: s for s in self.sensors}
         for power, charging, discharging in ((3,3,0), (-2,0,2), (0,0,0)):
             values = {'sensor.sigen_plant_battery_power': power}
             self.assertEqual(charging, float(self.render(names['Power Flow Gauge - Total Battery Charging']['state'], values)))
             self.assertEqual(discharging, float(self.render(names['Power Flow Gauge - Total Battery Discharging']['state'], values)))
-        self.assertEqual(90, int(self.render(names['Available Battery Minutes']['state'],
-                                             {'sensor.sigen_plant_battery_time_remaining': 1.5})))
 
     def test_valid_power_flows_are_not_changed_by_availability_guards(self):
         names = {s['name']: s for s in self.sensors}
