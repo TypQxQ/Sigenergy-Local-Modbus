@@ -90,6 +90,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         can_publish_without_charger = False
         degraded_statuses = {"partial", "error"}
         ac_tasks: dict[str, asyncio.Task] = {}
+        chargers_at_deadline: set[str] = set()
         device_timings: dict[str, dict[str, Any]] = {}
 
         async def timed_read(device: str, read, *args) -> Dict[str, Any]:
@@ -231,7 +232,14 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 self._last_successful_update_sequence = update_sequence
                 return self.data
         except asyncio.TimeoutError as exception:
+            self.update_timeout_count += 1
             if can_publish_without_charger and snapshot is not None:
+                # Propagating the deadline can already have cancelled the
+                # charger that the coordinator was awaiting.
+                chargers_at_deadline = {
+                    name for name, task in ac_tasks.items()
+                    if task.cancelled() or not task.done()
+                }
                 # The primary data is usable even if a charger consumed the
                 # rest of the coordinator deadline. The finally block stops
                 # pending workflows and lets wire requests finish safely.
@@ -243,7 +251,6 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     snapshot["_sensors_initialized"] = early_data["_sensors_initialized"]
                 return snapshot
             status = "timeout"
-            self.update_timeout_count += 1
             self.update_failure_count += 1
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
         except Exception as exception:
@@ -264,6 +271,11 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 if device_tasks:
                     await asyncio.gather(*device_tasks, return_exceptions=True)
             finally:
+                for name in chargers_at_deadline:
+                    device_timings.setdefault(f"ac_charger:{name}", {}).update(
+                        status="error", error_type="TimeoutError",
+                    )
+
                 # Include failed attempts, and keep workflow cleanup separate
                 # from the fetch deadline. Device times include broker waits;
                 # they overlap and must not be summed as wire transaction time.

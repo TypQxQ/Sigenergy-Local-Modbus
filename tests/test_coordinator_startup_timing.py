@@ -198,6 +198,8 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
             "stalled": {}, "timed out": {}, "disconnected": {}, "healthy": {},
         }
         hub.registers["soc"] = 51
+        hub.inverter_connections = {"inverter": {}}
+        hub.async_read_inverter_data = self._read_inverter
         cancelled = asyncio.Event()
         attempts = []
         failing = True
@@ -237,6 +239,15 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("partial", coordinator.latest_update_timing["status"])
         self.assertEqual({}, coordinator.data["ac_chargers"]["timed out"])
         self.assertEqual({}, coordinator.data["ac_chargers"]["disconnected"])
+        self.assertEqual({"power": 3}, coordinator.data["inverters"]["inverter"])
+        self.assertEqual(1, coordinator.update_timeout_count)
+        self.assertEqual(0, coordinator.update_failure_count)
+        stalled = coordinator.latest_update_timing["devices"]["ac_charger:stalled"]
+        self.assertEqual("error", stalled["status"])
+        self.assertEqual("TimeoutError", stalled["error_type"])
+        warnings = [call.args[1] for call in namespace["_LOGGER"].warning.call_args_list]
+        self.assertIn("ac_charger:stalled", warnings)
+        self.assertNotIn("ac_charger:healthy", warnings)
 
         failing = False
         hub.registers["soc"] = 52
@@ -246,6 +257,8 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(values == {"ac_charger_charging_power": 2}
                             for values in coordinator.data["ac_chargers"].values()))
         self.assertEqual("success", coordinator.latest_update_timing["status"])
+        self.assertEqual(1, coordinator.update_timeout_count)
+        namespace["_LOGGER"].info.assert_any_call("Sigenergy read recovered for %s", "ac_charger:stalled")
 
     async def test_charger_grace_is_limited_by_polling_interval(self):
         coordinator, hub, _namespace = _make_coordinator()
