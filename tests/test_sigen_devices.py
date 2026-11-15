@@ -96,6 +96,25 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
         _load_zeroes(unit, "holding", self.defs.PLANT_ESS_PREHEATING_REGISTERS)
         return unit, self.devices.SigenergyPlant(unit)
 
+    async def test_load_power_all_ones_is_missing_and_valid_values_recover(self) -> None:
+        unit, plant = self._new_plant()
+        names = ("plant_general_load_power", "plant_total_load_power")
+        general, total = (self.defs.PLANT_RUNNING_INFO_REGISTERS[name].address
+                          for name in names)
+        unit.load_raw({"input": {general: 0xFFFF, general + 1: 0xFFFF,
+                                total: 0xFFFF, total + 1: 0xFFFF}})
+
+        data = await plant.async_update()
+        for name in names:
+            self.assertIsNone(data[name])
+            self.assertTrue(plant.is_supported(name))
+        self.assertEqual("success", plant._group.poll_diagnostics()["status"])
+
+        unit.load_raw({"input": {general: 0, general + 1: 0, total: 0, total + 1: 1250}})
+        data = await plant.async_update()
+        self.assertEqual(0.0, data[names[0]])
+        self.assertEqual(1.25, data[names[1]])
+
     async def test_narrows_around_an_unsupported_register_and_decodes_gain(self) -> None:
         unit, plant = self._new_plant()
         soh_addr = self.defs.PLANT_RUNNING_INFO_REGISTERS["plant_ess_soh"].address

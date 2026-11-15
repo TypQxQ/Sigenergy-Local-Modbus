@@ -26,8 +26,8 @@ The sensor names needs to be changed to suit your system.
    ```
 
 2. Replace the source entity IDs with your actual IDs. The examples expect kW
-   power readings and the built-in **Battery time remaining** sensor in hours.
-   Battery power is positive when charging and negative when discharging.
+   power readings. Battery power is positive when charging and negative when
+   discharging.
 3. Check the Home Assistant configuration, then restart to load the package.
 4. Open an empty, manually managed dashboard's **Raw configuration editor** and
    paste `energy_flow.yaml`. This file starts with `views:` and defines a whole
@@ -35,8 +35,7 @@ The sensor names needs to be changed to suit your system.
 
 In B4, missing source readings make dependent gauge sensors unavailable instead
 of reporting fabricated zeroes. Statistics may need some valid samples after
-startup. The existing battery-minutes helper converts the integration's estimate
-from hours to minutes. If you previously copied this package, update your copy
+startup. If you previously copied this package, update your copy
 manually and preserve any local entity-ID mappings; integration updates do not
 replace your dashboard configuration.
 

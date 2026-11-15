@@ -641,16 +641,6 @@ views:
                     kW'; ]]]
                   icon: mdi:arrow-right-bold
         column_span: 2
-      - type: grid
-        cards:
-          - type: tile
-            grid_options:
-              columns: full
-              rows: 1
-            entity: sensor.available_battery_minutes
-            vertical: false
-            features_position: bottom
-        column_span: 1
     cards: []
   - type: sections
     path: energipriser

@@ -18,6 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 STARTUP_TIMEOUT = 180
 UPDATE_TIMEOUT = 60
+AC_CHARGER_PUBLISH_GRACE = 2.0
 
 
 class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
@@ -84,6 +85,12 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         timeout = STARTUP_TIMEOUT if phase == "startup" else UPDATE_TIMEOUT
         start_time = time.perf_counter()
         status = "cancelled"
+        snapshot: dict[str, Any] | None = None
+        early_data: dict[str, Any] | None = None
+        can_publish_without_charger = False
+        degraded_statuses = {"partial", "error"}
+        ac_tasks: dict[str, asyncio.Task] = {}
+        chargers_at_deadline: set[str] = set()
         device_timings: dict[str, dict[str, Any]] = {}
 
         async def timed_read(device: str, read, *args) -> Dict[str, Any]:
@@ -113,6 +120,16 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "duration": time.perf_counter() - started,
                     "status": device_status,
                 }
+
+        def completed_charger_data() -> dict[str, Any]:
+            return {
+                name: (
+                    task.result()
+                    if task.done() and not task.cancelled() and task.exception() is None
+                    else {}
+                )
+                for name, task in ac_tasks.items()
+            }
 
         try:
             async with async_timeout.timeout(timeout):
@@ -149,7 +166,6 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     except Exception:
                         dc_charger_data[name] = {}
 
-                # Fetch AC charger data concurrently
                 ac_tasks = {
                     name: asyncio.create_task(timed_read(
                         f"ac_charger:{name}", self.hub.async_read_ac_charger_data, name
@@ -157,12 +173,39 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     for name in self.hub.ac_charger_connections
                 }
                 device_tasks.update(ac_tasks.values())
-                ac_charger_data: dict[str, Any] = {}
+                # Keep an empty row for missing charger data so calculated
+                # consumption treats missing charger power as unknown.
+                ac_charger_data: dict[str, Any] = {name: {} for name in ac_tasks}
+
+                sensors_initialized = self.data.get("_sensors_initialized", False) if self.data else False
+                snapshot = {
+                    "plant": plant_data,
+                    "inverters": inverter_data,
+                    "ac_chargers": ac_charger_data,
+                    "dc_chargers": dc_charger_data,
+                    "_sensors_initialized": sensors_initialized,
+                }
+                can_publish_without_charger = (
+                    bool(ac_tasks) and phase == "poll"
+                    and any(value is not None for value in plant_data.values())
+                )
+                if can_publish_without_charger and self.last_update_success:
+                    _, pending = await asyncio.wait(
+                        ac_tasks.values(),
+                        timeout=min(AC_CHARGER_PUBLISH_GRACE, self.update_interval.total_seconds()),
+                    )
+                    if pending:
+                        # Publish the fresh plant/inverter snapshot without moving
+                        # HA's refresh timer or declaring the poll complete.
+                        early_data = {**snapshot, "ac_chargers": completed_charger_data()}
+                        self.data = early_data
+                        self.async_update_listeners()
+
                 for name, task in ac_tasks.items():
                     try:
                         ac_charger_data[name] = await task
                     except Exception:
-                        ac_charger_data[name] = {}
+                        pass  # Preserve the empty charger row.
 
                 # Unknown/unsupported registers during discovery are expected.
                 # A poll with actual read failures and no usable readings is
@@ -170,32 +213,44 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # snapshot until HA marks the coordinator unavailable.
                 readings = [plant_data, *inverter_data.values(),
                             *dc_charger_data.values(), *ac_charger_data.values()]
-                if (any(item["status"] in {"partial", "error"} for item in device_timings.values())
+                if (any(item["status"] in degraded_statuses for item in device_timings.values())
                         and not any(value is not None for values in readings for value in values.values())):
                     raise UpdateFailed("No Sigenergy register readings succeeded")
 
-                # Merge fetched data into existing coordinator data
-                # Preserve the _sensors_initialized flag across updates
-                sensors_initialized = self.data.get("_sensors_initialized", False) if self.data else False
-                self.data = {
-                    "plant": plant_data,
-                    "inverters": inverter_data,
-                    "ac_chargers": ac_charger_data,
-                    "dc_chargers": dc_charger_data,
-                    "_sensors_initialized": sensors_initialized,  # Preserve flag across updates
-                }
+                # A listener may have completed sensor initialization during
+                # the early publication.
+                if early_data is not None:
+                    snapshot["_sensors_initialized"] = early_data["_sensors_initialized"]
+                self.data = snapshot
                 _LOGGER.debug("RBS-coordinator-106-coordinator-post Merged fetched, len: %s data: %s", len(self.data), self.data)
-                
+
                 # Return the updated, complete data structure
-                status = ("partial" if any(item["status"] in {"partial", "error"}
+                status = ("partial" if any(item["status"] in degraded_statuses
                           for item in device_timings.values()) else "success")
                 if status == "partial":
                     self.partial_update_count += 1
                 self._last_successful_update_sequence = update_sequence
                 return self.data
         except asyncio.TimeoutError as exception:
-            status = "timeout"
             self.update_timeout_count += 1
+            if can_publish_without_charger and snapshot is not None:
+                # Propagating the deadline can already have cancelled the
+                # charger that the coordinator was awaiting.
+                chargers_at_deadline = {
+                    name for name, task in ac_tasks.items()
+                    if task.cancelled() or not task.done()
+                }
+                # The primary data is usable even if a charger consumed the
+                # rest of the coordinator deadline. The finally block stops
+                # pending workflows and lets wire requests finish safely.
+                status = "partial"
+                self.partial_update_count += 1
+                self._last_successful_update_sequence = update_sequence
+                snapshot["ac_chargers"] = completed_charger_data()
+                if early_data is not None:
+                    snapshot["_sensors_initialized"] = early_data["_sensors_initialized"]
+                return snapshot
+            status = "timeout"
             self.update_failure_count += 1
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
         except Exception as exception:
@@ -216,6 +271,11 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 if device_tasks:
                     await asyncio.gather(*device_tasks, return_exceptions=True)
             finally:
+                for name in chargers_at_deadline:
+                    device_timings.setdefault(f"ac_charger:{name}", {}).update(
+                        status="error", error_type="TimeoutError",
+                    )
+
                 # Include failed attempts, and keep workflow cleanup separate
                 # from the fetch deadline. Device times include broker waits;
                 # they overlap and must not be summed as wire transaction time.
