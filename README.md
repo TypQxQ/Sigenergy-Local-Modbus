@@ -76,7 +76,9 @@ Custom names, entity IDs and history are preserved.
 **Controls start in read-only mode.** To use them, disable read-only mode in the
 integration options and enable the required control entities in Home Assistant.
 Check each setting before changing it. For EMS automation sequencing and device
-details, see the [usage guide](docs/USAGE.md).
+details, see the [usage guide](docs/USAGE.md). The
+[Home Assistant entity reference](docs/MODBUS_ENTITIES.md) explains what each
+sensor or control does, when to use it, and which equipment it needs.
 
 ## Troubleshooting
 

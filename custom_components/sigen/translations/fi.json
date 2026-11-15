@@ -32,8 +32,6 @@
           "ac_charger_slave_ids": "AC-laturien laitetunnukset (erota useat pilkuilla; jätä tyhjäksi, jos AC-laturia ei ole)",
           "dc_charger_slave_ids": "Invertterien tunnukset, joihin on liitetty DC-latureita (erota useat pilkuilla)",
           "scan_interval": "Lukuväli (sekuntia)",
-          "migrate_yaml": "Siirrä anturiarvot vanhasta YAML-määrityksestä",
-          "migrate_yaml_description": "Jos käytössä, anturien alkuarvot tuodaan vanhasta YAML-määrityksestä, jos se on olemassa.",
           "read_only": "Vain luku -tila",
           "slave_id": "Laitteiston laitetunnus"
         },
@@ -1777,12 +1775,6 @@
       },
       "inverter_start_stop": {
         "name": "Invertteri päälle/pois"
-      },
-      "ac_charger_start_stop": {
-        "name": "AC-laturi päälle/pois (vanhentunut)"
-      },
-      "dc_charging": {
-        "name": "DC-lataus (vanhentunut)"
       }
     }
   },

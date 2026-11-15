@@ -45,7 +45,7 @@ def load_controls():
                                         ('select.py', 'SigenergySelect', 'SelectEntity')]:
         tree = ast.parse((ROOT / filename).read_text(encoding='utf-8'))
         helpers = [n for n in tree.body if isinstance(n, ast.FunctionDef)
-                   and (n.name.startswith('_deprecated_') or n.name == '_power_limit_value')]
+                   and n.name == '_power_limit_value']
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == classname)
         cls.body = [n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name != '__init__']
         scope[parent] = type(parent, (), {})
@@ -137,22 +137,13 @@ class TestMissingControlReadings(unittest.IsolatedAsyncioTestCase):
 
     async def test_write_only_power_switches_read_the_running_state(self):
         for role, key, state in [('plant', 'plant_start_stop', 'plant_running_state'),
-                                 ('inverter', 'inverter_start_stop', 'inverter_running_state'),
-                                 ('ac_charger', 'ac_charger_start_stop', 'ac_charger_system_state')]:
-            e = self.entity('switch', key, {state: 3 if role == 'ac_charger' else 1}, role=role)
+                                 ('inverter', 'inverter_start_stop', 'inverter_running_state')]:
+            e = self.entity('switch', key, {state: 1}, role=role)
             self.assertTrue(e.available)
             self.assertTrue(e.is_on)
             e.coordinator.data[next(iter(e.coordinator.data))] = {} if role == 'plant' else {'Plant': {state: None}}
             self.assertFalse(e.available)
             self.assertIsNone(e.is_on)
-
-    async def test_legacy_dc_write_only_control_retains_telemetry_fallback(self):
-        e = self.entity('switch', 'dc_charging', {'dc_charger_output_power': 0}, role='dc_charger', name='Inv')
-        self.assertTrue(e.available)
-        self.assertFalse(e.is_on)
-        e.coordinator.data['dc_chargers']['Inv'] = {'dc_charger_vehicle_soc': 50}
-        self.assertTrue(e.available)  # Write-only command still usable.
-        self.assertIsNone(e.is_on)  # No false off without a state/power reading.
 
     async def test_base_does_not_apply_control_guard_to_calculated_sensors(self):
         e = self.entity('number', 'plant_ess_max_charging_limit', {})

@@ -32,8 +32,6 @@
           "ac_charger_slave_ids": "ID dei caricatori AC (separati da virgole se multipli; lascia vuoto se non ci sono caricatori AC)",
           "dc_charger_slave_ids": "ID degli inverter con caricatori DC collegati (separati da virgole se multipli)",
           "scan_interval": "Intervallo di lettura (secondi)",
-          "migrate_yaml": "Migra i valori dei sensori dalla vecchia configurazione YAML",
-          "migrate_yaml_description": "Se abilitata, i valori iniziali dei sensori vengono importati dalla vecchia configurazione YAML, se presente.",
           "read_only": "Modalità di sola lettura",
           "slave_id": "ID del dispositivo dell’impianto"
         },
@@ -1777,12 +1775,6 @@
       },
       "inverter_start_stop": {
         "name": "Accensione dell’inverter"
-      },
-      "ac_charger_start_stop": {
-        "name": "Accensione del caricatore AC (obsoleto)"
-      },
-      "dc_charging": {
-        "name": "Carica DC (obsoleta)"
       }
     }
   },

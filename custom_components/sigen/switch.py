@@ -13,19 +13,14 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.exceptions import HomeAssistantError
 
-from .common import generate_sigen_entity, generate_device_id
+from .common import generate_sigen_entity
 from .const import (
-    DEVICE_TYPE_AC_CHARGER,
-    DEVICE_TYPE_DC_CHARGER,
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
     DOMAIN,
-    CONF_INVERTER_HAS_DCCHARGER,
 )
 from .coordinator import SigenergyDataUpdateCoordinator # Import coordinator
-from .device_registry_compat import parent_device_info
 from .sigen_entity import SigenergyEntity # Import the new base class
-from .modbusregisterdefinitions import DCChargerRunningState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,40 +36,8 @@ class SigenergySwitchEntityDescription(SwitchEntityDescription):
     # Make turn_on/off functions async and update type hint to accept coordinator
     turn_on_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any]], Coroutine[Any, Any, None]] = lambda coordinator, identifier: asyncio.sleep(0) # Placeholder async lambda
     turn_off_fn: Callable[[SigenergyDataUpdateCoordinator, Optional[Any]], Coroutine[Any, Any, None]] = lambda coordinator, identifier: asyncio.sleep(0) # Placeholder async lambda
-    available_fn: Callable[[Dict[str, Any], Optional[Any]], bool] = lambda data, _: True
     entity_registry_enabled_default: bool = True
     register_support_keys: Optional[tuple[str, ...]] = None
-
-
-def _deprecated_ac_charger_switch_available(data: Dict[str, Any], identifier: Optional[Any]) -> bool:
-    """Preserve legacy switch availability when charger state is missing."""
-    return data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") not in (0, 1)
-
-
-def _deprecated_dc_charger_switch_available(data: Dict[str, Any], identifier: Optional[Any]) -> bool:
-    """Preserve the deprecated switch's off state when the charger is idle."""
-    charger_data = data.get("dc_chargers", {}).get(identifier)
-    if not isinstance(charger_data, dict):
-        return False
-
-    state = charger_data.get("dc_charger_running_state")
-    if state is None:
-        return any(value is not None for value in charger_data.values())
-    return state != DCChargerRunningState.UNAVAILABLE
-
-
-def _deprecated_dc_charger_switch_is_on(data: Dict[str, Any], identifier: Optional[Any]) -> bool | None:
-    """Return the DC charging state with a legacy telemetry fallback."""
-    charger_data = data.get("dc_chargers", {}).get(identifier, {})
-    state = charger_data.get("dc_charger_running_state")
-    if state is not None:
-        return state in (
-            DCChargerRunningState.CHARGING,
-            DCChargerRunningState.DISCHARGING,
-        )
-
-    output_power = charger_data.get("dc_charger_output_power")
-    return output_power != 0 if output_power is not None else None
 
 
 PLANT_SWITCHES: list[SigenergySwitchEntityDescription] = [
@@ -141,43 +104,6 @@ INVERTER_SWITCHES: list[SigenergySwitchEntityDescription] = [
     ),
     # Register 41500 (inverter_remote_ems_dispatch_enable) removed in Modbus v2.8
 ]
-AC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
-    SigenergySwitchEntityDescription(
-        key="ac_charger_start_stop",
-        name="AC Charger Power (Deprecated)",
-        icon="mdi:ev-station",
-        # identifier here will be ac_charger_name
-        is_on_fn=lambda data, identifier: data.get("ac_chargers", {}).get(identifier, {}).get("ac_charger_system_state") in (2,3,4,5),
-        # Check if EV is connected (State != 0 (Init) and != 1 (A1_A2))
-        available_fn=_deprecated_ac_charger_switch_available,
-        turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 0),
-        turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("ac_charger", identifier, "ac_charger_start_stop", 1),
-        register_support_keys=("ac_charger_system_state",),
-        entity_registry_enabled_default=False,
-    ),
-]
-
-DC_CHARGER_SWITCHES: list[SigenergySwitchEntityDescription] = [
-    SigenergySwitchEntityDescription(
-        key="dc_charging",
-        name="DC Charging (Deprecated)",
-        icon="mdi:ev-station",
-        # is_on reflects the reported running state (CHARGING or DISCHARGING), not
-        # instantaneous output power. During a genuine session the output power
-        # momentarily reads exactly 0.0 kW at taper/handshake/cycle boundaries, which
-        # made an `output_power != 0` test flap the switch off/on every poll (and, via
-        # plug-in negotiation, a brief on/off on every connect). running_state is the
-        # stable signal and still covers both charging and discharging (like the AC charger).
-        is_on_fn=_deprecated_dc_charger_switch_is_on,
-        available_fn=_deprecated_dc_charger_switch_available,
-        turn_on_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 0),
-        turn_off_fn=lambda coordinator, identifier: coordinator.async_write_parameter("dc_charger", identifier, "dc_charger_start_stop", 1),
-        # This legacy control can still issue its write-only command without the
-        # optional running-state register and then falls back to output power.
-        register_support_keys=(),
-        entity_registry_enabled_default=False,
-    ),
-]
 
 
 async def async_setup_entry(
@@ -192,7 +118,7 @@ async def async_setup_entry(
 
     # Helper to add entities to the list
     def add_entities_for_device(device_name, device_conn,
-                                entity_descriptions, device_type, **kwargs):
+                                entity_descriptions, device_type):
         entities_to_add.extend(
             generate_sigen_entity(
                 plant_name,
@@ -202,38 +128,15 @@ async def async_setup_entry(
                 SigenergySwitch,
                 entity_descriptions,
                 device_type,
-                **kwargs,
             )
         )
 
     # Plant Switches
     add_entities_for_device(None, None, PLANT_SWITCHES, DEVICE_TYPE_PLANT)
 
-    # Inverter and related switches
+    # Inverter switches
     for device_name, device_conn in coordinator.hub.inverter_connections.items():
         add_entities_for_device(device_name, device_conn, INVERTER_SWITCHES, DEVICE_TYPE_INVERTER)
-
-        # DC Charger
-        if device_conn.get(CONF_INVERTER_HAS_DCCHARGER, False):
-            dc_name = f"{device_name} DC Charger"
-            parent_inverter_id = f"{coordinator.hub.config_entry.entry_id}_{generate_device_id(device_name)}"
-            dc_id = f"{parent_inverter_id}_dc_charger"
-            dc_device_info = DeviceInfo(
-                identifiers={(DOMAIN, dc_id)},
-                name=dc_name,
-                manufacturer="Sigenergy",
-                model="DC Charger",
-                **parent_device_info(
-                    hass,
-                    config_entry.entry_id,
-                    (DOMAIN, parent_inverter_id),
-                ),
-            )
-            add_entities_for_device(device_name, device_conn, DC_CHARGER_SWITCHES, DEVICE_TYPE_DC_CHARGER, device_info=dc_device_info)
-
-    # AC Charger Switches
-    for device_name, device_conn in coordinator.hub.ac_charger_connections.items():
-        add_entities_for_device(device_name, device_conn, AC_CHARGER_SWITCHES, DEVICE_TYPE_AC_CHARGER)
 
     if entities_to_add:
         async_add_entities(entities_to_add)
@@ -275,12 +178,7 @@ class SigenergySwitch(SigenergyEntity, SwitchEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        if not super().available or not self._control_reading_available():
-            return False
-
-        # Use device_name as the primary identifier passed to the lambda/function
-        identifier = self._device_name
-        return self.entity_description.available_fn(self.coordinator.data, identifier)
+        return super().available and self._control_reading_available()
 
     @property
     def is_on(self) -> bool | None:

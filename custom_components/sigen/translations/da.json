@@ -32,8 +32,6 @@
           "ac_charger_slave_ids": "AC-ladernes enheds-ID’er (kommasepareret ved flere; tomt, hvis der ikke er en AC-lader)",
           "dc_charger_slave_ids": "ID’er for vekselrettere med tilsluttede DC-ladere (kommasepareret ved flere)",
           "scan_interval": "Aflæsningsinterval (sekunder)",
-          "migrate_yaml": "Overfør sensorværdier fra ældre YAML-konfiguration",
-          "migrate_yaml_description": "Hvis aktiveret, importeres sensorernes startværdier fra den ældre YAML-konfiguration, hvis den findes.",
           "read_only": "Skrivebeskyttet tilstand",
           "slave_id": "Anlæggets enheds-ID"
         },
@@ -1777,12 +1775,6 @@
       },
       "inverter_start_stop": {
         "name": "Vekselretter tænd/sluk"
-      },
-      "ac_charger_start_stop": {
-        "name": "AC-lader tænd/sluk (forældet)"
-      },
-      "dc_charging": {
-        "name": "DC-opladning (forældet)"
       }
     }
   },
