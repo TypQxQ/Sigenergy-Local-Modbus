@@ -32,8 +32,6 @@
           "ac_charger_slave_ids": "AC Charger Device IDs (comma-separated when multiple. Default is empty for no AC charger)",
           "dc_charger_slave_ids": "Inverter IDs with DC Chargers attached (comma-separated when multiple)",
           "scan_interval": "Scan Interval (seconds)",
-          "migrate_yaml": "Migrate legacy YAML sensor values",
-          "migrate_yaml_description": "If enabled, initial sensor values will be imported from the legacy YAML configuration (if present).",
           "read_only": "Read-Only Mode",
           "slave_id": "Plant device ID"
         },
@@ -1777,12 +1775,6 @@
       },
       "inverter_start_stop": {
         "name": "Inverter power"
-      },
-      "ac_charger_start_stop": {
-        "name": "AC charger power (deprecated)"
-      },
-      "dc_charging": {
-        "name": "DC charging (deprecated)"
       }
     }
   },

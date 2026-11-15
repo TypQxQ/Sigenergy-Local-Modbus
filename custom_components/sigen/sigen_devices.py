@@ -914,9 +914,17 @@ class _ComponentGroup:
             if field_name in words and field_name in known_fields:
                 field = known_fields[field_name]
                 try:
-                    if len(words[field_name]) != field.count:
+                    field_words = words[field_name]
+                    if len(field_words) != field.count:
                         raise ValueError("Incomplete register field")
-                    values[field_name] = field.decode(words[field_name])
+                    if (
+                        field_name in {"plant_general_load_power", "plant_total_load_power"}
+                        and field_words == [0xFFFF, 0xFFFF]
+                    ):
+                        # Some firmware returns all ones for these load readings.
+                        values[field_name] = None
+                    else:
+                        values[field_name] = field.decode(field_words)
                 except Exception as ex:
                     values[field_name] = None
                     if failures is not None:

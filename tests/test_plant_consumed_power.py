@@ -59,6 +59,13 @@ class TestPlantConsumedPower(unittest.TestCase):
         data["ac_chargers"]["Second"]["ac_charger_charging_power"] = 1
         self.assertEqual(2, self.consumed(data))
 
+    def test_missing_direct_consumption_uses_fallback(self):
+        data = self.data({})
+        data["plant"]["plant_general_load_power"] = None
+        self.assertEqual(4, self.consumed(data))
+        data["ac_chargers"]["Charger"] = {}
+        self.assertIsNone(self.consumed(data))
+
     def test_direct_consumption_wins_over_fallback(self):
         data = self.data({"Charger": {}})
         data["plant"]["plant_general_load_power"] = 2

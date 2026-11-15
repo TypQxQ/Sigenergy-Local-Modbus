@@ -32,8 +32,6 @@
           "ac_charger_slave_ids": "Enhets-ID:n för AC-laddare (kommaseparerade; lämna tomt om inga finns)",
           "dc_charger_slave_ids": "ID:n för växelriktare med DC-laddare (kommaseparerade)",
           "scan_interval": "Uppdateringsintervall (sekunder)",
-          "migrate_yaml": "Importera sensorvärden från äldre YAML-konfiguration",
-          "migrate_yaml_description": "Om detta aktiveras hämtas sensorns startvärden från den äldre YAML-konfigurationen, om den finns.",
           "read_only": "Skrivskyddat läge",
           "slave_id": "Anläggningens enhets-ID"
         },
@@ -1777,12 +1775,6 @@
       },
       "inverter_start_stop": {
         "name": "Växelriktarens strömbrytare"
-      },
-      "ac_charger_start_stop": {
-        "name": "AC-laddarens strömbrytare (utfasad)"
-      },
-      "dc_charging": {
-        "name": "DC-laddning (utfasad)"
       }
     }
   },

@@ -32,8 +32,6 @@
           "ac_charger_slave_ids": "AC-Ladegerät-IDs (mehrere durch Kommas trennen; für kein AC-Ladegerät leer lassen)",
           "dc_charger_slave_ids": "Wechselrichter-IDs mit angeschlossenen DC-Ladegeräten (mehrere durch Kommas trennen)",
           "scan_interval": "Abfrageintervall (Sekunden)",
-          "migrate_yaml": "Sensorwerte aus alter YAML-Konfiguration übernehmen",
-          "migrate_yaml_description": "Wenn aktiviert, werden die Anfangswerte der Sensoren aus der alten YAML-Konfiguration übernommen, sofern vorhanden.",
           "read_only": "Nur-Lese-Modus",
           "slave_id": "Anlagen-Geräte-ID"
         },
@@ -1777,12 +1775,6 @@
       },
       "inverter_start_stop": {
         "name": "Wechselrichter ein/aus"
-      },
-      "ac_charger_start_stop": {
-        "name": "AC-Ladegerät ein/aus (veraltet)"
-      },
-      "dc_charging": {
-        "name": "DC-Laden (veraltet)"
       }
     }
   },

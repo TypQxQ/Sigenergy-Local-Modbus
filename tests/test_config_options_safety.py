@@ -200,7 +200,12 @@ class TestRetiredEnergyAdjustment(unittest.IsolatedAsyncioTestCase):
 
     async def test_empty_and_numeric_stale_submissions_abort_without_mutation(self):
         scope = load_flows()
-        values = {entity_id: 12.0 for entity_id in scope["RESETTABLE_SENSORS"]}
+        values = {
+            "sensor.sigen_plant_accumulated_pv_energy": 12.0,
+            "sensor.sigen_plant_accumulated_consumed_energy": 12.0,
+            "sensor.sigen_plant_accumulated_grid_import_energy": 12.0,
+            "sensor.sigen_plant_accumulated_grid_export_energy": 12.0,
+        }
         for submission in (None, {}, values):
             with self.subTest(submission=submission):
                 flow = options_flow(scope)

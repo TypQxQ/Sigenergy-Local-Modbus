@@ -32,8 +32,6 @@
           "ac_charger_slave_ids": "Identyfikatory ładowarek AC (oddziel przecinkami, jeśli jest ich kilka; pozostaw puste, jeśli nie ma ładowarki AC)",
           "dc_charger_slave_ids": "Identyfikatory falowników z podłączonymi ładowarkami DC (oddziel przecinkami, jeśli jest ich kilka)",
           "scan_interval": "Interwał odczytu (sekundy)",
-          "migrate_yaml": "Przenieś wartości czujników ze starszej konfiguracji YAML",
-          "migrate_yaml_description": "Po włączeniu początkowe wartości czujników zostaną zaimportowane ze starszej konfiguracji YAML, jeśli istnieje.",
           "read_only": "Tryb tylko do odczytu",
           "slave_id": "Identyfikator urządzenia instalacji"
         },
@@ -1777,12 +1775,6 @@
       },
       "inverter_start_stop": {
         "name": "Włączenie falownika"
-      },
-      "ac_charger_start_stop": {
-        "name": "Włączenie ładowarki AC (przestarzałe)"
-      },
-      "dc_charging": {
-        "name": "Ładowanie DC (przestarzałe)"
       }
     }
   },

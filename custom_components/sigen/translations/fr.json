@@ -32,8 +32,6 @@
           "ac_charger_slave_ids": "Identifiants des bornes CA (séparés par des virgules s’il y en a plusieurs ; laisser vide si aucune borne CA)",
           "dc_charger_slave_ids": "Identifiants des onduleurs avec bornes CC raccordées (séparés par des virgules s’il y en a plusieurs)",
           "scan_interval": "Intervalle de lecture (secondes)",
-          "migrate_yaml": "Migrer les valeurs des capteurs de l’ancienne configuration YAML",
-          "migrate_yaml_description": "Si cette option est activée, les valeurs initiales des capteurs seront importées depuis l’ancienne configuration YAML, si elle existe.",
           "read_only": "Mode lecture seule",
           "slave_id": "Identifiant de l’installation"
         },
@@ -1777,12 +1775,6 @@
       },
       "inverter_start_stop": {
         "name": "Marche/arrêt de l’onduleur"
-      },
-      "ac_charger_start_stop": {
-        "name": "Marche/arrêt de la borne CA (obsolète)"
-      },
-      "dc_charging": {
-        "name": "Charge CC (obsolète)"
       }
     }
   },
