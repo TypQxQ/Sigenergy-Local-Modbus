@@ -39,7 +39,8 @@ class TestDiagnosticDeviceMatching(unittest.IsolatedAsyncioTestCase):
             'Garage East': {}, 'Roof PV Inverter': {}}, ac_charger_connections={'Wallbox': {}},
             _plant_host='fixture', _plant_port=502, plant_id=247, inverter_count=3,
             ac_charger_count=1, read_only=False, probe_retry_delay=60,
-            discovery_diagnostics=lambda: {}, get_register_support=lambda *args: True)
+            discovery_diagnostics=lambda: {}, poll_endpoint_diagnostics=lambda: [],
+            get_register_support=lambda *args: True)
         self.hass = SimpleNamespace(data={'sigen': {'entry': {'coordinator': self.coordinator, 'hub': self.hub}}})
         self.scope = {'re': re, 'DOMAIN': 'sigen', 'CONF_INVERTER_HAS_DCCHARGER': self.flag,
             'TO_REDACT': set(), 'HA_VERSION': 'fixture', 'pymodbus_version': 'fixture', 'tmodbus_version': 'fixture',

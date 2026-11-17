@@ -66,6 +66,7 @@ class TestRestoreDiagnostics(unittest.IsolatedAsyncioTestCase):
         discovery = {"devices": {"inverter:1": {"poll_quality": {"status": "partial"}}}}
         hub = SimpleNamespace(
             discovery_diagnostics=Mock(return_value=discovery),
+            poll_endpoint_diagnostics=Mock(return_value=[]),
             _plant_host="redacted", _plant_port=502, plant_id=247,
             inverter_count=0, ac_charger_count=0, read_only=True,
             probe_retry_delay=60,

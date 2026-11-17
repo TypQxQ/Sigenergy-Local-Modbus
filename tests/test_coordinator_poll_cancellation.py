@@ -39,6 +39,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
         "time": time,
         "STARTUP_TIMEOUT": 180,
         "UPDATE_TIMEOUT": 60,
+        "SLOW_POLL_WARNING_COUNT": 10,
         "async_timeout": SimpleNamespace(timeout=lambda _seconds: asyncio.timeout(timeout)),
         "dt_util": SimpleNamespace(utcnow=lambda: datetime.now(timezone.utc)),
         "CONF_INVERTER_HAS_DCCHARGER": "has_dc_charger",
@@ -72,6 +73,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
         return await read_device(f"{name} DC")
 
     hub = SimpleNamespace(
+        begin_poll_update=lambda: None,
         inverter_connections={} if ac_only else {
             "inverter 1": {"has_dc_charger": True}, "inverter 2": {},
         },
@@ -85,6 +87,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
     coordinator = SimpleNamespace(
         hub=hub, data=None, largest_update_interval=0.0, latest_fetch_time=0.0,
         _update_sequence=0, _last_successful_update_sequence=0,
+        _consecutive_slow_polls=0,
         update_timeout_count=0, update_failure_count=0,
         partial_update_count=0, _degraded_devices=set(),
     )

@@ -22,10 +22,9 @@ outright if the automation retriggers itself (`mode: restart`) while the
 previous run is still in flight. Without shielding, that cancellation
 reaches straight into the in-flight Modbus request: the device still answers
 it, but nothing is listening for that transaction ID any more, which
-tmodbus logs as "Received unexpected response" and recovers from by
-dropping and reconnecting the link -- a connection blip (and a few seconds
-of every entity on it going unavailable) that has nothing to do with the
-device or the network. The request finishes and its result is consumed
+tmodbus logs at WARNING as "Received unexpected response" and discards.
+A header or function-code mismatch instead disconnects the link with
+`ModbusDesyncError`. The request finishes and its result is consumed
 regardless of whether the caller is still around. Unlike `asyncio.shield()`,
 this does not report late errors again through the loop on Python 3.14.
 """
@@ -40,7 +39,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 from modbus_connection import ModbusConnectionError, ModbusError, ModbusUnit
 from modbus_connection.exceptions import IllegalDataAddressError
@@ -61,6 +60,9 @@ from .sigen_components import (
     PlantPreheating,
     PlantRunningInfo,
 )
+
+if TYPE_CHECKING:
+    from .modbus import _EndpointPoll
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,11 +110,16 @@ class _ReadInterruptedByWrite(ModbusError):
     """A discarded read may be retried after endpoint writes drain."""
 
 
+class _EndpointPollStopped(ModbusError):
+    """A supported block was skipped because the endpoint stopped polling."""
+
+
 class _EndpointWrites:
     """Track protected wire writes, never their callers or refreshes."""
 
     def __init__(self) -> None:
         self.pending: set[asyncio.Task[Any]] = set()
+        self.disconnect_lock = asyncio.Lock()
 
     async def async_drain(self) -> None:
         while pending := {task for task in self.pending if not task.done()}:
@@ -166,6 +173,7 @@ class _ComponentGroup:
         self._read_round = None
         self._reset_epoch = 0
         self._endpoint_writes = _EndpointWrites()
+        self._endpoint_poll: _EndpointPoll | None = None
         self.poll_write_restarts = 0
         self.poll_write_recoveries = 0
         self.poll_write_recovery_failures = 0
@@ -601,6 +609,10 @@ class _ComponentGroup:
                 self._prefetched_at.pop(name, None)
         progress = None
         if self.incremental:
+            if self._read_round is not None and self._endpoint_poll and self._endpoint_poll.stopped:
+                # A stopped endpoint must not receive identity reads. Start an
+                # empty round so the skipped blocks appear in poll quality.
+                self.reset_poll_progress()
             if (self._read_round is not None
                     and time.monotonic() - self._read_round["started"] > _POLL_PROGRESS_MAX_AGE):
                 self._read_round = None
@@ -628,11 +640,16 @@ class _ComponentGroup:
                 reset_epoch = self._reset_epoch
             else:
                 self.poll_resumes += 1
+                # Skips describe the previous update's stop, not wire attempts.
+                saved_failures = self._read_round.get("failures", {})
+                for key in list(saved_failures):
+                    if key[-1] == "skipped":
+                        del saved_failures[key]
             progress = self._read_round
         failures = progress.setdefault("failures", {}) if progress is not None else {}
         values: dict[str, Any] = {}
         for name, component in self._readable.items():
-            if not self.incremental:
+            if not self.incremental and not (self._endpoint_poll and self._endpoint_poll.stopped):
                 await self._async_ensure_resolved(name, component)
             prefetched = self._prefetched.pop(name, {})
             self._prefetched_at.pop(name, None)
@@ -667,12 +684,12 @@ class _ComponentGroup:
                 self._on_write()
 
                 async def write_and_invalidate():
-                    try:
-                        await component.write(register_name, value)
-                    finally:
-                        # This runs even when the caller was cancelled while
-                        # the actual protected wire write was still pending.
-                        self._on_write()
+                    async with self._endpoint_writes.disconnect_lock:
+                        try:
+                            await component.write(register_name, value)
+                        finally:
+                            # Invalidate even after cancellation of the caller.
+                            self._on_write()
 
                 await self._async_request(write_and_invalidate(), write=True)
                 return
@@ -742,6 +759,13 @@ class _ComponentGroup:
         )
         words: dict[str, list[int]] = {}
         errors: dict[str, ModbusError] = {}
+        poll = self._endpoint_poll if not probing and failures is not None else None
+        update = poll.update if poll is not None else 0
+        cancelled = False
+
+        def is_current() -> bool:
+            return not cancelled and (progress is None or progress is self._read_round)
+
         for start, count in _group_contiguous_blocks(
             [(field.address, field.count) for field in fields.values()]
         ):
@@ -752,7 +776,14 @@ class _ComponentGroup:
 
             async def read_and_commit(start=start, count=count, affected=affected):
                 try:
-                    block = await read(start, count)
+                    if poll is None:
+                        block = await read(start, count)
+                    else:
+                        block = await poll.async_read(unit, read, start, count, update, is_current)
+                except _EndpointPollStopped:
+                    # A queued block can be abandoned while its caller is
+                    # cancelled. Leave it eligible for a later read round.
+                    raise
                 except ModbusError as ex:
                     if (failures is not None and not isinstance(ex, ModbusConnectionError)
                             and (progress is None or progress is self._read_round)):
@@ -777,11 +808,21 @@ class _ComponentGroup:
 
             try:
                 block = await self._async_request(read_and_commit())
+            except asyncio.CancelledError:
+                cancelled = True
+                raise
             except ModbusConnectionError:
                 raise
             except ModbusError as ex:
                 if progress is not None and progress is not self._read_round:
                     break
+                if isinstance(ex, _EndpointPollStopped):
+                    if failures is not None:
+                        self._save_poll_failure(
+                            failures, name, component, start, count, affected, ex, stage="skipped",
+                        )
+                    errors.update((field_name, ex) for field_name in affected)
+                    continue
                 if self.incremental and not probing and isinstance(ex, IllegalDataAddressError):
                     affected = [field_name for field_name, field in fields.items()
                                 if start <= field.address < start + count]

@@ -19,6 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 STARTUP_TIMEOUT = 180
 UPDATE_TIMEOUT = 60
 AC_CHARGER_PUBLISH_GRACE = 2.0
+SLOW_POLL_WARNING_COUNT = 10
 
 
 class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
@@ -40,6 +41,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self.data: dict[str, Any] | None = None
         self._update_sequence = 0
         self._last_successful_update_sequence = 0
+        self._consecutive_slow_polls = 0
         self.startup_fetch_time: float | None = None
         self.update_timeout_count = 0
         self.update_failure_count = 0
@@ -78,6 +80,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Update data via Modbus library."""
+        self.hub.begin_poll_update()
         self._update_sequence += 1
         update_sequence = self._update_sequence
         device_tasks: set[asyncio.Task] = set()
@@ -281,6 +284,20 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # they overlap and must not be summed as wire transaction time.
                 self.latest_fetch_time = fetch_time
                 self.largest_update_interval = max(self.largest_update_interval, fetch_time)
+                if phase == "poll" and status != "cancelled":
+                    interval = self.update_interval.total_seconds()
+                    if fetch_time > interval:
+                        self._consecutive_slow_polls += 1
+                        if self._consecutive_slow_polls == SLOW_POLL_WARNING_COUNT:
+                            _LOGGER.warning(
+                                "Sigenergy fetch time has exceeded the %.1f s polling interval for %s consecutive polls. "
+                                "Consider a longer polling interval",
+                                interval, SLOW_POLL_WARNING_COUNT,
+                            )
+                    else:
+                        if self._consecutive_slow_polls >= SLOW_POLL_WARNING_COUNT:
+                            _LOGGER.info("Sigenergy fetch time is back within the %.1f s polling interval", interval)
+                        self._consecutive_slow_polls = 0
                 if phase == "startup" and status in {"success", "partial"}:
                     self.startup_fetch_time = fetch_time
                 self.latest_update_timing = {

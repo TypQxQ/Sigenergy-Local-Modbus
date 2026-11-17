@@ -165,6 +165,7 @@ async def async_get_config_entry_diagnostics(
     diagnostics_data = {
         "unknown_alarm_values": unknown_alarm_diagnostics(coordinator.data),
         "discovery": hub.discovery_diagnostics(),
+        "modbus_poll_endpoints": async_redact_data(hub.poll_endpoint_diagnostics(), TO_REDACT),
         "pv_restore": coordinator.pv_restore_diagnostics(),
         "entry": async_redact_data(entry.as_dict(), TO_REDACT),
         "coordinator": {
@@ -239,6 +240,7 @@ async def async_get_device_diagnostics(
     device_diagnostics = {
         "unknown_alarm_values": unknown_alarm_diagnostics(coordinator.data),
         "discovery": hub.discovery_diagnostics(),
+        "modbus_poll_endpoints": async_redact_data(hub.poll_endpoint_diagnostics(), TO_REDACT),
         "pv_restore": coordinator.pv_restore_diagnostics(),
         "device_info": async_redact_data({
             "name": device.name,
