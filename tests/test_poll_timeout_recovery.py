@@ -83,7 +83,7 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
             "requests", "timeouts", "reconnects", "successful_rereads", "endpoint_stops",
         )))
         self.assertEqual(timedelta(0), datetime.fromisoformat(stats["last_reconnect"]).utcoffset())
-        self.assertEqual(3, stats["request_latency_seconds"]["samples"])
+        self.assertEqual(2, stats["request_latency_seconds"]["samples"])
         self.assertIn("10.12.0.9:502", logs.output[0])
         self.assertIn("address 200 (count 1)", logs.output[0])
         self.assertIn("recovered after reconnect", logs.output[1])
@@ -106,7 +106,7 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.endpoint.stopped)
         self.assertEqual(1, self.endpoint.stops)
         blocks = self.group.poll_diagnostics()["failed_blocks"]
-        self.assertEqual([(200, "read", "ModbusTimeoutError"), (300, "skipped", "_EndpointPollStopped")],
+        self.assertEqual([(200, "read", "ModbusTimeoutError"), (300, "skipped", "EndpointStopped")],
                          [(b["address"], b["stage"], b["error_type"]) for b in blocks])
         self.assertEqual(["first", "last", "middle"], other_group.poll_diagnostics()["failed_fields"])
         self.assertIsNone(self.group._read_round)
@@ -115,6 +115,56 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.unit, "read_input_registers", wraps=self.unit.read_input_registers) as read:
             self.assertEqual({"first": 1, "middle": 2, "last": 3}, await self.group.async_update())
         self.assertEqual([call(100, 1), call(200, 1), call(300, 1)], read.await_args_list)
+
+    async def test_stopped_endpoint_keeps_saved_round_until_it_can_be_validated(self):
+        for expired in (False, True):
+            with self.subTest(expired=expired):
+                self.endpoint.begin_update()
+                group = self.make_group(self.unit)
+                clock = [100.0]
+                saved_round = {
+                    "started": 90.0,
+                    "words": {"readings": {"first": [1]}},
+                    "attempted": {"readings": {"first"}},
+                    "failures": {},
+                    "identity": {"fixture": "stable"},
+                }
+                group._read_round = saved_round
+                group._prefetched = {"readings": {"middle": [2]}}
+                group._prefetched_at = {"readings": 95.0}
+                epoch = group._reset_epoch
+                self.endpoint.update_timeouts = 2
+                self.unit.load_raw({"input": {100: 91, 200: 92, 300: 3}})
+
+                with (
+                    patch.object(self.devices, "time", SimpleNamespace(monotonic=lambda: clock[0])),
+                    patch.object(self.unit, "read_input_registers", wraps=self.unit.read_input_registers) as read,
+                ):
+                    self.assertEqual({"first": None, "middle": None, "last": None}, await group.async_update())
+                    read.assert_not_awaited()
+                    group._confirm_endpoint_identity.assert_not_awaited()
+                    self.assertIs(saved_round, group._read_round)
+                    self.assertEqual(90.0, saved_round["started"])
+                    self.assertEqual(epoch, group._reset_epoch)
+                    self.assertEqual({"readings": {"first": [1]}}, saved_round["words"])
+                    self.assertEqual({"readings": {"middle": [2]}}, group._prefetched)
+                    self.assertEqual({"readings": 95.0}, group._prefetched_at)
+                    self.assertEqual(
+                        ["skipped"] * 3,
+                        [block["stage"] for block in group.poll_diagnostics()["failed_blocks"]],
+                    )
+
+                    self.endpoint.begin_update()
+                    if expired:
+                        clock[0] += self.devices._POLL_PROGRESS_MAX_AGE
+                        self.assertEqual({"first": 91, "middle": 92, "last": 3}, await group.async_update())
+                        self.assertEqual([call(100, 1), call(200, 1), call(300, 1)], read.await_args_list)
+                        self.assertEqual(1, group.poll_expired_rounds)
+                        group._confirm_endpoint_identity.assert_not_awaited()
+                    else:
+                        self.assertEqual({"first": 1, "middle": 2, "last": 3}, await group.async_update())
+                        read.assert_awaited_once_with(300, 1)
+                        group._confirm_endpoint_identity.assert_awaited_once_with({"fixture": "stable"})
 
     async def test_cooldown_continues_after_first_failure_then_stops(self):
         with (
@@ -142,8 +192,36 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(4, read.await_count)
         disconnect.assert_awaited_once()
         self.assertIn("Could not disconnect", logs.output[0])
-        self.assertEqual((0, 0), (self.endpoint.reconnects, self.endpoint.successful_rereads))
-        self.assertIsNone(self.endpoint.last_reconnect_at)
+        self.assertEqual((1, 1), (self.endpoint.reconnects, self.endpoint.successful_rereads))
+        self.assertIsNotNone(self.endpoint.last_reconnect_at)
+        self.assertEqual(["DEBUG", "WARNING", "INFO"], [record.levelname for record in logs.records])
+        self.assertIsNotNone(logs.records[0].exc_info)
+        self.assertIn("Recycling Modbus connection", logs.output[1])
+        self.assertIn("Modbus read recovered after reconnect", logs.output[2])
+
+    async def test_reread_that_reconnects_is_excluded_from_latency_samples(self):
+        clock = [0.0]
+        attempts = 0
+
+        async def read(address, count):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                clock[0] += 20.0
+                raise ModbusTimeoutError("no reply")
+            clock[0] += 2.0 if attempts == 2 else 0.25
+            return [address // 100]
+
+        with (
+            patch.object(self.modbus, "time",
+                         SimpleNamespace(monotonic=lambda: clock[0], perf_counter=lambda: clock[0])),
+            patch.object(self.unit, "read_input_registers", read),
+            patch.object(self.unit, "disconnect", new_callable=AsyncMock),
+        ):
+            self.assertEqual({"first": 1, "middle": 2, "last": 3}, await self.group.async_update())
+        self.assertEqual((4, 1), (self.endpoint.requests, self.endpoint.successful_rereads))
+        self.assertEqual({"samples": 2, "p50": 0.25, "p90": 0.25, "max": 0.25},
+                         self.endpoint.diagnostics()["request_latency_seconds"])
 
     async def test_non_timeout_read_errors_do_not_disconnect(self):
         with (
@@ -432,6 +510,43 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, shared.stops)
         self.assertEqual(1, len(hub.poll_endpoint_diagnostics()))
 
+    async def test_stop_logging_warns_once_until_an_update_finishes_without_a_stop(self):
+        const = _load_sigen_module("const")
+        entry = _ConfigEntry({
+            const.CONF_PLANT_CONNECTION: {const.CONF_HOST: "sigen.local", const.CONF_PORT: 502,
+                                          const.CONF_SLAVE_ID: 247},
+        })
+        with patch.object(self.modbus, "_acquire_unit", return_value=self.unit):
+            hub = self.modbus.SigenergyModbusHub(None, entry)
+        self.addAsyncCleanup(hub.async_close)
+        self.endpoint = hub._plant._group._endpoint_poll
+        hub._plant._group = self.make_group(self.unit)
+        coordinator, _, _ = _make_coordinator()
+        coordinator.hub = hub
+        await coordinator.async_refresh()
+        normal_read = self.unit.read_input_registers
+
+        async def read(address, count):
+            if failing and address != 100:
+                raise ModbusTimeoutError("no reply")
+            return await normal_read(address, count)
+
+        with (
+            patch.object(self.unit, "read_input_registers", read),
+            patch.object(self.unit, "disconnect", new_callable=AsyncMock),
+            self.assertLogs(self.modbus.__name__, "DEBUG") as logs,
+        ):
+            for failing in (True, True, False, False, True):
+                await coordinator.async_refresh()
+                self.assertEqual(failing, self.endpoint.stopped)
+
+        stop_records = [record.levelname for record in logs.records if (
+            record.getMessage().startswith("Stopped Modbus polling")
+            or "finished without stopping" in record.getMessage()
+        )]
+        self.assertEqual(["WARNING", "DEBUG", "INFO", "WARNING"], stop_records)
+        self.assertEqual(3, self.endpoint.stops)
+
     def test_diagnostics_redact_endpoint_host_and_report_bounded_latency_percentiles(self):
         self.endpoint.latencies.extend(range(1, 206))
         diagnostics = Path(__file__).resolve().parents[1] / "custom_components/sigen/diagnostics.py"
@@ -460,6 +575,36 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
 
 
 class TestSlowPollWarning(unittest.IsolatedAsyncioTestCase):
+    async def test_failed_fetches_neither_extend_nor_reset_the_slow_poll_streak(self):
+        coordinator, hub, namespace = _make_coordinator()
+        clock = [0.0]
+        duration = [4.0]
+        read = hub.async_read_plant_data
+
+        async def timed_read():
+            clock[0] += duration[0]
+            return await read()
+
+        namespace["time"] = SimpleNamespace(perf_counter=lambda: clock[0])
+        hub.async_read_plant_data = timed_read
+        logger = namespace["_LOGGER"]
+        await coordinator.async_refresh()
+        coordinator._consecutive_slow_polls = 10
+        hub.fail_read = True
+        await coordinator.async_refresh()
+        duration[0] = 6.0
+        await coordinator.async_refresh()
+        self.assertFalse(coordinator.last_update_success)
+        self.assertEqual(10, coordinator._consecutive_slow_polls)
+        logger.info.assert_not_called()
+
+        hub.fail_read = False
+        duration[0] = 4.0
+        await coordinator.async_refresh()
+        self.assertEqual(0, coordinator._consecutive_slow_polls)
+        recovery_logs = [entry for entry in logger.info.call_args_list if "back within" in entry.args[0]]
+        self.assertEqual(1, len(recovery_logs))
+
     async def test_warns_after_ten_slow_polls_and_logs_recovery_once(self):
         coordinator, hub, namespace = _make_coordinator()
         clock = [0.0]

@@ -93,6 +93,9 @@ class _Hub:
     def begin_poll_update(self):
         pass
 
+    def finish_poll_update(self):
+        pass
+
     async def async_write_parameter(self, *, device_type, device_identifier, register_name, value):
         self.writes.append((device_type, device_identifier, register_name, value))
         if not self.ignore_writes:

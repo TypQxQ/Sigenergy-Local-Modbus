@@ -53,7 +53,7 @@ from .const import (
     DEVICE_TYPE_PLANT,
 )
 from .sigen_devices import PROBE_RETRY_DELAY, SigenergyACCharger, SigenergyInverter, SigenergyPlant
-from .sigen_devices import IDENTITY_REGISTERS, _EndpointPollStopped, _EndpointWrites, _MAX_BLOCK_SPAN
+from .sigen_devices import IDENTITY_REGISTERS, EndpointStopped, _EndpointWrites, _MAX_BLOCK_SPAN
 from .support_cache import SupportCache, device_cache_key
 
 _LOGGER = logging.getLogger(__name__)
@@ -71,6 +71,7 @@ class SigenergyModbusError(HomeAssistantError):
 #: and a dropped connection.
 _REQUEST_TIMEOUT = 20.0
 _RECONNECT_COOLDOWN = 60.0
+_POLL_TIMEOUT_LIMIT = 2
 _DISCOVERY_TIMING_SAMPLES = 8
 _MIN_DISCOVERY_PAUSE = 0.01
 _MAX_PV_STRINGS = 36
@@ -128,20 +129,28 @@ class _EndpointPoll:
         self.reconnects = 0
         self.successful_rereads = 0
         self.stops = 0
+        self._stop_streak = False
         self.latencies: deque[float] = deque(maxlen=200)
 
     @property
     def stopped(self) -> bool:
-        return self.update_timeouts >= 2
+        return self.update_timeouts >= _POLL_TIMEOUT_LIMIT
 
     def begin_update(self) -> None:
         self.update += 1
         self.update_timeouts = 0
 
+    def finish_update(self) -> None:
+        if self._stop_streak and not self.stopped:
+            self._stop_streak = False
+            _LOGGER.info("Modbus polling for %s:%s finished without stopping", *self.endpoint)
+
     async def _async_read_request(
         self, read: Callable[[int, int], Awaitable[list[int]]], start: int, count: int, update: int,
+        *, sample_latency: bool = True,
     ) -> list[int]:
         self.requests += 1
+        # This includes any time the request spends waiting in the broker queue.
         started = time.perf_counter()
         try:
             block = await read(start, count)
@@ -149,13 +158,17 @@ class _EndpointPoll:
             self.timeouts += 1
             if update == self.update:
                 self.update_timeouts += 1
-                if self.update_timeouts == 2:
+                if self.update_timeouts == _POLL_TIMEOUT_LIMIT:
                     self.stops += 1
-                    _LOGGER.warning(
-                        "Stopped Modbus polling for %s:%s for this update after two timeouts", *self.endpoint,
+                    log_stop = _LOGGER.debug if self._stop_streak else _LOGGER.warning
+                    self._stop_streak = True
+                    log_stop(
+                        "Stopped Modbus polling for %s:%s for this update after %s timeouts",
+                        *self.endpoint, _POLL_TIMEOUT_LIMIT,
                     )
             raise
-        self.latencies.append(time.perf_counter() - started)
+        if sample_latency:
+            self.latencies.append(time.perf_counter() - started)
         return block
 
     async def async_read(
@@ -168,7 +181,7 @@ class _EndpointPoll:
         # a wire read before this one has accounted for its outcome.
         async with self.lock:
             if self.stopped or update != self.update or not is_current():
-                raise _EndpointPollStopped
+                raise EndpointStopped
             try:
                 return await self._async_read_request(read, start, count, update)
             except ModbusTimeoutError:
@@ -187,26 +200,23 @@ class _EndpointPoll:
                         _LOGGER.debug(
                             "Could not disconnect Modbus endpoint %s:%s", *self.endpoint, exc_info=True,
                         )
-                        reconnected = False
-                    else:
-                        reconnected = True
-                        self.reconnects += 1
-                        self.last_reconnect_at = datetime.now(timezone.utc).isoformat()
-                        _LOGGER.warning(
-                            "Recycling Modbus connection to %s:%s after timeout at address %s (count %s)",
-                            *self.endpoint, start, count,
-                        )
-                    # Apply the cooldown to a failed disconnect attempt too.
+                    # The broker drops the link even if teardown raises.
+                    self.reconnects += 1
+                    self.last_reconnect_at = datetime.now(timezone.utc).isoformat()
                     self.last_reconnect = time.monotonic()
+                    _LOGGER.warning(
+                        "Recycling Modbus connection to %s:%s after timeout at address %s (count %s)",
+                        *self.endpoint, start, count,
+                    )
                 if update != self.update or not is_current():
                     raise
-            block = await self._async_read_request(read, start, count, update)
-            if reconnected:
-                self.successful_rereads += 1
-                _LOGGER.info(
-                    "Modbus read recovered after reconnect to %s:%s at address %s (count %s)",
-                    *self.endpoint, start, count,
-                )
+            # A new TCP connection can contribute to the re-read time.
+            block = await self._async_read_request(read, start, count, update, sample_latency=False)
+            self.successful_rereads += 1
+            _LOGGER.info(
+                "Modbus read recovered after reconnect to %s:%s at address %s (count %s)",
+                *self.endpoint, start, count,
+            )
             return block
 
     def diagnostics(self) -> dict:
@@ -334,6 +344,11 @@ class SigenergyModbusHub:
         """Reset per-update timeout counts while preserving reconnect cooldowns."""
         for poll in self._endpoint_polls.values():
             poll.begin_update()
+
+    def finish_poll_update(self) -> None:
+        """Report endpoints that completed the update without stopping."""
+        for poll in self._endpoint_polls.values():
+            poll.finish_update()
 
     def poll_endpoint_diagnostics(self) -> list[dict]:
         """Return request and recovery statistics for each configured link."""
@@ -611,8 +626,11 @@ class SigenergyModbusHub:
         # room for that and still leave a discovery window on a 1-second poll.
         deadline = now + interval - min(1.0, interval / 2)
         for endpoint in self._endpoint_identity:
-            if not any(ep == endpoint and group._probe_queue
-                       for _key, ep, _role, group in self._bindings):
+            if not any(
+                ep == endpoint and group._probe_queue
+                and (group._endpoint_poll is None or not group._endpoint_poll.stopped)
+                for _key, ep, _role, group in self._bindings
+            ):
                 continue
             # Rate-limit extra refreshes without skipping normal polls due to
             # small differences between the poll and background task clocks.

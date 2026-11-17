@@ -110,7 +110,7 @@ class _ReadInterruptedByWrite(ModbusError):
     """A discarded read may be retried after endpoint writes drain."""
 
 
-class _EndpointPollStopped(ModbusError):
+class EndpointStopped(ModbusError):
     """A supported block was skipped because the endpoint stopped polling."""
 
 
@@ -608,17 +608,15 @@ class _ComponentGroup:
                 self._prefetched.pop(name, None)
                 self._prefetched_at.pop(name, None)
         progress = None
+        keep_saved_round = False
+        poll = self._endpoint_poll
         if self.incremental:
-            if self._read_round is not None and self._endpoint_poll and self._endpoint_poll.stopped:
-                # A stopped endpoint must not receive identity reads. Start an
-                # empty round so the skipped blocks appear in poll quality.
-                self.reset_poll_progress()
             if (self._read_round is not None
                     and time.monotonic() - self._read_round["started"] > _POLL_PROGRESS_MAX_AGE):
                 self._read_round = None
                 self.poll_expired_rounds += 1
-            if self._read_round is not None:
-                saved_round = self._read_round
+            saved_round = self._read_round
+            if saved_round is not None and not (poll is not None and poll.stopped):
                 try:
                     confirmed = await self._async_confirm_poll_identity(saved_round)
                 except (ModbusError, asyncio.CancelledError):
@@ -628,16 +626,17 @@ class _ComponentGroup:
                     if reset_epoch == self._reset_epoch:
                         raise _ReadInterruptedByWrite("Read round interrupted by a write")
                     raise ModbusError("Read round invalidated during identity validation")
-                if not confirmed:
+                if not confirmed and not (poll is not None and poll.stopped):
                     self.reset_poll_progress()
             if self._read_round is None:
                 oldest = min([time.monotonic(), *self._prefetched_at.values()])
                 self._read_round = {"started": oldest, "words": {}, "attempted": {}, "failures": {},
                                     "identity": deepcopy(self._identity_snapshot())}
-                # Rejecting saved samples can advance the reset epoch. This
-                # fresh round must compare against its own epoch, while the
-                # identity-validation checks above retain the earlier one.
+                # Rejecting saved samples can advance the reset epoch.
+                # The fresh round must compare against its own epoch.
                 reset_epoch = self._reset_epoch
+            elif poll is not None and poll.stopped:
+                keep_saved_round = True
             else:
                 self.poll_resumes += 1
                 # Skips describe the previous update's stop, not wire attempts.
@@ -645,14 +644,18 @@ class _ComponentGroup:
                 for key in list(saved_failures):
                     if key[-1] == "skipped":
                         del saved_failures[key]
-            progress = self._read_round
+            if not keep_saved_round:
+                progress = self._read_round
         failures = progress.setdefault("failures", {}) if progress is not None else {}
         values: dict[str, Any] = {}
         for name, component in self._readable.items():
-            if not self.incremental and not (self._endpoint_poll and self._endpoint_poll.stopped):
+            if not self.incremental and not (poll is not None and poll.stopped):
                 await self._async_ensure_resolved(name, component)
-            prefetched = self._prefetched.pop(name, {})
-            self._prefetched_at.pop(name, None)
+            # Report this update's skips without using or modifying saved data.
+            prefetched = {}
+            if not keep_saved_round:
+                prefetched = self._prefetched.pop(name, {})
+                self._prefetched_at.pop(name, None)
             await self._async_read_component(
                 name, component, values, prefetched, progress=progress, failures=failures
             )
@@ -666,7 +669,8 @@ class _ComponentGroup:
                 self._read_round = None
                 self.poll_expired_rounds += 1
                 raise ModbusError("Read recovery expired; starting a fresh round")
-        self._read_round = None
+        if not keep_saved_round:
+            self._read_round = None
         self._complete_poll_quality(failures)
         return values
 
@@ -788,7 +792,7 @@ class _ComponentGroup:
                         block = await read(start, count)
                     else:
                         block = await poll.async_read(unit, read, start, count, update, is_current, is_waiting)
-                except _EndpointPollStopped:
+                except EndpointStopped:
                     # A queued block can be abandoned while its caller is
                     # cancelled. Leave it eligible for a later read round.
                     raise
@@ -824,7 +828,7 @@ class _ComponentGroup:
             except ModbusError as ex:
                 if progress is not None and progress is not self._read_round:
                     break
-                if isinstance(ex, _EndpointPollStopped):
+                if isinstance(ex, EndpointStopped):
                     if failures is not None:
                         self._save_poll_failure(
                             failures, name, component, start, count, affected, ex, stage="skipped",

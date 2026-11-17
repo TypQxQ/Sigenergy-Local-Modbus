@@ -75,6 +75,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60,
 
     hub = SimpleNamespace(
         begin_poll_update=lambda: None,
+        finish_poll_update=lambda: None,
         inverter_connections={} if ac_only else {
             "inverter 1": {"has_dc_charger": True}, "inverter 2": {},
         },

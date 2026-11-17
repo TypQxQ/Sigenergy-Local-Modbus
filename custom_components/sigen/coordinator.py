@@ -127,6 +127,9 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "status": device_status,
                 }
 
+        def has_readings(*devices: dict[str, Any]) -> bool:
+            return any(value is not None for device in devices for value in device.values())
+
         def completed_data(tasks: dict[str, asyncio.Task]) -> dict[str, Any]:
             return {
                 name: (
@@ -217,10 +220,9 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # A poll with actual read failures and no usable readings is
                 # a total outage, not a successful partial update. Keep the old
                 # snapshot until HA marks the coordinator unavailable.
-                readings = [plant_data, *inverter_data.values(),
-                            *dc_charger_data.values(), *ac_charger_data.values()]
                 if (any(item["status"] in degraded_statuses for item in device_timings.values())
-                        and not any(value is not None for values in readings for value in values.values())):
+                        and not has_readings(plant_data, *inverter_data.values(),
+                                             *dc_charger_data.values(), *ac_charger_data.values())):
                     raise UpdateFailed("No Sigenergy register readings succeeded")
 
                 # A listener may have completed sensor initialization during
@@ -256,9 +258,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "dc_chargers": completed_data(dc_tasks),
                     "_sensors_initialized": previous.get("_sensors_initialized", False),
                 }
-                readings = [partial["plant"], *partial["inverters"].values(),
-                            *partial["dc_chargers"].values(), *partial["ac_chargers"].values()]
-                if any(value is not None for values in readings for value in values.values()):
+                if has_readings(partial["plant"], *partial["inverters"].values(),
+                                *partial["dc_chargers"].values(), *partial["ac_chargers"].values()):
                     devices_at_deadline = {
                         f"{kind}:{name}"
                         for kind, tasks in (("inverter", inverter_tasks), ("dc_charger", dc_tasks),
@@ -292,6 +293,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 if device_tasks:
                     await asyncio.gather(*device_tasks, return_exceptions=True)
             finally:
+                if status != "cancelled":
+                    self.hub.finish_poll_update()
                 for device in devices_at_deadline:
                     device_timings.setdefault(device, {}).update(
                         status="error", error_type="TimeoutError",
@@ -302,7 +305,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # they overlap and must not be summed as wire transaction time.
                 self.latest_fetch_time = fetch_time
                 self.largest_update_interval = max(self.largest_update_interval, fetch_time)
-                if phase == "poll" and status != "cancelled":
+                if phase == "poll" and status in {"success", "partial"}:
                     interval = self.update_interval.total_seconds()
                     if fetch_time > interval:
                         self._consecutive_slow_polls += 1
