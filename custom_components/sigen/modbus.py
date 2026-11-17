@@ -360,8 +360,9 @@ class SigenergyModbusHub:
                           if key in IDENTITY_REGISTERS}
                 if not fields:
                     continue
+                # Part of the poll: share the endpoint's lock, stop and recovery.
                 words, errors = await group._async_read_blocks(
-                    component_name, component, fields, probing=True
+                    component_name, component, fields, probing=True, endpoint_read=True,
                 )
                 if errors:
                     return False

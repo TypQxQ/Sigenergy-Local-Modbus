@@ -92,8 +92,11 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         early_data: dict[str, Any] | None = None
         can_publish_without_charger = False
         degraded_statuses = {"partial", "error"}
+        plant_data: dict[str, Any] | None = None
+        inverter_tasks: dict[str, asyncio.Task] = {}
+        dc_tasks: dict[str, asyncio.Task] = {}
         ac_tasks: dict[str, asyncio.Task] = {}
-        chargers_at_deadline: set[str] = set()
+        devices_at_deadline: set[str] = set()
         device_timings: dict[str, dict[str, Any]] = {}
 
         async def timed_read(device: str, read, *args) -> Dict[str, Any]:
@@ -124,14 +127,14 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     "status": device_status,
                 }
 
-        def completed_charger_data() -> dict[str, Any]:
+        def completed_data(tasks: dict[str, asyncio.Task]) -> dict[str, Any]:
             return {
                 name: (
                     task.result()
                     if task.done() and not task.cancelled() and task.exception() is None
                     else {}
                 )
-                for name, task in ac_tasks.items()
+                for name, task in tasks.items()
             }
 
         try:
@@ -200,7 +203,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     if pending:
                         # Publish the fresh plant/inverter snapshot without moving
                         # HA's refresh timer or declaring the poll complete.
-                        early_data = {**snapshot, "ac_chargers": completed_charger_data()}
+                        early_data = {**snapshot, "ac_chargers": completed_data(ac_tasks)}
                         self.data = early_data
                         self.async_update_listeners()
 
@@ -236,23 +239,38 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 return self.data
         except asyncio.TimeoutError as exception:
             self.update_timeout_count += 1
-            if can_publish_without_charger and snapshot is not None:
+            if phase == "poll" and plant_data is not None:
+                # Another endpoint can use up the rest of the deadline after
+                # the plant read, for example with a timeout, reconnect and
+                # timed-out re-read. Publish the readings that already arrived.
                 # Propagating the deadline can already have cancelled the
-                # charger that the coordinator was awaiting.
-                chargers_at_deadline = {
-                    name for name, task in ac_tasks.items()
-                    if task.cancelled() or not task.done()
+                # device that the coordinator was awaiting. The finally block
+                # stops pending workflows and lets wire requests finish safely.
+                previous = early_data if early_data is not None else snapshot or self.data or {}
+                # AC charger tasks start after the inverter and DC reads.
+                unstarted_ac = [name for name in self.hub.ac_charger_connections if name not in ac_tasks]
+                partial = {
+                    "plant": plant_data,
+                    "inverters": completed_data(inverter_tasks),
+                    "ac_chargers": completed_data(ac_tasks) | {name: {} for name in unstarted_ac},
+                    "dc_chargers": completed_data(dc_tasks),
+                    "_sensors_initialized": previous.get("_sensors_initialized", False),
                 }
-                # The primary data is usable even if a charger consumed the
-                # rest of the coordinator deadline. The finally block stops
-                # pending workflows and lets wire requests finish safely.
-                status = "partial"
-                self.partial_update_count += 1
-                self._last_successful_update_sequence = update_sequence
-                snapshot["ac_chargers"] = completed_charger_data()
-                if early_data is not None:
-                    snapshot["_sensors_initialized"] = early_data["_sensors_initialized"]
-                return snapshot
+                readings = [partial["plant"], *partial["inverters"].values(),
+                            *partial["dc_chargers"].values(), *partial["ac_chargers"].values()]
+                if any(value is not None for values in readings for value in values.values()):
+                    devices_at_deadline = {
+                        f"{kind}:{name}"
+                        for kind, tasks in (("inverter", inverter_tasks), ("dc_charger", dc_tasks),
+                                            ("ac_charger", ac_tasks))
+                        for name, task in tasks.items()
+                        if task.cancelled() or not task.done()
+                    }
+                    devices_at_deadline.update(f"ac_charger:{name}" for name in unstarted_ac)
+                    status = "partial"
+                    self.partial_update_count += 1
+                    self._last_successful_update_sequence = update_sequence
+                    return partial
             status = "timeout"
             self.update_failure_count += 1
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
@@ -274,8 +292,8 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 if device_tasks:
                     await asyncio.gather(*device_tasks, return_exceptions=True)
             finally:
-                for name in chargers_at_deadline:
-                    device_timings.setdefault(f"ac_charger:{name}", {}).update(
+                for device in devices_at_deadline:
+                    device_timings.setdefault(device, {}).update(
                         status="error", error_type="TimeoutError",
                     )
 

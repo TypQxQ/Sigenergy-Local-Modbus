@@ -742,12 +742,16 @@ class _ComponentGroup:
     async def _async_read_blocks(
         self, name: str, component: Component, fields: Mapping[str, RegisterField],
         *, probing: bool = False, progress: dict | None = None,
-        failures: dict | None = None,
+        failures: dict | None = None, endpoint_read: bool = False,
     ) -> tuple[dict[str, list[int]], dict[str, ModbusError]]:
         """Read contiguous blocks; return words and failed-block errors per field.
 
         Each block's failure is isolated: a field is missing from the result
         when its block failed to read (but the link is still up).
+
+        `endpoint_read` sends a probing read through the endpoint's poll
+        accounting too, so it waits its turn, counts towards the stop and
+        can recycle the link.
 
         Raises `ModbusConnectionError` if the link itself is down.
         """
@@ -759,7 +763,8 @@ class _ComponentGroup:
         )
         words: dict[str, list[int]] = {}
         errors: dict[str, ModbusError] = {}
-        poll = self._endpoint_poll if not probing and failures is not None else None
+        poll = (self._endpoint_poll
+                if endpoint_read or (not probing and failures is not None) else None)
         update = poll.update if poll is not None else 0
         cancelled = False
 

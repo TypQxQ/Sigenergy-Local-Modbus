@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import ast
 import asyncio
+from copy import deepcopy
 from datetime import datetime, timedelta
 import json
 from pathlib import Path
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, call, patch
@@ -260,6 +262,40 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([("read", 100), "write", "disconnect", ("read", 100)], events)
         self.assertTrue(self.endpoint.stopped)
         self.assertEqual((2, 1, 1), (self.endpoint.timeouts, self.endpoint.reconnects, self.endpoint.stops))
+
+    async def test_identity_check_of_saved_round_uses_endpoint_recovery(self):
+        import test_incremental_discovery as fixtures
+        fixture = fixtures.TestHubDiscoveryCache()
+        fixture.setUp()
+        hub = fixture.hub
+        await hub.async_initialize(fixture.cache())
+        plant = hub._plant._group
+        endpoint = plant._endpoint_poll
+        self.assertTrue(plant._identity_snapshot())
+        # A poll cut by the coordinator deadline leaves its round saved.
+        plant._read_round = {"started": time.monotonic(), "words": {}, "attempted": {},
+                             "failures": {}, "identity": deepcopy(plant._identity_snapshot())}
+        hub.begin_poll_update()
+        identity_read = AsyncMock(side_effect=ModbusTimeoutError("no reply"))
+        with (
+            patch.object(fixture.inv_unit, "read_input_registers", identity_read),
+            patch.object(fixture.inv_unit, "disconnect", new_callable=AsyncMock) as disconnect,
+            patch.object(fixture.plant_unit, "read_input_registers",
+                         wraps=fixture.plant_unit.read_input_registers) as plant_input,
+            patch.object(fixture.plant_unit, "read_holding_registers",
+                         wraps=fixture.plant_unit.read_holding_registers) as plant_holding,
+        ):
+            data = await hub.async_read_plant_data()
+        # One identity read and its single re-read, then the endpoint stops.
+        self.assertEqual(2, identity_read.await_count)
+        disconnect.assert_awaited_once_with()
+        self.assertTrue(endpoint.stopped)
+        self.assertEqual((2, 1, 1), (endpoint.timeouts, endpoint.reconnects, endpoint.stops))
+        plant_input.assert_not_awaited()
+        plant_holding.assert_not_awaited()
+        self.assertTrue(data)
+        self.assertTrue(all(value is None for value in data.values()))
+        await hub.async_close()
 
     async def test_cancellation_during_retry_preserves_tracked_response(self):
         started, release = asyncio.Event(), asyncio.Event()
