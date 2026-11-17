@@ -173,6 +173,26 @@ class TestCoordinatorPollCancellation(unittest.IsolatedAsyncioTestCase):
             release.set()
             await asyncio.gather(*children, return_exceptions=True)
 
+    async def test_failed_polls_do_not_finish_endpoint_updates(self):
+        for status, failure in (
+            ("error", RuntimeError("plant read failed")),
+            ("timeout", TimeoutError("plant read timed out")),
+        ):
+            with self.subTest(status=status):
+                coordinator, _, _, _, _ = _make_coordinator(poll_phase=True)
+                finish = Mock()
+                coordinator.hub.finish_poll_update = finish
+
+                async def read_plant():
+                    raise failure
+
+                coordinator.hub.async_read_plant_data = read_plant
+                with self.assertRaisesRegex(_UpdateFailed, "communicating with Sigenergy system"):
+                    await coordinator.poll()
+
+                self.assertEqual(status, coordinator.latest_update_timing["status"])
+                finish.assert_not_called()
+
     async def test_successful_poll_preserves_all_device_results(self):
         coordinator, children, started, release, _events = _make_coordinator()
         poll = asyncio.create_task(coordinator.poll())

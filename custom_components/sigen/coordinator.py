@@ -293,7 +293,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 if device_tasks:
                     await asyncio.gather(*device_tasks, return_exceptions=True)
             finally:
-                if status != "cancelled":
+                if status in {"success", "partial"}:
                     self.hub.finish_poll_update()
                 for device in devices_at_deadline:
                     device_timings.setdefault(device, {}).update(
