@@ -367,3 +367,19 @@ class TestEndpointWriteBinding(IsolatedAsyncioTestCase):
         for _, info, group in groups:
             self.assertEqual(info["host"] != "other", group._endpoint_writes is plant._endpoint_writes)
         await hub.async_close()
+
+    async def test_hub_write_resets_every_group_on_the_same_endpoint(self):
+        import test_incremental_discovery as fixtures
+        from test_modbus_hub import _ConfigEntry
+        fixture = fixtures.TestHubDiscoveryCache()
+        fixture.setUp()
+        data = deepcopy(fixture.data)
+        data["inverter_connections"]["Other"] = {"host": "other", "port": 502, "slave_id": 1}
+        hub = fixture.modbus.SigenergyModbusHub(object(), _ConfigEntry(data))
+        groups = list(hub._all_groups())
+        for _, _, group in groups:
+            group._read_round = {"started": 0.0, "words": {}, "attempted": {}, "failures": {}}
+        hub._inverters["Inverter"]._inverter_group._on_write()
+        for _, info, group in groups:
+            self.assertEqual(info["host"] == "other", group._read_round is not None)
+        await hub.async_close()

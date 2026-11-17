@@ -90,6 +90,12 @@ class _Hub:
     def get_poll_diagnostics(self, device):
         return {}
 
+    def begin_poll_update(self):
+        pass
+
+    def finish_poll_update(self):
+        pass
+
     async def async_write_parameter(self, *, device_type, device_identifier, register_name, value):
         self.writes.append((device_type, device_identifier, register_name, value))
         if not self.ignore_writes:
@@ -118,7 +124,7 @@ def _make_coordinator():
         node for node in tree.body if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id in {
             "STARTUP_TIMEOUT", "UPDATE_TIMEOUT",
-            "AC_CHARGER_PUBLISH_GRACE",
+            "AC_CHARGER_PUBLISH_GRACE", "SLOW_POLL_WARNING_COUNT",
         } for target in node.targets)
     ]
     module = ast.fix_missing_locations(ast.Module(

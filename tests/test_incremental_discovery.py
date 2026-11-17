@@ -257,6 +257,27 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("new-live-version", (await warm.async_read_inverter_data("Inverter"))[
             "inverter_machine_firmware_version"])
 
+    async def test_discovery_skips_a_stopped_endpoint_and_resumes_after_the_next_update(self):
+        self.addAsyncCleanup(self.hub.async_close)
+        await self.hub.async_initialize(self.cache())
+        self.hub._coordinator = types.SimpleNamespace(
+            last_update_success=True, update_interval=timedelta(seconds=5),
+        )
+        self.hub.config_entry.async_create_background_task = lambda _hass, coro, **_kwargs: asyncio.create_task(coro)
+        endpoint = self.hub._plant._group._endpoint_poll
+        self.hub.begin_poll_update()
+        endpoint.update_timeouts = 2
+
+        with patch.object(self.hub, "_async_discover_endpoint", new_callable=AsyncMock) as discover:
+            self.hub.async_schedule_discovery()
+            await asyncio.gather(*self.hub._discovery_tasks.values())
+            discover.assert_not_awaited()
+
+            self.hub.begin_poll_update()
+            self.hub.async_schedule_discovery()
+            await asyncio.gather(*self.hub._discovery_tasks.values())
+            discover.assert_awaited_once()
+
     async def test_manual_refreshes_respect_cooldown_without_skipping_normal_polls(self):
         await self.hub.async_initialize(self.cache())
         tasks = []

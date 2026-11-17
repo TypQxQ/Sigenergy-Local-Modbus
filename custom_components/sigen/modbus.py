@@ -22,7 +22,10 @@ import logging
 import asyncio
 import time
 from collections import deque
+from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
+from datetime import datetime, timezone
+from math import ceil
 from uuid import uuid4
 from typing import Any, Dict, Optional, Union
 
@@ -30,7 +33,7 @@ from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntry  # pylint: disable=no-name-in-module, syntax-error
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from modbus_connection import ModbusConnectionError, ModbusError, ModbusTcpParams
+from modbus_connection import ModbusConnectionError, ModbusError, ModbusTcpParams, ModbusTimeoutError, ModbusUnit
 
 from .const import (
     CONF_AC_CHARGER_CONNECTIONS,
@@ -50,7 +53,7 @@ from .const import (
     DEVICE_TYPE_PLANT,
 )
 from .sigen_devices import PROBE_RETRY_DELAY, SigenergyACCharger, SigenergyInverter, SigenergyPlant
-from .sigen_devices import IDENTITY_REGISTERS, _EndpointWrites, _MAX_BLOCK_SPAN
+from .sigen_devices import IDENTITY_REGISTERS, EndpointStopped, _EndpointWrites, _MAX_BLOCK_SPAN
 from .support_cache import SupportCache, device_cache_key
 
 _LOGGER = logging.getLogger(__name__)
@@ -67,6 +70,8 @@ class SigenergyModbusError(HomeAssistantError):
 #: -- surfacing as a "Received unexpected response" transaction-ID mismatch
 #: and a dropped connection.
 _REQUEST_TIMEOUT = 20.0
+_RECONNECT_COOLDOWN = 60.0
+_POLL_TIMEOUT_LIMIT = 2
 _DISCOVERY_TIMING_SAMPLES = 8
 _MIN_DISCOVERY_PAUSE = 0.01
 _MAX_PV_STRINGS = 36
@@ -106,6 +111,131 @@ class _DiscoveryTiming:
         deviation = sum(abs(sample - average) for sample in self.samples) / len(self.samples)
         pause = min(10 * average, 4 * average + 6 * deviation)
         return max(_MIN_DISCOVERY_PAUSE, pause), max(10 * average, max(self.samples))
+
+
+class _EndpointPoll:
+    """Coordinate polling and record recovery for units on one shared socket."""
+
+    def __init__(self, endpoint: tuple[str, int], writes: _EndpointWrites) -> None:
+        self.endpoint = endpoint
+        self.writes = writes
+        self.lock = asyncio.Lock()
+        self.update = 0
+        self.update_timeouts = 0
+        self.last_reconnect = float("-inf")
+        self.last_reconnect_at: str | None = None
+        self.requests = 0
+        self.timeouts = 0
+        self.reconnects = 0
+        self.successful_rereads = 0
+        self.stops = 0
+        self._stop_streak = False
+        self.latencies: deque[float] = deque(maxlen=200)
+
+    @property
+    def stopped(self) -> bool:
+        return self.update_timeouts >= _POLL_TIMEOUT_LIMIT
+
+    def begin_update(self) -> None:
+        self.update += 1
+        self.update_timeouts = 0
+
+    def finish_update(self) -> None:
+        if self._stop_streak and not self.stopped:
+            self._stop_streak = False
+            _LOGGER.info("Modbus polling for %s:%s finished without stopping", *self.endpoint)
+
+    async def _async_read_request(
+        self, read: Callable[[int, int], Awaitable[list[int]]], start: int, count: int, update: int,
+        *, sample_latency: bool = True,
+    ) -> list[int]:
+        self.requests += 1
+        # This includes any time the request spends waiting in the broker queue.
+        started = time.perf_counter()
+        try:
+            block = await read(start, count)
+        except ModbusTimeoutError:
+            self.timeouts += 1
+            if update == self.update:
+                self.update_timeouts += 1
+                if self.update_timeouts == _POLL_TIMEOUT_LIMIT:
+                    self.stops += 1
+                    log_stop = _LOGGER.debug if self._stop_streak else _LOGGER.warning
+                    self._stop_streak = True
+                    log_stop(
+                        "Stopped Modbus polling for %s:%s for this update after %s timeouts",
+                        *self.endpoint, _POLL_TIMEOUT_LIMIT,
+                    )
+            raise
+        if sample_latency:
+            self.latencies.append(time.perf_counter() - started)
+        return block
+
+    async def async_read(
+        self, unit: ModbusUnit, read: Callable[[int, int], Awaitable[list[int]]],
+        start: int, count: int, update: int, is_current: Callable[[], bool],
+        is_waiting: Callable[[], bool],
+    ) -> list[int]:
+        """Read one block and, if eligible, recycle the link and try it once."""
+        # Hold this through the read and retry so another group cannot queue
+        # a wire read before this one has accounted for its outcome.
+        async with self.lock:
+            if self.stopped or update != self.update or not is_current():
+                raise EndpointStopped
+            try:
+                return await self._async_read_request(read, start, count, update)
+            except ModbusTimeoutError:
+                # A write may have made this sample stale, but the timeout
+                # still shows the link is wedged: recycle while this update's
+                # caller is still waiting, and skip only the stale re-read.
+                if (self.stopped or update != self.update or not is_waiting()
+                        or time.monotonic() - self.last_reconnect < _RECONNECT_COOLDOWN):
+                    raise
+                async with self.writes.disconnect_lock:
+                    if update != self.update or not is_waiting():
+                        raise
+                    try:
+                        await unit.disconnect()
+                    except Exception:
+                        _LOGGER.debug(
+                            "Could not disconnect Modbus endpoint %s:%s", *self.endpoint, exc_info=True,
+                        )
+                    # The broker drops the link even if teardown raises.
+                    self.reconnects += 1
+                    self.last_reconnect_at = datetime.now(timezone.utc).isoformat()
+                    self.last_reconnect = time.monotonic()
+                    _LOGGER.warning(
+                        "Recycling Modbus connection to %s:%s after timeout at address %s (count %s)",
+                        *self.endpoint, start, count,
+                    )
+                if update != self.update or not is_current():
+                    raise
+            # A new TCP connection can contribute to the re-read time.
+            block = await self._async_read_request(read, start, count, update, sample_latency=False)
+            self.successful_rereads += 1
+            _LOGGER.info(
+                "Modbus read recovered after reconnect to %s:%s at address %s (count %s)",
+                *self.endpoint, start, count,
+            )
+            return block
+
+    def diagnostics(self) -> dict:
+        samples = sorted(self.latencies)
+        return {
+            "endpoint": {"host": self.endpoint[0], "port": self.endpoint[1]},
+            "requests": self.requests,
+            "timeouts": self.timeouts,
+            "reconnects": self.reconnects,
+            "successful_rereads": self.successful_rereads,
+            "endpoint_stops": self.stops,
+            "last_reconnect": self.last_reconnect_at,
+            "request_latency_seconds": {
+                "samples": len(samples),
+                "p50": samples[ceil(len(samples) * 0.5) - 1] if samples else None,
+                "p90": samples[ceil(len(samples) * 0.9) - 1] if samples else None,
+                "max": samples[-1] if samples else None,
+            },
+        }
 
 # Entry setup retries share a pass; a complete HA restart starts a new pass
 # over cached negatives. Nothing here is shared register support or live data.
@@ -194,20 +324,40 @@ class SigenergyModbusHub:
             name: SigenergyACCharger(_acquire_unit(hass, config_entry, info, info[CONF_SLAVE_ID]))
             for name, info in self.ac_charger_connections.items()
         }
-        endpoint_writes = {}
+        self._endpoint_polls: dict[tuple[str, int], _EndpointPoll] = {}
         for _role, info, group in self._all_groups():
             endpoint = (info[CONF_HOST], info[CONF_PORT])
-            group._endpoint_writes = endpoint_writes.setdefault(endpoint, _EndpointWrites())
-            group._on_write = lambda ep=endpoint: self._reset_poll_progress(ep)
+            params = _connection_params(info)
+            poll_endpoint = (params.host, params.port)
+            if poll_endpoint not in self._endpoint_polls:
+                self._endpoint_polls[poll_endpoint] = _EndpointPoll(poll_endpoint, _EndpointWrites())
+            poll = self._endpoint_polls[poll_endpoint]
+            group._endpoint_poll = poll
+            group._endpoint_writes = poll.writes
+            group._on_write = lambda state=poll: self._reset_poll_progress(state)
             group._identity_snapshot = lambda ep=endpoint: self._endpoint_identity.get(ep, {})
             group._confirm_endpoint_identity = (
                 lambda expected, ep=endpoint: self._async_confirm_endpoint_identity(ep, expected)
             )
 
-    def _reset_poll_progress(self, endpoint):
+    def begin_poll_update(self) -> None:
+        """Reset per-update timeout counts while preserving reconnect cooldowns."""
+        for poll in self._endpoint_polls.values():
+            poll.begin_update()
+
+    def finish_poll_update(self) -> None:
+        """Report endpoints that completed the update without stopping."""
+        for poll in self._endpoint_polls.values():
+            poll.finish_update()
+
+    def poll_endpoint_diagnostics(self) -> list[dict]:
+        """Return request and recovery statistics for each configured link."""
+        return [poll.diagnostics() for poll in self._endpoint_polls.values()]
+
+    def _reset_poll_progress(self, poll: _EndpointPoll) -> None:
         """Discard every pre-write sample on the affected physical link."""
-        for _role, info, group in self._all_groups():
-            if (info[CONF_HOST], info[CONF_PORT]) == endpoint:
+        for _role, _info, group in self._all_groups():
+            if group._endpoint_poll is poll:
                 group.reset_poll_progress(reason="write")
 
     async def _async_confirm_endpoint_identity(self, endpoint, expected):
@@ -225,8 +375,9 @@ class SigenergyModbusHub:
                           if key in IDENTITY_REGISTERS}
                 if not fields:
                     continue
+                # Part of the poll: share the endpoint's lock, stop and recovery.
                 words, errors = await group._async_read_blocks(
-                    component_name, component, fields, probing=True
+                    component_name, component, fields, probing=True, endpoint_read=True,
                 )
                 if errors:
                     return False
@@ -475,8 +626,11 @@ class SigenergyModbusHub:
         # room for that and still leave a discovery window on a 1-second poll.
         deadline = now + interval - min(1.0, interval / 2)
         for endpoint in self._endpoint_identity:
-            if not any(ep == endpoint and group._probe_queue
-                       for _key, ep, _role, group in self._bindings):
+            if not any(
+                ep == endpoint and group._probe_queue
+                and (group._endpoint_poll is None or not group._endpoint_poll.stopped)
+                for _key, ep, _role, group in self._bindings
+            ):
                 continue
             # Rate-limit extra refreshes without skipping normal polls due to
             # small differences between the poll and background task clocks.

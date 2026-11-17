@@ -193,7 +193,8 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         coordinator, hub, namespace = _make_coordinator()
         await coordinator.async_refresh()
         namespace["AC_CHARGER_PUBLISH_GRACE"] = 0
-        namespace["async_timeout"].timeout = lambda _seconds: asyncio.timeout(0.05)
+        deadline = asyncio.timeout(None)
+        namespace["async_timeout"].timeout = lambda _seconds: deadline
         hub.ac_charger_connections = {
             "stalled": {}, "timed out": {}, "disconnected": {}, "healthy": {},
         }
@@ -215,7 +216,12 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
                     cancelled.set()
             if name == "disconnected":
                 raise ModbusConnectionError()
-            return {"ac_charger_charging_power": 2} if name == "healthy" else {}
+            if name == "healthy":
+                # Expire only after the stalled charger has started and this
+                # healthy read can finish, independent of scheduler speed.
+                deadline.reschedule(asyncio.get_running_loop().time())
+                return {"ac_charger_charging_power": 2}
+            return {}
 
         class ModbusConnectionError(Exception):
             pass
@@ -250,6 +256,7 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("ac_charger:healthy", warnings)
 
         failing = False
+        namespace["async_timeout"].timeout = asyncio.timeout
         hub.registers["soc"] = 52
         await coordinator.async_refresh()
         self.assertEqual(52, coordinator.data["plant"]["soc"])

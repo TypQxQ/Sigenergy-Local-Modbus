@@ -10,7 +10,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import MethodType, SimpleNamespace
 import unittest
@@ -26,7 +26,8 @@ class _UpdateFailed(Exception):
     pass
 
 
-def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
+def _make_coordinator(*, ac_only: bool = False, timeout: float = 60,
+                      poll_phase: bool = False, plant_value: object = 50):
     tree = ast.parse(SOURCE_PATH.read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef))
     method = next(
@@ -39,6 +40,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
         "time": time,
         "STARTUP_TIMEOUT": 180,
         "UPDATE_TIMEOUT": 60,
+        "SLOW_POLL_WARNING_COUNT": 10,
         "async_timeout": SimpleNamespace(timeout=lambda _seconds: asyncio.timeout(timeout)),
         "dt_util": SimpleNamespace(utcnow=lambda: datetime.now(timezone.utc)),
         "CONF_INVERTER_HAS_DCCHARGER": "has_dc_charger",
@@ -54,7 +56,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
     expected_reads = 2 if ac_only else 3
 
     async def read_plant():
-        return {"plant_ess_soc": 50}
+        return {"plant_ess_soc": plant_value}
 
     async def read_device(name):
         child_tasks.add(asyncio.current_task())
@@ -72,6 +74,8 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
         return await read_device(f"{name} DC")
 
     hub = SimpleNamespace(
+        begin_poll_update=lambda: None,
+        finish_poll_update=lambda: None,
         inverter_connections={} if ac_only else {
             "inverter 1": {"has_dc_charger": True}, "inverter 2": {},
         },
@@ -84,7 +88,8 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60):
     )
     coordinator = SimpleNamespace(
         hub=hub, data=None, largest_update_interval=0.0, latest_fetch_time=0.0,
-        _update_sequence=0, _last_successful_update_sequence=0,
+        _update_sequence=int(poll_phase), _last_successful_update_sequence=int(poll_phase),
+        _consecutive_slow_polls=0, update_interval=timedelta(seconds=5), last_update_success=True,
         update_timeout_count=0, update_failure_count=0,
         partial_update_count=0, _degraded_devices=set(),
     )
@@ -131,6 +136,62 @@ class TestCoordinatorPollCancellation(unittest.IsolatedAsyncioTestCase):
 
     async def test_timeout_stops_ac_charger_siblings(self):
         await self._assert_children_stop(ac_only=True, timeout=True)
+
+    async def test_late_poll_timeout_publishes_readings_that_arrived(self):
+        coordinator, children, _started, release, events = _make_coordinator(timeout=0.05, poll_phase=True)
+        coordinator.hub.ac_charger_connections = {"AC 1": {}}
+        try:
+            data = await coordinator.poll()
+            self.assertEqual({"plant_ess_soc": 50}, data["plant"])
+            self.assertEqual({"inverter 1": {}, "inverter 2": {}}, data["inverters"])
+            self.assertEqual({"inverter 1": {}}, data["dc_chargers"])
+            self.assertEqual({"AC 1": {}}, data["ac_chargers"])
+            self.assertNotIn(("started", "AC 1"), events)
+            self.assertTrue(all(task.done() for task in children))
+            timing = coordinator.latest_update_timing
+            self.assertEqual("partial", timing["status"])
+            for device in ("inverter:inverter 1", "inverter:inverter 2", "dc_charger:inverter 1", "ac_charger:AC 1"):
+                self.assertEqual(("error", "TimeoutError"),
+                                 (timing["devices"][device]["status"], timing["devices"][device]["error_type"]))
+            self.assertEqual((1, 1, 0), (coordinator.update_timeout_count, coordinator.partial_update_count,
+                                         coordinator.update_failure_count))
+            self.assertEqual(coordinator._update_sequence, coordinator._last_successful_update_sequence)
+        finally:
+            release.set()
+            await asyncio.gather(*children, return_exceptions=True)
+
+    async def test_late_poll_timeout_without_readings_still_fails(self):
+        coordinator, children, _started, release, _events = _make_coordinator(
+            timeout=0.05, poll_phase=True, plant_value=None,
+        )
+        try:
+            with self.assertRaisesRegex(_UpdateFailed, "Timeout communicating"):
+                await coordinator.poll()
+            self.assertEqual((1, 0, 1), (coordinator.update_timeout_count, coordinator.partial_update_count,
+                                         coordinator.update_failure_count))
+        finally:
+            release.set()
+            await asyncio.gather(*children, return_exceptions=True)
+
+    async def test_failed_polls_do_not_finish_endpoint_updates(self):
+        for status, failure in (
+            ("error", RuntimeError("plant read failed")),
+            ("timeout", TimeoutError("plant read timed out")),
+        ):
+            with self.subTest(status=status):
+                coordinator, _, _, _, _ = _make_coordinator(poll_phase=True)
+                finish = Mock()
+                coordinator.hub.finish_poll_update = finish
+
+                async def read_plant():
+                    raise failure
+
+                coordinator.hub.async_read_plant_data = read_plant
+                with self.assertRaisesRegex(_UpdateFailed, "communicating with Sigenergy system"):
+                    await coordinator.poll()
+
+                self.assertEqual(status, coordinator.latest_update_timing["status"])
+                finish.assert_not_called()
 
     async def test_successful_poll_preserves_all_device_results(self):
         coordinator, children, started, release, _events = _make_coordinator()

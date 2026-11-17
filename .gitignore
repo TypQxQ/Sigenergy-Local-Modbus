@@ -5,3 +5,4 @@
 /dist/
 Reference/**
 custom_components/sigen/homeassistant/**
+/custom_components/sigen/.storage/
