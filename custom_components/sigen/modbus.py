@@ -161,6 +161,7 @@ class _EndpointPoll:
     async def async_read(
         self, unit: ModbusUnit, read: Callable[[int, int], Awaitable[list[int]]],
         start: int, count: int, update: int, is_current: Callable[[], bool],
+        is_waiting: Callable[[], bool],
     ) -> list[int]:
         """Read one block and, if eligible, recycle the link and try it once."""
         # Hold this through the read and retry so another group cannot queue
@@ -171,11 +172,14 @@ class _EndpointPoll:
             try:
                 return await self._async_read_request(read, start, count, update)
             except ModbusTimeoutError:
-                if (self.stopped or update != self.update or not is_current()
+                # A write may have made this sample stale, but the timeout
+                # still shows the link is wedged: recycle while this update's
+                # caller is still waiting, and skip only the stale re-read.
+                if (self.stopped or update != self.update or not is_waiting()
                         or time.monotonic() - self.last_reconnect < _RECONNECT_COOLDOWN):
                     raise
                 async with self.writes.disconnect_lock:
-                    if update != self.update or not is_current():
+                    if update != self.update or not is_waiting():
                         raise
                     try:
                         await unit.disconnect()

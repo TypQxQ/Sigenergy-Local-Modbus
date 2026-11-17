@@ -38,6 +38,7 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
         self.connection = MockModbusConnection()
         self.endpoint = self.modbus._EndpointPoll(("10.12.0.9", 502), self.devices._EndpointWrites())
         self.unit = self.connection.for_unit(247)
+        self.groups = []
         self.group = self.make_group(self.unit)
         self.endpoint.begin_update()
 
@@ -50,6 +51,16 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
         group._endpoint_writes = self.endpoint.writes
         group._identity_snapshot = lambda: {"fixture": "stable"}
         group._confirm_endpoint_identity = AsyncMock(return_value=True)
+        # Match the hub: a write resets every group on this link.
+        endpoint = self.endpoint
+
+        def reset_endpoint_progress():
+            for sibling in self.groups:
+                if sibling._endpoint_poll is endpoint:
+                    sibling.reset_poll_progress(reason="write")
+
+        group._on_write = reset_endpoint_progress
+        self.groups.append(group)
         return group
 
     async def test_timeout_disconnects_and_commits_successful_reread(self):
@@ -197,6 +208,58 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
                 release.set()
                 await asyncio.gather(*(t for t in (pending_write, poll) if t is not None))
         self.assertEqual(["write finished", "disconnect"], events)
+
+    async def _poll_with_write_during_timed_out_read(self, *, restart_times_out):
+        writer = self.make_group(self.connection.for_unit(1))
+        first_read, release = asyncio.Event(), asyncio.Event()
+        events = []
+
+        async def read(address, count):
+            events.append(("read", address))
+            if len(events) == 1:
+                first_read.set()
+                await release.wait()
+                raise ModbusTimeoutError("no reply")
+            if address == 100 and restart_times_out:
+                raise ModbusTimeoutError("still wedged")
+            return [address // 100]
+
+        async def write(register, value):
+            events.append("write")
+
+        async def disconnect():
+            events.append("disconnect")
+
+        with (
+            patch.object(writer._commands["commands"], "write", write),
+            patch.object(self.unit, "read_input_registers", read),
+            patch.object(self.unit, "disconnect", disconnect),
+        ):
+            poll = asyncio.create_task(self.group.async_update())
+            await asyncio.wait_for(first_read.wait(), 1)
+            await writer.async_write("set_output", 4)
+            release.set()
+            return events, await poll
+
+    async def test_write_during_timed_out_read_still_recycles_link(self):
+        events, result = await self._poll_with_write_during_timed_out_read(restart_times_out=False)
+        self.assertEqual({"first": 1, "middle": 2, "last": 3}, result)
+        # The stale re-read is skipped; the restarted round reads on the new link.
+        self.assertEqual([("read", 100), "write", "disconnect", ("read", 100), ("read", 200), ("read", 300)],
+                         events)
+        stats = self.endpoint.diagnostics()
+        self.assertEqual((1, 1, 0, 0), tuple(stats[k] for k in (
+            "timeouts", "reconnects", "successful_rereads", "endpoint_stops",
+        )))
+        self.assertFalse(self.endpoint.stopped)
+        self.assertEqual(1, self.group.poll_write_restarts)
+
+    async def test_write_during_timed_out_read_then_second_timeout_stops(self):
+        events, result = await self._poll_with_write_during_timed_out_read(restart_times_out=True)
+        self.assertEqual({"first": None, "middle": None, "last": None}, result)
+        self.assertEqual([("read", 100), "write", "disconnect", ("read", 100)], events)
+        self.assertTrue(self.endpoint.stopped)
+        self.assertEqual((2, 1, 1), (self.endpoint.timeouts, self.endpoint.reconnects, self.endpoint.stops))
 
     async def test_cancellation_during_retry_preserves_tracked_response(self):
         started, release = asyncio.Event(), asyncio.Event()

@@ -763,8 +763,11 @@ class _ComponentGroup:
         update = poll.update if poll is not None else 0
         cancelled = False
 
+        def is_waiting() -> bool:
+            return not cancelled
+
         def is_current() -> bool:
-            return not cancelled and (progress is None or progress is self._read_round)
+            return is_waiting() and (progress is None or progress is self._read_round)
 
         for start, count in _group_contiguous_blocks(
             [(field.address, field.count) for field in fields.values()]
@@ -779,7 +782,7 @@ class _ComponentGroup:
                     if poll is None:
                         block = await read(start, count)
                     else:
-                        block = await poll.async_read(unit, read, start, count, update, is_current)
+                        block = await poll.async_read(unit, read, start, count, update, is_current, is_waiting)
                 except _EndpointPollStopped:
                     # A queued block can be abandoned while its caller is
                     # cancelled. Leave it eligible for a later read round.
