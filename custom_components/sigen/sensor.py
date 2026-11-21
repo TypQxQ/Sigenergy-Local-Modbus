@@ -315,7 +315,11 @@ class SigenergySensor(SigenergyEntity, SensorEntity):
         if self._device_type == DEVICE_TYPE_INVERTER:
             return data.get("inverters", {}).get(self._device_name, {}).get(self.entity_description.key)
         if self._device_type == DEVICE_TYPE_AC_CHARGER:
-            return data.get("ac_chargers", {}).get(self._device_name, {}).get(self.entity_description.key)
+            key = self.entity_description.key
+            value = data.get("ac_chargers", {}).get(self._device_name, {}).get(key)
+            if value is None:
+                return data.get("_ac_charger_held", {}).get(self._device_name, {}).get(key)
+            return value
         if self._device_type == DEVICE_TYPE_DC_CHARGER:
             return data.get("dc_chargers", {}).get(self._device_name, {}).get(self.entity_description.key)
         return None

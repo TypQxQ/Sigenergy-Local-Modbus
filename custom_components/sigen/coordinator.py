@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
 from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL, MIN_SCAN_INTERVAL
+from .modbusregisterdefinitions import AC_CHARGER_RUNNING_INFO_REGISTERS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,6 +99,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         ac_tasks: dict[str, asyncio.Task] = {}
         devices_at_deadline: set[str] = set()
         device_timings: dict[str, dict[str, Any]] = {}
+        previous_data = (self.data or {}) if self.last_update_success else {}
 
         async def timed_read(device: str, read, *args) -> Dict[str, Any]:
             started = time.perf_counter()
@@ -139,6 +141,36 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 )
                 for name, task in tasks.items()
             }
+
+        def with_held_charger_telemetry(data: dict[str, Any], *, waiting=(), at_deadline=()):
+            """Hold read-only EVAC telemetry through one missed poll per field."""
+            held = {}
+            for name, readings in data["ac_chargers"].items():
+                previous = previous_data.get("ac_chargers", {}).get(name, {})
+                if name in waiting:
+                    # Early publication is provisional. Keep displaying an
+                    # existing hold until the current read finishes, either way.
+                    previous = previous | previous_data.get("_ac_charger_held", {}).get(name, {})
+                if not previous:
+                    continue
+                fields = previous.keys() & AC_CHARGER_RUNNING_INFO_REGISTERS.keys()
+                if name not in waiting and name not in at_deadline:
+                    # Use only the previous raw row for completed polls. A held
+                    # value cannot carry forward through a second consecutive miss.
+                    blocks = device_timings.get(f"ac_charger:{name}", {}).get("failed_blocks", ())
+                    fields.intersection_update(
+                        field for block in blocks
+                        if (block.get("stage"), block.get("error_type")) in {
+                            ("read", "ModbusTimeoutError"), ("skipped", "EndpointStopped")
+                        }
+                        for field in block.get("fields", ())
+                    )
+                values = {field: previous[field] for field in fields
+                          if previous[field] is not None and readings.get(field) is None}
+                if values:
+                    held[name] = values
+            # Controls and calculations still consume the raw charger rows.
+            return {**data, "_ac_charger_held": held} if held else data
 
         try:
             async with async_timeout.timeout(timeout):
@@ -206,7 +238,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     if pending:
                         # Publish the fresh plant/inverter snapshot without moving
                         # HA's refresh timer or declaring the poll complete.
-                        early_data = {**snapshot, "ac_chargers": completed_data(ac_tasks)}
+                        early_data = with_held_charger_telemetry(
+                            {**snapshot, "ac_chargers": completed_data(ac_tasks)},
+                            waiting={name for name, task in ac_tasks.items() if task in pending},
+                        )
                         self.data = early_data
                         self.async_update_listeners()
 
@@ -229,6 +264,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 # the early publication.
                 if early_data is not None:
                     snapshot["_sensors_initialized"] = early_data["_sensors_initialized"]
+                snapshot = with_held_charger_telemetry(snapshot)
                 self.data = snapshot
                 _LOGGER.debug("RBS-coordinator-106-coordinator-post Merged fetched, len: %s data: %s", len(self.data), self.data)
 
@@ -268,10 +304,14 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                         if task.cancelled() or not task.done()
                     }
                     devices_at_deadline.update(f"ac_charger:{name}" for name in unstarted_ac)
+                    snapshot = with_held_charger_telemetry(
+                        partial, at_deadline={name for name in partial["ac_chargers"]
+                                              if f"ac_charger:{name}" in devices_at_deadline},
+                    )
                     status = "partial"
                     self.partial_update_count += 1
                     self._last_successful_update_sequence = update_sequence
-                    return partial
+                    return snapshot
             status = "timeout"
             self.update_failure_count += 1
             raise UpdateFailed("Timeout communicating with Sigenergy system") from exception
@@ -299,6 +339,9 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                     device_timings.setdefault(device, {}).update(
                         status="error", error_type="TimeoutError",
                     )
+                if status in {"success", "partial"}:
+                    for name, values in (snapshot or {}).get("_ac_charger_held", {}).items():
+                        device_timings[f"ac_charger:{name}"]["held_fields"] = sorted(values)
 
                 # Include failed attempts, and keep workflow cleanup separate
                 # from the fetch deadline. Device times include broker waits;
