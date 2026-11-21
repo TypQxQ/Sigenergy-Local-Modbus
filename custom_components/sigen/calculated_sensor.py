@@ -379,8 +379,12 @@ class SigenergyCalculations:
 
         total_ac_charger_power = 0.0
         ac_chargers: dict[str, Any] = coordinator_data.get("ac_chargers", {})
-        for ac_charger_data in ac_chargers.values():
-            raw_power = ac_charger_data.get("ac_charger_charging_power")
+        held_telemetry = coordinator_data.get("_ac_charger_held", {})
+        power_key = "ac_charger_charging_power"
+        for name, ac_charger_data in ac_chargers.items():
+            raw_power = ac_charger_data.get(power_key)
+            if raw_power is None:
+                raw_power = held_telemetry.get(name, {}).get(power_key)
             if raw_power is None or isinstance(raw_power, bool):
                 return None
             ac_power = safe_float(raw_power)

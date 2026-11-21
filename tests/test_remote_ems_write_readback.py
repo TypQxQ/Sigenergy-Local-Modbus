@@ -18,6 +18,10 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
+from modbus_connection import ModbusConnectionError
+
+from test_sigen_components import _load_sigen_module
+
 SOURCE_PATH = Path(__file__).resolve().parents[1] / "custom_components/sigen/coordinator.py"
 ENABLE = "plant_remote_ems_enable"
 MODE = "plant_remote_ems_control_mode"
@@ -140,10 +144,14 @@ def _make_coordinator():
         "DataUpdateCoordinator": _CoordinatorBase,
         "UpdateFailed": _UpdateFailed,
         "SigenergyModbusError": _ModbusError,
+        "ModbusConnectionError": ModbusConnectionError,
         "dt_util": SimpleNamespace(utcnow=lambda: datetime.now(timezone.utc)),
         "DEFAULT_SCAN_INTERVAL": 5,
         "MIN_SCAN_INTERVAL": 1,
         "CONF_INVERTER_HAS_DCCHARGER": "has_dc_charger",
+        "AC_CHARGER_RUNNING_INFO_REGISTERS": _load_sigen_module(
+            "modbusregisterdefinitions"
+        ).AC_CHARGER_RUNNING_INFO_REGISTERS,
         "_LOGGER": Mock(),
     }
     exec(compile(module, str(SOURCE_PATH), "exec"), namespace)

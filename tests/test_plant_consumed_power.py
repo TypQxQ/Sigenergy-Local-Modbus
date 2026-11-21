@@ -66,6 +66,19 @@ class TestPlantConsumedPower(unittest.TestCase):
         data["ac_chargers"]["Charger"] = {}
         self.assertIsNone(self.consumed(data))
 
+    def test_fallback_uses_held_charger_power_until_it_expires(self):
+        power = "ac_charger_charging_power"
+        data = self.data({"First": {power: 1}, "Second": {}})
+        data["_ac_charger_held"] = {"Second": {power: 2}}
+        self.assertEqual(1, self.consumed(data))
+        self.assertEqual({}, data["ac_chargers"]["Second"])
+        data["ac_chargers"]["Second"][power] = 0
+        self.assertEqual(3, self.consumed(data), "fresh zero takes precedence")
+        data["ac_chargers"]["Second"][power] = None
+        self.assertEqual(1, self.consumed(data))
+        del data["_ac_charger_held"]
+        self.assertIsNone(self.consumed(data))
+
     def test_direct_consumption_wins_over_fallback(self):
         data = self.data({"Charger": {}})
         data["plant"]["plant_general_load_power"] = 2

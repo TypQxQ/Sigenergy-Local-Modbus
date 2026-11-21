@@ -16,6 +16,11 @@ from types import MethodType, SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
+from modbus_connection import ModbusConnectionError
+
+from test_remote_ems_write_readback import _ModbusError
+from test_sigen_components import _load_sigen_module
+
 SOURCE_PATH = (
     Path(__file__).resolve().parents[1]
     / "custom_components" / "sigen" / "coordinator.py"
@@ -44,7 +49,12 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60,
         "async_timeout": SimpleNamespace(timeout=lambda _seconds: asyncio.timeout(timeout)),
         "dt_util": SimpleNamespace(utcnow=lambda: datetime.now(timezone.utc)),
         "CONF_INVERTER_HAS_DCCHARGER": "has_dc_charger",
+        "AC_CHARGER_RUNNING_INFO_REGISTERS": _load_sigen_module(
+            "modbusregisterdefinitions"
+        ).AC_CHARGER_RUNNING_INFO_REGISTERS,
         "UpdateFailed": _UpdateFailed,
+        "SigenergyModbusError": _ModbusError,
+        "ModbusConnectionError": ModbusConnectionError,
         "_LOGGER": Mock(),
     }
     exec(compile(module, str(SOURCE_PATH), "exec"), namespace)
