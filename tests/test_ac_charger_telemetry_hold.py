@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+from types import MethodType
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from modbus_connection import ModbusTimeoutError
+from modbus_connection import ModbusConnectionError, ModbusTimeoutError
 from modbus_connection.exceptions import IllegalDataAddressError
 from modbus_connection.mock import MockModbusConnection
 from modbus_connection.model import Component, gauge
@@ -55,13 +56,19 @@ class TestAcChargerTelemetryHold(unittest.IsolatedAsyncioTestCase):
             group._endpoint_poll = self.endpoint
 
         self.coordinator, hub, self.namespace = _make_coordinator()
+        self.namespace["SigenergyModbusError"] = modbus.SigenergyModbusError
         hub.inverter_connections = {"inverter": {}}
         hub.ac_charger_connections = {"EVAC": {}}
         hub.begin_poll_update = self.endpoint.begin_update
         hub.finish_poll_update = self.endpoint.finish_update
         hub.async_read_plant_data = groups["plant"].async_update
         hub.async_read_inverter_data = lambda name: groups[f"inverter:{name}"].async_update()
-        hub.async_read_ac_charger_data = lambda _name: charger.async_update()
+        hub._ac_chargers = {"EVAC": charger}
+        hub._active_polls = 0
+        hub._async_read = MethodType(modbus.SigenergyModbusHub._async_read, hub)
+        hub.async_read_ac_charger_data = MethodType(
+            modbus.SigenergyModbusHub.async_read_ac_charger_data, hub,
+        )
         hub.get_poll_diagnostics = lambda name: groups[name].poll_diagnostics()
         self.state_sensor, _ = self.sensor_fixture.sensor(STATE)
         self.state_sensor._device_name = "EVAC"
@@ -167,6 +174,46 @@ class TestAcChargerTelemetryHold(unittest.IsolatedAsyncioTestCase):
         await self.coordinator.async_refresh()
         self.assertIsNone(self.state_sensor.native_value)
         self.assertNotIn("_ac_charger_held", self.coordinator.data)
+
+    async def test_connection_error_on_reread_holds_telemetry(self):
+        await self.coordinator.async_refresh()
+        read = AsyncMock(side_effect=[
+            ModbusTimeoutError("missed first read"),
+            ModbusConnectionError("reconnect failed"),
+        ])
+        with (patch.object(self.unit, "read_input_registers", read),
+              patch.object(self.unit, "disconnect", new_callable=AsyncMock) as disconnect):
+            await self.coordinator.async_refresh()
+        disconnect.assert_awaited_once_with()
+        self.assertEqual(2, read.await_count)
+        self.assertEqual((1, 1, 0), (self.endpoint.timeouts, self.endpoint.reconnects, self.endpoint.stops))
+        self._assert_connection_error_hold("ModbusConnectionError")
+
+    async def test_plain_connection_error_holds_telemetry_once(self):
+        await self.coordinator.async_refresh()
+        link_error = ModbusConnectionError("connection lost")
+        # The library can chain a socket error under the connection error.
+        link_error.__cause__ = OSError("socket unavailable")
+        self.unit.fail_read(32000, link_error, register_type="input")
+        await self.coordinator.async_refresh()
+        self._assert_connection_error_hold("OSError")
+
+        await self.coordinator.async_refresh()
+        self.assertEqual((0, 0), (self.endpoint.timeouts, self.endpoint.reconnects))
+        self.assertIsNone(self.state_sensor.native_value)
+        timing = self.coordinator.latest_update_timing["devices"]["ac_charger:EVAC"]
+        self.assertEqual("error", timing["status"])
+        self.assertNotIn("held_fields", timing)
+
+    def _assert_connection_error_hold(self, cause_type):
+        self.assertEqual("charging", self.state_sensor.native_value)
+        self.assertEqual({}, self.coordinator.data["ac_chargers"]["EVAC"])
+        self.assertNotIn(CURRENT, self.coordinator.data["_ac_charger_held"]["EVAC"])
+        timing = self.coordinator.latest_update_timing["devices"]["ac_charger:EVAC"]
+        self.assertEqual("error", timing["status"])
+        self.assertEqual("SigenergyModbusError", timing["error_type"])
+        self.assertEqual(cause_type, timing["cause_type"])
+        self.assertIn(STATE, timing["held_fields"])
 
     async def test_poll_deadline_holds_once_and_still_reports_timeout(self):
         await self.coordinator.async_refresh()

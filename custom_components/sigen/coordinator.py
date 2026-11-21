@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Union # Added Optional, Union
 import async_timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=syntax-error
+from modbus_connection import ModbusConnectionError
 
 from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
 from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL, MIN_SCAN_INTERVAL
@@ -98,6 +99,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         dc_tasks: dict[str, asyncio.Task] = {}
         ac_tasks: dict[str, asyncio.Task] = {}
         devices_at_deadline: set[str] = set()
+        connection_failures: set[str] = set()
         device_timings: dict[str, dict[str, Any]] = {}
         previous_data = (self.data or {}) if self.last_update_success else {}
 
@@ -113,6 +115,11 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             except Exception as error:
                 device_status = "error"
                 quality = {"error_type": type(error).__name__}
+                if (
+                    isinstance(error, SigenergyModbusError)
+                    and isinstance(error.__cause__, ModbusConnectionError)
+                ):
+                    connection_failures.add(device)
                 # Keep explicit cause types, never exception messages/payloads.
                 # Bound traversal even for a malformed cyclic exception chain.
                 seen = {id(error)}
@@ -154,10 +161,14 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                 if not previous:
                     continue
                 fields = previous.keys() & AC_CHARGER_RUNNING_INFO_REGISTERS.keys()
-                if name not in waiting and name not in at_deadline:
+                device = f"ac_charger:{name}"
+                if (
+                    name not in waiting and name not in at_deadline
+                    and device not in connection_failures
+                ):
                     # Use only the previous raw row for completed polls. A held
                     # value cannot carry forward through a second consecutive miss.
-                    blocks = device_timings.get(f"ac_charger:{name}", {}).get("failed_blocks", ())
+                    blocks = device_timings.get(device, {}).get("failed_blocks", ())
                     fields.intersection_update(
                         field for block in blocks
                         if (block.get("stage"), block.get("error_type")) in {
@@ -169,7 +180,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                           if previous[field] is not None and readings.get(field) is None}
                 if values:
                     held[name] = values
-            # Controls and calculations still consume the raw charger rows.
+            # Controls still consume the raw charger rows.
             return {**data, "_ac_charger_held": held} if held else data
 
         try:

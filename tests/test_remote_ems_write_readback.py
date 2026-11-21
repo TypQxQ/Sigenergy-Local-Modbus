@@ -18,6 +18,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
+from modbus_connection import ModbusConnectionError
+
 from test_sigen_components import _load_sigen_module
 
 SOURCE_PATH = Path(__file__).resolve().parents[1] / "custom_components/sigen/coordinator.py"
@@ -142,6 +144,7 @@ def _make_coordinator():
         "DataUpdateCoordinator": _CoordinatorBase,
         "UpdateFailed": _UpdateFailed,
         "SigenergyModbusError": _ModbusError,
+        "ModbusConnectionError": ModbusConnectionError,
         "dt_util": SimpleNamespace(utcnow=lambda: datetime.now(timezone.utc)),
         "DEFAULT_SCAN_INTERVAL": 5,
         "MIN_SCAN_INTERVAL": 1,
