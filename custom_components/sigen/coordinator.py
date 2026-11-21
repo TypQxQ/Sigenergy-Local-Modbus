@@ -4,10 +4,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from asyncio import timeout as asyncio_timeout
 from datetime import timedelta
 from typing import Any, Dict, Optional, Union # Added Optional, Union
 
-import async_timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=syntax-error
 from modbus_connection import ModbusConnectionError
@@ -184,7 +184,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
             return {**data, "_ac_charger_held": held} if held else data
 
         try:
-            async with async_timeout.timeout(timeout):
+            async with asyncio_timeout(timeout):
 
                 # Fetch all data at once
                 plant_data = await timed_read("plant", self.hub.async_read_plant_data)
@@ -414,7 +414,7 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         """
         after_sequence = self._update_sequence
         try:
-            async with async_timeout.timeout(60):
+            async with asyncio_timeout(60):
                 await self.async_refresh()
         except TimeoutError as ex:
             raise SigenergyModbusError(

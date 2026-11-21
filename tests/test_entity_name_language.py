@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock
 
-from test_config_options_safety import load_flows, options_flow, vol
+from test_config_options_safety import load_flows, options_flow, probatio
 from test_entity_translations import COMPONENT, descriptions
 
 
@@ -127,12 +127,12 @@ class TestNamePreparation(unittest.IsolatedAsyncioTestCase):
                     {"component.sigen.entity.number.test.name": text}, "number", "test", {}))
 
 
-@unittest.skipUnless(vol is not None, "Install voluptuous to exercise the real form schema")
+@unittest.skipUnless(probatio is not None, "Install probatio to exercise the real form schema")
 class TestLanguageOptions(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.scope = load_flows()
-        self.scope.update(vol=vol, SelectSelectorConfig=lambda **kw: kw,
-                          SelectSelector=lambda config: vol.In(config["options"]))
+        self.scope.update(probatio=probatio, SelectSelectorConfig=lambda **kw: kw,
+                          SelectSelector=lambda config: probatio.In(config["options"]))
         self.flow = options_flow(self.scope)
 
     async def test_configure_menu_exposes_device_and_display_settings(self):
@@ -148,7 +148,7 @@ class TestLanguageOptions(unittest.IsolatedAsyncioTestCase):
             for language in ("auto", *self.scope["ENTITY_NAME_LANGUAGES"]):
                 self.assertEqual({"entity_name_language": language},
                                  result["data_schema"]({"entity_name_language": language}))
-            with self.assertRaises(vol.Invalid):
+            with self.assertRaises(probatio.Invalid):
                 result["data_schema"]({"entity_name_language": "xx"})
 
     async def test_save_only_returns_options_for_standard_persistence_and_one_listener_reload(self):

@@ -139,7 +139,7 @@ def _make_coordinator():
     namespace = {
         "asyncio": asyncio,
         "time": time,
-        "async_timeout": SimpleNamespace(timeout=asyncio.timeout),
+        "asyncio_timeout": asyncio.timeout,
         "timedelta": timedelta,
         "DataUpdateCoordinator": _CoordinatorBase,
         "UpdateFailed": _UpdateFailed,
@@ -246,7 +246,7 @@ class TestRemoteEmsWriteReadback(unittest.IsolatedAsyncioTestCase):
     async def test_readback_wait_is_bounded_and_does_not_repeat_the_write(self):
         coordinator, hub, namespace = _make_coordinator()
         hub.release_read.clear()
-        namespace["async_timeout"].timeout = lambda _seconds: asyncio.timeout(0.01)
+        namespace["asyncio_timeout"] = lambda _seconds: asyncio.timeout(0.01)
         try:
             with self.assertRaisesRegex(_ModbusError, "readback.*timed out"):
                 await coordinator.async_write_parameter("plant", None, ENABLE, 1)
@@ -319,7 +319,7 @@ class TestRemoteEmsWriteReadback(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(hub.read_started.wait(), timeout=1)
             # The old poll already entered its original timeout context.
             # Shorten only the new command's confirmation budget.
-            namespace["async_timeout"].timeout = lambda _seconds: asyncio.timeout(0.01)
+            namespace["asyncio_timeout"] = lambda _seconds: asyncio.timeout(0.01)
             with self.assertRaisesRegex(_ModbusError, "readback.*timed out"):
                 await coordinator.async_write_parameter("plant", None, ENABLE, 1)
             self.assertFalse(old_poll.done(), "confirmation must not cancel the refresh lock owner")

@@ -11,7 +11,7 @@ import logging
 from modbus_connection import ModbusError, ModbusTcpParams
 from homeassistant.components.modbus import async_get_temporary_unit
 
-import voluptuous as vol
+import probatio
 
 from homeassistant import (
     config_entries,
@@ -124,9 +124,9 @@ DEFAULT_PLANT_CONNECTION = {
 }
 
 # Schema definitions for each step
-STEP_DEVICE_TYPE_SCHEMA = vol.Schema(
+STEP_DEVICE_TYPE_SCHEMA = probatio.Schema(
     {
-        vol.Required("device_type"): SelectSelector(SelectSelectorConfig(
+        probatio.Required("device_type"): SelectSelector(SelectSelectorConfig(
             options=[DEVICE_TYPE_NEW_PLANT, DEVICE_TYPE_INVERTER,
                      DEVICE_TYPE_AC_CHARGER, DEVICE_TYPE_DC_CHARGER],
             translation_key="device_type",
@@ -146,7 +146,7 @@ def generate_plant_schema(
         discovered_ip = "",
         use_inverter_device_id = False,
         display_update_frq = False
-    ) -> vol.Schema:
+    ) -> probatio.Schema:
     """Dynamically create schema using the determined prefill_host
 
     Args:
@@ -156,27 +156,27 @@ def generate_plant_schema(
         display_update_frq (bool, optional): _description_. Defaults to False.
 
     Returns:
-        vol.Schema: _description_
+        probatio.Schema: _description_
     """
     slave_id_type = CONF_INVERTER_SLAVE_ID if use_inverter_device_id else CONF_SLAVE_ID
 
     validation_schema = {
-                vol.Required(CONF_HOST, default = user_input[CONF_HOST] or discovered_ip): str,
-                vol.Required(CONF_PORT, default = user_input[CONF_PORT]): int
+                probatio.Required(CONF_HOST, default = user_input[CONF_HOST] or discovered_ip): str,
+                probatio.Required(CONF_PORT, default = user_input[CONF_PORT]): int
     }
 
     _LOGGER.debug("slave_id_type: %s",slave_id_type)
-    validation_schema[vol.Required(slave_id_type, default=user_input[slave_id_type])] = int
-    validation_schema[vol.Required(CONF_READ_ONLY,
+    validation_schema[probatio.Required(slave_id_type, default=user_input[slave_id_type])] = int
+    validation_schema[probatio.Required(CONF_READ_ONLY,
                                    default=user_input.get(CONF_READ_ONLY, DEFAULT_READ_ONLY))] = bool
 
     if display_update_frq:
-        validation_schema[vol.Required(CONF_SCAN_INTERVAL,
-                                       default=user_input.get(CONF_SCAN_INTERVAL,DEFAULT_SCAN_INTERVAL))] = vol.All(
-                                           vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL)
+        validation_schema[probatio.Required(CONF_SCAN_INTERVAL,
+                                       default=user_input.get(CONF_SCAN_INTERVAL,DEFAULT_SCAN_INTERVAL))] = probatio.All(
+                                           probatio.Coerce(int), probatio.Range(min=MIN_SCAN_INTERVAL)
                                        )
 
-    schema = vol.Schema(validation_schema)
+    schema = probatio.Schema(validation_schema)
     return schema
 
 def validate_host_port(host: str, port: int) -> Dict[str, str]:
@@ -320,7 +320,7 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
 
         # Check if the accumulated energy consumption sensor exists
-        schema = vol.Schema({vol.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool})
+        schema = probatio.Schema({probatio.Required(CONF_READ_ONLY, default=DEFAULT_READ_ONLY): bool})
 
         if user_input is None:
             return self.async_show_form(
@@ -691,8 +691,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         if user_input is None:
             # Create schema with plant selection
-            schema = vol.Schema(
-                {vol.Required(CONF_PARENT_PLANT_ID): vol.In(self._plants)}
+            schema = probatio.Schema(
+                {probatio.Required(CONF_PARENT_PLANT_ID): probatio.In(self._plants)}
             )
 
             return self.async_show_form(
@@ -726,10 +726,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
 
         # Dynamically create schema to pre-fill host if discovered via DHCP
-        schema = vol.Schema({
-            vol.Required(CONF_HOST, default=(user_input.get(CONF_HOST, "") if user_input else "")): str,
-            vol.Required(CONF_PORT, default=(user_input.get(CONF_PORT, DEFAULT_PORT) if user_input else DEFAULT_PORT)): int,
-            vol.Required(CONF_SLAVE_ID, default=(user_input.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID) if user_input else DEFAULT_INVERTER_SLAVE_ID)): int,
+        schema = probatio.Schema({
+            probatio.Required(CONF_HOST, default=(user_input.get(CONF_HOST, "") if user_input else "")): str,
+            probatio.Required(CONF_PORT, default=(user_input.get(CONF_PORT, DEFAULT_PORT) if user_input else DEFAULT_PORT)): int,
+            probatio.Required(CONF_SLAVE_ID, default=(user_input.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID) if user_input else DEFAULT_INVERTER_SLAVE_ID)): int,
             })
 
         if user_input is None:
@@ -829,10 +829,10 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
         errors = {}
 
         def get_schema(data_source: Dict):
-            return vol.Schema({
-                vol.Required(CONF_HOST, default=data_source.get(CONF_HOST, "")): str,
-                vol.Required(CONF_PORT, default=data_source.get(CONF_PORT, DEFAULT_PORT)): int,
-                vol.Required(CONF_SLAVE_ID, default=data_source.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID)): int,
+            return probatio.Schema({
+                probatio.Required(CONF_HOST, default=data_source.get(CONF_HOST, "")): str,
+                probatio.Required(CONF_PORT, default=data_source.get(CONF_PORT, DEFAULT_PORT)): int,
+                probatio.Required(CONF_SLAVE_ID, default=data_source.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID)): int,
                 })
 
         if user_input is None:
@@ -946,8 +946,8 @@ class SigenergyConfigFlow(config_entries.ConfigFlow):
 
         if user_input is None:
             # Create schema with inverter selection
-            schema = vol.Schema(
-                {vol.Required(CONF_PARENT_INVERTER_ID): vol.In(inverters_without_dc)}
+            schema = probatio.Schema(
+                {probatio.Required(CONF_PARENT_INVERTER_ID): probatio.In(inverters_without_dc)}
             )
 
             return self.async_show_form(
@@ -1164,10 +1164,10 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
         on, off = thresholds if thresholds is not None else (DEFAULT_POWER_FLOW_ON_W, DEFAULT_POWER_FLOW_OFF_W)
         return self.async_show_form(
             step_id="power_flow_settings",
-            data_schema=vol.Schema({
-                vol.Required(CONF_POWER_FLOW_HYSTERESIS, default=current.get(CONF_POWER_FLOW_HYSTERESIS) is True): bool,
-                vol.Required(CONF_POWER_FLOW_ON_W, default=float(on)): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000000)),
-                vol.Required(CONF_POWER_FLOW_OFF_W, default=float(off)): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000000)),
+            data_schema=probatio.Schema({
+                probatio.Required(CONF_POWER_FLOW_HYSTERESIS, default=current.get(CONF_POWER_FLOW_HYSTERESIS) is True): bool,
+                probatio.Required(CONF_POWER_FLOW_ON_W, default=float(on)): probatio.All(probatio.Coerce(float), probatio.Range(min=0, max=1000000)),
+                probatio.Required(CONF_POWER_FLOW_OFF_W, default=float(off)): probatio.All(probatio.Coerce(float), probatio.Range(min=0, max=1000000)),
             }), errors=errors,
         )
 
@@ -1193,7 +1193,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             current = ENTITY_NAME_LANGUAGE_AUTO
         return self.async_show_form(
             step_id="display_settings",
-            data_schema=vol.Schema({vol.Required(CONF_ENTITY_NAME_LANGUAGE, default=current):
+            data_schema=probatio.Schema({probatio.Required(CONF_ENTITY_NAME_LANGUAGE, default=current):
                 SelectSelector(SelectSelectorConfig(
                     options=list(languages), translation_key="entity_name_language",
                 ))}),
@@ -1213,7 +1213,7 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
                 {"value": key, "label": label}
                 for key, label in self._devices.items()
             ]
-            schema = vol.Schema({vol.Required("selected_device"): SelectSelector(
+            schema = probatio.Schema({probatio.Required("selected_device"): SelectSelector(
                 SelectSelectorConfig(options=options, translation_key="configured_device")
             )})
 
@@ -1337,14 +1337,14 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is None:
             # Create schema dictionary with base fields
-            schema_dict: Dict[Union[vol.Required, vol.Optional], Any] = {
-                vol.Required(
+            schema_dict: Dict[Union[probatio.Required, probatio.Optional], Any] = {
+                probatio.Required(
                     CONF_HOST, default=inverter_details.get(CONF_HOST, "")
                 ): str,
-                vol.Required(
+                probatio.Required(
                     CONF_PORT, default=inverter_details.get(CONF_PORT, DEFAULT_PORT)
                 ): int,
-                vol.Required(
+                probatio.Required(
                     CONF_SLAVE_ID,
                     default=inverter_details.get(
                         CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID
@@ -1353,9 +1353,9 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             }
             # Conditionally add the remove option
             if show_remove_option:
-                schema_dict[vol.Optional(CONF_REMOVE_DEVICE, default=False)] = bool
+                schema_dict[probatio.Optional(CONF_REMOVE_DEVICE, default=False)] = bool
 
-            schema = vol.Schema(schema_dict)
+            schema = probatio.Schema(schema_dict)
 
             return self.async_show_form(
                 step_id=STEP_INVERTER_CONFIG,
@@ -1363,14 +1363,14 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             )
 
         # Create schema with current values that we can return on errors.
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Optional(CONF_REMOVE_DEVICE, default=False): bool,
-                vol.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
-                vol.Required(
+                probatio.Optional(CONF_REMOVE_DEVICE, default=False): bool,
+                probatio.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
+                probatio.Required(
                     CONF_PORT, default=user_input.get(CONF_PORT, DEFAULT_PORT)
                 ): int,
-                vol.Required(
+                probatio.Required(
                     CONF_SLAVE_ID,
                     default=user_input.get(CONF_SLAVE_ID, DEFAULT_INVERTER_SLAVE_ID),
                 ): int,
@@ -1466,17 +1466,17 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is None:
             # Create schema with current values
-            schema = vol.Schema(
+            schema = probatio.Schema(
                 {
-                    vol.Optional(CONF_REMOVE_DEVICE, default=False): bool,
-                    vol.Required(
+                    probatio.Optional(CONF_REMOVE_DEVICE, default=False): bool,
+                    probatio.Required(
                         CONF_HOST, default=ac_charger_details.get(CONF_HOST, "")
                     ): str,
-                    vol.Required(
+                    probatio.Required(
                         CONF_PORT,
                         default=ac_charger_details.get(CONF_PORT, DEFAULT_PORT),
                     ): int,
-                    vol.Required(
+                    probatio.Required(
                         CONF_SLAVE_ID, default=ac_charger_details.get(CONF_SLAVE_ID, 1)
                     ): int,
                 }
@@ -1488,17 +1488,17 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
             )
 
         # Re-create schema with user input values for error display
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Optional(
+                probatio.Optional(
                     CONF_REMOVE_DEVICE,
                     default=user_input.get(CONF_REMOVE_DEVICE, False),
                 ): bool,
-                vol.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
-                vol.Required(
+                probatio.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
+                probatio.Required(
                     CONF_PORT, default=user_input.get(CONF_PORT, DEFAULT_PORT)
                 ): int,
-                vol.Required(
+                probatio.Required(
                     CONF_SLAVE_ID, default=user_input.get(CONF_SLAVE_ID, 1)
                 ): int,
             }
@@ -1575,9 +1575,9 @@ class SigenergyOptionsFlowHandler(config_entries.OptionsFlow):
     ):
         """Handle reconfiguration of an existing DC charger device."""
         if user_input is None:
-            schema = vol.Schema(
+            schema = probatio.Schema(
                 {
-                    vol.Optional(CONF_REMOVE_DEVICE, default=False): bool,
+                    probatio.Optional(CONF_REMOVE_DEVICE, default=False): bool,
                 }
             )
 

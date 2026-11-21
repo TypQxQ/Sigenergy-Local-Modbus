@@ -1,6 +1,6 @@
 """Regression tests for config_flow.py's connection-check timeout handling.
 
-config_flow.py pulls in a large chunk of Home Assistant (voluptuous
+config_flow.py pulls in a large chunk of Home Assistant (probatio
 selectors, entity/device registry helpers, the sensor platform, ...) that
 isn't worth stubbing just to import the module directly. Instead, following
 this repo's existing pattern (see test_energy_zero_guard.py), the probe and

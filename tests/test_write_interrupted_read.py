@@ -86,7 +86,7 @@ class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
         hub.async_read_plant_data = self.group.async_update
         await coordinator.async_refresh()
         original = self.unit.read_input_registers
-        original_timeout = namespace["async_timeout"].timeout
+        original_timeout = namespace["asyncio_timeout"]
         deadline = None
         writes = 0
 
@@ -105,7 +105,7 @@ class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
             return await original(address, count)
 
         with patch.object(self.unit, "read_input_registers", read), \
-             patch.object(namespace["async_timeout"], "timeout", timeout):
+             patch.dict(namespace, asyncio_timeout=timeout):
             await coordinator.async_refresh()
 
         self.assertFalse(coordinator.last_update_success)
@@ -301,7 +301,7 @@ class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
             deadline.reschedule(asyncio.get_running_loop().time())
             await release.wait()
         namespace = c._async_update_data.__func__.__globals__
-        original_timeout = namespace["async_timeout"].timeout
+        original_timeout = namespace["asyncio_timeout"]
         def timeout(seconds):
             nonlocal deadline
             deadline = original_timeout(seconds)
@@ -309,7 +309,7 @@ class TestWriteInterruptedRead(IsolatedAsyncioTestCase):
         deadline = None
         with patch.object(self.unit, "read_input_registers", read), \
              patch.object(self.group._endpoint_writes, "async_drain", drain), \
-             patch.object(namespace["async_timeout"], "timeout", timeout):
+             patch.dict(namespace, asyncio_timeout=timeout):
             await c.async_refresh()
         self.assertFalse(c.last_update_success)
         self.assertEqual(1, c.update_timeout_count)

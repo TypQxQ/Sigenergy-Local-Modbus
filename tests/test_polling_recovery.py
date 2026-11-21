@@ -190,7 +190,7 @@ class TestPollingRecovery(unittest.IsolatedAsyncioTestCase):
             timer = asyncio.timeout(seconds)
             deadlines.append(timer)
             return timer
-        namespace["async_timeout"].timeout = deadline
+        namespace["asyncio_timeout"] = deadline
         original = self.unit.read_input_registers
         finish = asyncio.Event()
         calls = []
