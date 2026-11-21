@@ -21,7 +21,7 @@ class TestCoordinatorStartupTiming(unittest.IsolatedAsyncioTestCase):
             # Scale 180/60 seconds to keep this real timeout test fast.
             return asyncio.timeout(seconds / 1000)
 
-        namespace["async_timeout"].timeout = timeout
+        namespace["asyncio_timeout"] = timeout
 
         async def slow_plant():
             await asyncio.sleep(0.09)
@@ -63,7 +63,7 @@ class TestCoordinatorStartupTiming(unittest.IsolatedAsyncioTestCase):
             budgets.append(seconds)
             return asyncio.timeout(0.02)
 
-        namespace["async_timeout"].timeout = timeout
+        namespace["asyncio_timeout"] = timeout
         hub.release_read.clear()
         await coordinator.async_refresh()
         self.assertFalse(coordinator.last_update_success)
@@ -194,7 +194,7 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         await coordinator.async_refresh()
         namespace["AC_CHARGER_PUBLISH_GRACE"] = 0
         deadline = asyncio.timeout(None)
-        namespace["async_timeout"].timeout = lambda _seconds: deadline
+        namespace["asyncio_timeout"] = lambda _seconds: deadline
         hub.ac_charger_connections = {
             "stalled": {}, "timed out": {}, "disconnected": {}, "healthy": {},
         }
@@ -256,7 +256,7 @@ class TestAcChargerPolling(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("ac_charger:healthy", warnings)
 
         failing = False
-        namespace["async_timeout"].timeout = asyncio.timeout
+        namespace["asyncio_timeout"] = asyncio.timeout
         hub.registers["soc"] = 52
         await coordinator.async_refresh()
         self.assertEqual(52, coordinator.data["plant"]["soc"])

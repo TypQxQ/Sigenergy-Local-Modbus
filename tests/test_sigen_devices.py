@@ -491,7 +491,7 @@ class TestSigenergyPlant(unittest.IsolatedAsyncioTestCase):
         hub.async_read_plant_data = plant.async_update
         # Two wire budgets fit; retrying either silent address in this same
         # first refresh exceeds the deadline and would trigger a new setup.
-        namespace["async_timeout"].timeout = lambda _seconds: asyncio.timeout(3)
+        namespace["asyncio_timeout"] = lambda _seconds: asyncio.timeout(3)
         with patch.object(unit, "read_input_registers", read_input), patch.object(
             unit, "read_holding_registers", read_holding
         ):

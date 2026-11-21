@@ -20,9 +20,35 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install test dependencies
-        run: python -m pip install "modbus-connection==${{ matrix.modbus_connection }}" "voluptuous==0.15.2" PyYAML Jinja2
+        run: python -m pip install "modbus-connection==${{ matrix.modbus_connection }}" "probatio==0.13.0" PyYAML Jinja2
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
+
+  home-assistant-compatibility:
+    runs-on: "ubuntu-latest"
+    strategy:
+      matrix:
+        include:
+          - home_assistant: "2026.10.0"
+            modbus_connection: "4.12.3"
+            tmodbus: "0.6.2"
+          - home_assistant: "2026.11.2"
+            modbus_connection: "4.12.7"
+            tmodbus: "1.1.0"
+    steps:
+      - uses: "actions/checkout@v4"
+      - uses: "actions/setup-python@v5"
+        with:
+          python-version: "3.14"
+      - name: Install Home Assistant and its Modbus dependencies
+        run: >-
+          python -m pip install "homeassistant==${{ matrix.home_assistant }}"
+          "modbus-connection[tmodbus]==${{ matrix.modbus_connection }}"
+          "tmodbus==${{ matrix.tmodbus }}" "pymodbus==3.13.1"
+      - name: Check integration imports and form serialization
+        env:
+          PYTHONPATH: "."
+        run: python tests/ha_dependency_smoke.py
 
   validate:
     runs-on: "ubuntu-latest"

@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, Mock
 from test_remote_ems_write_readback import _make_coordinator
 
 try:
-    import voluptuous as vol
+    import probatio
 except ModuleNotFoundError:
-    vol = None
+    probatio = None
 
 SOURCE = Path(__file__).resolve().parents[1] / "custom_components/sigen"
 
@@ -84,11 +84,11 @@ def plant_input(interval):
             "inverter_slave_ids": 1, "read_only": True, "scan_interval": interval}
 
 
-@unittest.skipUnless(vol is not None, "Install voluptuous to exercise the real form schema")
+@unittest.skipUnless(probatio is not None, "Install probatio to exercise the real form schema")
 class TestPlantSchema(unittest.TestCase):
     def setUp(self):
         scope = load_flows()
-        scope["vol"] = vol
+        scope["probatio"] = probatio
         tree = ast.parse((SOURCE / "config_flow.py").read_text(encoding="utf-8"))
         node = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
                     and n.name == "generate_plant_schema")
@@ -117,7 +117,7 @@ class TestPlantSchema(unittest.TestCase):
             for interval in (0, -1, "0", "-1"):
                 with self.subTest(initial=initial, interval=interval):
                     schema, data = self.schema_and_input(initial, interval)
-                    with self.assertRaises(vol.Invalid):
+                    with self.assertRaises(probatio.Invalid):
                         schema(data)
 
 

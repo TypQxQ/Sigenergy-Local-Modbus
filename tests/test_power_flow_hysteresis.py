@@ -10,7 +10,7 @@ from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock
 
-from test_config_options_safety import load_flows, options_flow, vol
+from test_config_options_safety import load_flows, options_flow, probatio
 import test_enum_sensor_values as enum_values
 
 SOURCE=Path(__file__).resolve().parents[1]/'custom_components/sigen'
@@ -156,10 +156,10 @@ class TestCombinedPVPower(unittest.TestCase):
                 self.assertEqual(expected,sensor.native_value)
 
 
-@unittest.skipUnless(vol is not None,'Install voluptuous')
+@unittest.skipUnless(probatio is not None,'Install probatio')
 class TestHysteresisOptions(unittest.IsolatedAsyncioTestCase):
     async def test_save_options_without_touching_device_data_or_manually_reloading(self):
-        scope=load_flows();scope['vol']=vol
+        scope=load_flows();scope['probatio']=probatio
         flow=options_flow(scope)
         flow.config_entry.options={'entity_name_language':'sv'}
         before=deepcopy(flow.config_entry)
@@ -170,7 +170,7 @@ class TestHysteresisOptions(unittest.IsolatedAsyncioTestCase):
         flow.hass.config_entries.async_reload.assert_not_awaited()
 
     async def test_disable_restores_original_options_and_rejects_invalid_enabled_values(self):
-        scope=load_flows();scope['vol']=vol
+        scope=load_flows();scope['probatio']=probatio
         flow=options_flow(scope)
         flow.config_entry.options={**OPTIONS,'entity_name_language':'de'}
         result=await flow.async_step_power_flow_settings({'power_flow_hysteresis':False})

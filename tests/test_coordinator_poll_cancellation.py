@@ -46,7 +46,7 @@ def _make_coordinator(*, ac_only: bool = False, timeout: float = 60,
         "STARTUP_TIMEOUT": 180,
         "UPDATE_TIMEOUT": 60,
         "SLOW_POLL_WARNING_COUNT": 10,
-        "async_timeout": SimpleNamespace(timeout=lambda _seconds: asyncio.timeout(timeout)),
+        "asyncio_timeout": lambda _seconds: asyncio.timeout(timeout),
         "dt_util": SimpleNamespace(utcnow=lambda: datetime.now(timezone.utc)),
         "CONF_INVERTER_HAS_DCCHARGER": "has_dc_charger",
         "AC_CHARGER_RUNNING_INFO_REGISTERS": _load_sigen_module(

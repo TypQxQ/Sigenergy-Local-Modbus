@@ -126,7 +126,7 @@ class TestUICatalogues(unittest.TestCase):
                 except (ValueError, TypeError):
                     pass
         scope = {**constants, "_LOGGER": SimpleNamespace(debug=lambda *args: None),
-                 "vol": SimpleNamespace(Required=lambda key, **kwargs: key,
+                 "probatio": SimpleNamespace(Required=lambda key, **kwargs: key,
                                         Schema=lambda data: data, All=lambda *args: None,
                                         Range=lambda **kwargs: None,
                                         Coerce=lambda value: value)}

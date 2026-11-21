@@ -4,14 +4,14 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock
 
-from test_config_options_safety import load_flows, options_flow, vol
+from test_config_options_safety import load_flows, options_flow, probatio
 
 
-@unittest.skipUnless(vol is not None, "Install voluptuous for config flow tests")
+@unittest.skipUnless(probatio is not None, "Install probatio for config flow tests")
 class TestDeviceAddresses(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.scope = load_flows()
-        self.scope.update(vol=vol, DEVICE_CHECKS={k: k for k in ('inverter', 'ac_charger', 'dc_charger')})
+        self.scope.update(probatio=probatio, DEVICE_CHECKS={k: k for k in ('inverter', 'ac_charger', 'dc_charger')})
         self.flow = options_flow(self.scope)
         self.flow.config_entry.options = {'entity_name_language': 'sv'}
         for group in ('inverter_connections', 'ac_charger_connections'):

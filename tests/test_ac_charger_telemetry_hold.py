@@ -219,7 +219,7 @@ class TestAcChargerTelemetryHold(unittest.IsolatedAsyncioTestCase):
         await self.coordinator.async_refresh()
         for state in ("charging", None):
             deadline = asyncio.timeout(None)
-            self.namespace["async_timeout"].timeout = lambda _seconds: deadline
+            self.namespace["asyncio_timeout"] = lambda _seconds: deadline
 
             async def miss_deadline(_name):
                 deadline.reschedule(asyncio.get_running_loop().time())
