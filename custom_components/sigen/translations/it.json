@@ -1810,6 +1810,15 @@
     }
   },
   "exceptions": {
+    "command_superseded": {"message": "La scrittura è stata riconosciuta, ma un comando più recente l’ha sostituita prima della conferma tramite rilettura."},
+    "command_rejected": {"message": "Il dispositivo ha rifiutato la scrittura."},
+    "command_queue_full": {"message": "La coda dei comandi è piena. La scrittura non è stata inviata."},
+    "command_expired": {"message": "Il comando è scaduto. La scrittura non è stata inviata."},
+    "command_invalidated": {"message": "Il comando non è più valido. La scrittura non è stata inviata."},
+    "command_unknown": {"message": "L’esito è sconosciuto. La scrittura potrebbe aver raggiunto il dispositivo. Nessun nuovo tentativo automatico."},
+    "command_unconfirmed": {"message": "La scrittura è stata confermata, ma non una nuova lettura corrispondente."},
+    "command_read_only": {"message": "Le scritture sono disabilitate in modalità di sola lettura."},
+    "command_ems_busy": {"message": "Troppi comandi EMS sono attivi. La scrittura non è stata inviata."},
     "invalid_ac_charger_current": {
       "message": "Impossibile impostare la corrente di ricarica a {value} A. Usa un valore compreso tra 6 e {maximum} A."
     },

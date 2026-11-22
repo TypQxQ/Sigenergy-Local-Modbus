@@ -51,6 +51,25 @@ class TestPollingRecovery(unittest.IsolatedAsyncioTestCase):
     def support_all(self):
         self.group._field_support["telemetry"].update(first=True, second=True, separate=True)
 
+    async def test_failed_resume_identity_check_does_not_invalidate_queued_write(self):
+        self.support_all()
+        self.group._read_round = {"started": time.monotonic(), "identity": {"fixture": "stable"}}
+        self.group._confirm_endpoint_identity.side_effect = ModbusTimeoutError("identity timeout")
+        writes = self.group._endpoint_writes
+        await writes.lock.acquire()
+        writer = asyncio.create_task(self.group.async_write("set_first", 42))
+        try:
+            while not writes.local:
+                await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            with self.assertRaises(ModbusTimeoutError):
+                await self.group.async_update()
+            self.assertIsNone(self.group._read_round)
+        finally:
+            writes.lock.release()
+        await writer
+        self.assertEqual(42, self.unit.holding[100])
+
     async def test_expired_bootstrap_words_are_read_again_after_an_outage(self):
         self.support_all()
         clock = [100.0]
@@ -274,12 +293,20 @@ class TestPollingRecovery(unittest.IsolatedAsyncioTestCase):
                 started.set()
                 await finish.wait()
             return await original(address, count)
-        with patch.object(self.unit, "read_input_registers", slow_last):
+        original_write = self.unit.write_register
+        async def write(*args, **kwargs):
+            await original_write(*args, **kwargs)
+            self.unit.load_raw({"input": {100: 999}})
+        with patch.object(self.unit, "read_input_registers", slow_last), \
+             patch.object(self.unit, "write_register", write):
             old = asyncio.create_task(self.group.async_update())
             await started.wait()
-            await self.group.async_write("set_first", 999)
-            self.unit.load_raw({"input": {100: 999}})
+            writer = asyncio.create_task(self.group.async_write("set_first", 999))
+            while not self.group._endpoint_writes.waiting:
+                await asyncio.sleep(0)
+            await asyncio.sleep(0)
             finish.set()
+            await writer
             self.assertEqual(999, (await old)["first"])
             self.assertEqual(1, self.group.poll_write_recoveries)
             self.assertEqual(999, (await self.group.async_update())["first"])

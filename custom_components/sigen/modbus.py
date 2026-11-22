@@ -52,6 +52,7 @@ from .const import (
     DEVICE_TYPE_INVERTER,
     DEVICE_TYPE_PLANT,
 )
+from .write_lifecycle import CommandRejected
 from .sigen_devices import PROBE_RETRY_DELAY, SigenergyACCharger, SigenergyInverter, SigenergyPlant
 from .sigen_devices import IDENTITY_REGISTERS, EndpointStopped, _EndpointWrites, _MAX_BLOCK_SPAN
 from .support_cache import SupportCache, device_cache_key
@@ -119,7 +120,7 @@ class _EndpointPoll:
     def __init__(self, endpoint: tuple[str, int], writes: _EndpointWrites) -> None:
         self.endpoint = endpoint
         self.writes = writes
-        self.lock = asyncio.Lock()
+        self.lock = writes.lock
         self.update = 0
         self.update_timeouts = 0
         self.last_reconnect = float("-inf")
@@ -191,23 +192,9 @@ class _EndpointPoll:
                 if (self.stopped or update != self.update or not is_waiting()
                         or time.monotonic() - self.last_reconnect < _RECONNECT_COOLDOWN):
                     raise
-                async with self.writes.disconnect_lock:
-                    if update != self.update or not is_waiting():
-                        raise
-                    try:
-                        await unit.disconnect()
-                    except Exception:
-                        _LOGGER.debug(
-                            "Could not disconnect Modbus endpoint %s:%s", *self.endpoint, exc_info=True,
-                        )
-                    # The broker drops the link even if teardown raises.
-                    self.reconnects += 1
-                    self.last_reconnect_at = datetime.now(timezone.utc).isoformat()
-                    self.last_reconnect = time.monotonic()
-                    _LOGGER.warning(
-                        "Recycling Modbus connection to %s:%s after timeout at address %s (count %s)",
-                        *self.endpoint, start, count,
-                    )
+                if update != self.update or not is_waiting():
+                    raise
+                await self.async_recycle_locked(unit, start, count)
                 if update != self.update or not is_current():
                     raise
             # A new TCP connection can contribute to the re-read time.
@@ -218,6 +205,20 @@ class _EndpointPoll:
                 *self.endpoint, start, count,
             )
             return block
+
+    async def async_recycle_locked(self, unit, address=None, count=None):
+        if ((address is None and not unit.connected)
+                or time.monotonic() - self.last_reconnect < _RECONNECT_COOLDOWN):
+            return
+        try:
+            await unit.disconnect()
+        except Exception:
+            _LOGGER.debug("Could not disconnect Modbus endpoint", exc_info=True)
+        self.reconnects += 1
+        self.last_reconnect = time.monotonic()
+        self.last_reconnect_at = datetime.now(timezone.utc).isoformat()
+        _LOGGER.warning("Recycling Modbus connection to %s:%s after timeout at address %s (count %s)",
+                        *self.endpoint, address, count)
 
     def diagnostics(self) -> dict:
         samples = sorted(self.latencies)
@@ -334,6 +335,8 @@ class SigenergyModbusHub:
             poll = self._endpoint_polls[poll_endpoint]
             group._endpoint_poll = poll
             group._endpoint_writes = poll.writes
+            group._write_allowed = lambda: not self._stopping and not self.read_only
+            group._stopping = lambda: self._stopping
             group._on_write = lambda state=poll: self._reset_poll_progress(state)
             group._identity_snapshot = lambda ep=endpoint: self._endpoint_identity.get(ep, {})
             group._confirm_endpoint_identity = (
@@ -352,7 +355,11 @@ class SigenergyModbusHub:
 
     def poll_endpoint_diagnostics(self) -> list[dict]:
         """Return request and recovery statistics for each configured link."""
-        return [poll.diagnostics() for poll in self._endpoint_polls.values()]
+        return [{**poll.diagnostics(), "commands": dict(poll.writes.counts),
+                 "pending_commands": poll.writes.waiting,
+                 "handed_off_commands": len(poll.writes.pending),
+                 "recent_commands": list(poll.writes.history)}
+                for poll in self._endpoint_polls.values()]
 
     def _reset_poll_progress(self, poll: _EndpointPoll) -> None:
         """Discard every pre-write sample on the affected physical link."""
@@ -391,7 +398,14 @@ class SigenergyModbusHub:
             identity = self._identity(data)
             if not identity:
                 return False
-            identities[str(info[CONF_SLAVE_ID])] = identity
+            slave = str(info[CONF_SLAVE_ID])
+            known = self._endpoint_identity.get(endpoint, {}).get(slave)
+            if known and identity != known:
+                # A decoded mismatch is positive evidence, unlike a timeout
+                # or missing identity. Retire old commands before another await.
+                # The ordinary identity observer owns the eventual rebuild.
+                self._invalidate_endpoint_commands(endpoint)
+            identities[slave] = identity
         return (bool(identities) and identities == expected
                 and self._endpoint_identity.get(endpoint) == expected)
 
@@ -541,7 +555,15 @@ class SigenergyModbusHub:
             if identity != self._identities.get(name):
                 await self._async_rebuild_identity(name, identity, endpoint)
 
+    def _invalidate_endpoint_commands(self, endpoint):
+        # Retire queued commands before any drain/lock wait, without mutating
+        # the still-protected read round being drained by the identity workflow.
+        for _role, info, group in self._all_groups():
+            if (info[CONF_HOST], info[CONF_PORT]) == endpoint:
+                group._command_epoch = getattr(group, "_command_epoch", 0) + 1
+
     async def _async_rebuild_identity(self, name, identity, endpoint):
+        self._invalidate_endpoint_commands(endpoint)
         discovery = self._discovery_tasks.get(endpoint)
         if discovery is not None and not discovery.done():
             discovery.cancel()
@@ -741,10 +763,18 @@ class SigenergyModbusHub:
         for task in self._discovery_tasks.values():
             task.cancel()
         await asyncio.gather(*self._discovery_tasks.values(), return_exceptions=True)
-        pending = [task for _role, _info, group in self._all_groups()
-                   for task in group._pending_requests]
-        if pending:
-            await asyncio.gather(*pending, return_exceptions=True)
+        for poll in self._endpoint_polls.values():
+            for task in list(poll.writes.local):
+                if task not in poll.writes.pending:
+                    task.cancel()
+        while True:
+            pending = {task for _role, _info, group in self._all_groups()
+                       for task in group._pending_requests if not task.done()}
+            pending.update(task for poll in self._endpoint_polls.values()
+                           for task in poll.writes.local if not task.done())
+            if not pending:
+                break
+            await asyncio.wait(pending)
         for _role, _info, group in self._all_groups():
             group.reset_poll_progress()
         if self._cache is not None:
@@ -877,8 +907,8 @@ class SigenergyModbusHub:
             ValueError: If device_type is invalid or device_identifier is missing when required.
         """
         if self.read_only:
-            _LOGGER.error("Cannot write parameter while in read-only mode")
-            return
+            raise SigenergyModbusError("Cannot write parameter while in read-only mode",
+                                      translation_domain="sigen", translation_key="command_read_only")
 
         _LOGGER.debug(
             "Writing %s parameter '%s' with value %s to device '%s'",
@@ -898,14 +928,24 @@ class SigenergyModbusHub:
                 await self._ac_chargers[device_identifier].async_write(register_name, value)
             else:
                 raise ValueError(f"Unknown device_type: {device_type}")
+        except CommandRejected as ex:
+            raise SigenergyModbusError(str(ex), translation_domain="sigen",
+                                      translation_key=ex.translation_key) from ex
         except AttributeError as ex:
             raise SigenergyModbusError(
                 f"Unknown or unsupported {device_type} parameter '{register_name}': {ex}"
             ) from ex
         except ModbusConnectionError as ex:
-            raise SigenergyModbusError(f"Connection error: {ex}") from ex
+            raise SigenergyModbusError(f"Connection error: {ex}", translation_domain="sigen",
+                                      translation_key="command_unknown") from ex
         except ModbusError as ex:
-            raise SigenergyModbusError(f"Modbus error: {ex}") from ex
+            from modbus_connection.exceptions import ModbusExceptionError
+            if isinstance(ex, ModbusExceptionError) and ex.exception_code not in (5, 6):
+                raise SigenergyModbusError(f"Device rejected write: {ex}",
+                                          translation_domain="sigen",
+                                          translation_key="command_rejected") from ex
+            raise SigenergyModbusError(f"Modbus error: {ex}", translation_domain="sigen",
+                                      translation_key="command_unknown") from ex
         except SigenergyModbusError:
             raise
         except Exception as ex:

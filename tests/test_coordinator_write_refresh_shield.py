@@ -1,206 +1,95 @@
-"""Regression test for coordinator.py's write-triggered refresh shielding.
-
-coordinator.py subclasses Home Assistant's DataUpdateCoordinator, which isn't
-worth stubbing just to exercise this one method. Following this repo's
-existing pattern (see test_energy_zero_guard.py), async_write_parameter is
-extracted from the class by AST and exercised in isolation against fake
-hub/refresh collaborators -- no Home Assistant install required.
-"""
-
-from __future__ import annotations
-
-import ast
+"""Service caller identity must survive delegation without a protected wrapper."""
 import asyncio
-import unittest
-from pathlib import Path
-from types import MethodType
-from unittest.mock import Mock
+from unittest import IsolatedAsyncioTestCase
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from test_remote_ems_write_readback import _make_coordinator
 
-SOURCE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "custom_components"
-    / "sigen"
-    / "coordinator.py"
-)
+class TestCoordinatorCaller(IsolatedAsyncioTestCase):
+    async def test_actual_caller_is_forwarded_and_local_cancellation_prevents_write(self):
+        c,hub,ns=_make_coordinator()
+        m=__import__("sigen.write_lifecycle",fromlist=["x"])
+        admission=m.WriteAdmission()
+        group=SimpleNamespace(_reset_epoch=0,_write_allowed=lambda:True,
+            is_supported=lambda key:True,_pending_requests=set(),_on_write=lambda:None,
+            _endpoint_poll=None)
+        component=SimpleNamespace(write=AsyncMock())
+        observed=[]
+        async def write(**kwargs):
+            observed.append(m.CURRENT_COMMAND.get().caller)
+            await admission.write(group,component,"target",1)
+        hub.async_write_parameter=write
+        await admission.lock.acquire()
+        caller=asyncio.create_task(c.async_write_parameter("plant",None,"target",1))
+        while not admission.local:
+            await asyncio.sleep(0)
+        admission.lock.release()
+        caller.cancel()
+        await asyncio.gather(caller,return_exceptions=True)
+        await asyncio.sleep(0)
+        self.assertIs(observed[0],caller)
+        component.write.assert_not_awaited()
 
-
-class _FakeSigenergyModbusError(Exception):
-    """Stands in for modbus.py's SigenergyModbusError for this isolated test."""
-
-
-def _extract_method(class_name: str, method_name: str) -> ast.AsyncFunctionDef:
-    tree = ast.parse(SOURCE_PATH.read_text(encoding="utf-8"))
-    cls = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == class_name
-    )
-    return next(
-        node
-        for node in cls.body
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == method_name
-    )
-
-
-def _make_write_parameter(*, write_delay: float = 0.0, refresh_delay: float = 0.0, logger=None):
-    """Compile `async_write_parameter` in isolation, bound to a fake self
-    whose hub.async_write_parameter / async_request_refresh are fakes that
-    report when they start and finish, so a test can observe whether
-    cancelling the caller actually aborted them partway through.
-    """
-    func_def = _extract_method("SigenergyDataUpdateCoordinator", "async_write_parameter")
-    module = ast.fix_missing_locations(ast.Module(body=[func_def], type_ignores=[]))
-    namespace = {
-        "asyncio": asyncio,
-        "SigenergyModbusError": _FakeSigenergyModbusError,
-        "_LOGGER": logger if logger is not None else Mock(),
-        "Optional": object,
-        "Union": object,
-    }
-    exec(compile(module, str(SOURCE_PATH), "exec"), namespace)
-
-    events = {
-        "write_started": asyncio.Event(),
-        "write_finished": asyncio.Event(),
-        "refresh_started": asyncio.Event(),
-        "refresh_finished": asyncio.Event(),
-    }
-
-    async def fake_write_parameter(**kwargs):
-        events["write_started"].set()
-        await asyncio.sleep(write_delay)
-        events["write_finished"].set()
-
-    async def fake_request_refresh():
-        events["refresh_started"].set()
-        await asyncio.sleep(refresh_delay)
-        events["refresh_finished"].set()
-
-    fake_self = Mock()
-    fake_self.hub.async_write_parameter = fake_write_parameter
-    fake_self.async_request_refresh = fake_request_refresh
-
-    def fake_create_task(hass, target, name=None):
-        return asyncio.create_task(target, name=name)
-
-    fake_self.hub.config_entry.async_create_task = fake_create_task
-
-    bound = MethodType(namespace["async_write_parameter"], fake_self)
-    return bound, events
-
-
-class TestCoordinatorWriteRefreshShield(unittest.IsolatedAsyncioTestCase):
-    """Cancelling the caller must not abort the write or the refresh it
-    triggers partway through.
-    """
-
-    async def test_happy_path_runs_write_then_refresh_in_order(self) -> None:
-        write_parameter, events = _make_write_parameter()
-
-        await write_parameter("plant", None, "plant_ess_soc", 1)
-
-        self.assertTrue(events["write_finished"].is_set())
-        self.assertTrue(events["refresh_finished"].is_set())
-
-    async def test_cancelling_the_caller_mid_write_does_not_abort_the_write(self) -> None:
-        write_parameter, events = _make_write_parameter(write_delay=0.2)
-
-        task = asyncio.ensure_future(
-            write_parameter("plant", None, "plant_ess_soc", 1)
-        )
-        await asyncio.wait_for(events["write_started"].wait(), timeout=1)
-        task.cancel()
-        with self.assertRaises(asyncio.CancelledError):
-            await task
-
-        self.assertFalse(
-            events["write_finished"].is_set(),
-            "test setup issue: write finished before cancellation could be observed",
-        )
-        await asyncio.wait_for(events["write_finished"].wait(), timeout=1)
-
-    async def test_cancelling_the_caller_mid_refresh_does_not_abort_the_refresh(self) -> None:
-        write_parameter, events = _make_write_parameter(refresh_delay=0.2)
-
-        task = asyncio.ensure_future(
-            write_parameter("plant", None, "plant_ess_soc", 1)
-        )
-        await asyncio.wait_for(events["refresh_started"].wait(), timeout=1)
-        task.cancel()
-        with self.assertRaises(asyncio.CancelledError):
-            await task
-
-        self.assertFalse(
-            events["refresh_finished"].is_set(),
-            "test setup issue: refresh finished before cancellation could be observed",
-        )
-        await asyncio.wait_for(events["refresh_finished"].wait(), timeout=1)
-
-    async def test_hub_error_is_logged_and_reraised(self) -> None:
-        logger = Mock()
-        write_parameter, _events = _make_write_parameter(logger=logger)
-        write_parameter.__func__  # sanity: bound method exists
-
-        async def failing_write(**kwargs):
-            raise _FakeSigenergyModbusError("boom")
-
-        write_parameter.__self__.hub.async_write_parameter = failing_write
-
-        with self.assertRaises(_FakeSigenergyModbusError):
-            await write_parameter("plant", None, "plant_ess_soc", 1)
-        logger.error.assert_called_once()
-
-    async def _assert_late_error_is_logged(self, stage: str, error: Exception) -> None:
-        logger = Mock()
-        write_parameter, _events = _make_write_parameter(logger=logger)
-        loop = asyncio.get_running_loop()
-        unhandled_errors = []
-        original_handler = loop.get_exception_handler()
-        loop.set_exception_handler(lambda _loop, context: unhandled_errors.append(context))
-        self.addCleanup(loop.set_exception_handler, original_handler)
-        started = asyncio.Event()
-        release = asyncio.Event()
-        finished = asyncio.Event()
-
-        async def fail_after_cancellation(*args, **kwargs):
+    async def test_ordinary_refresh_is_background_and_not_cancelled_by_service(self):
+        c,hub,_=_make_coordinator()
+        m=__import__("sigen.write_lifecycle",fromlist=["x"])
+        started,finish=asyncio.Event(),asyncio.Event()
+        contexts=[]
+        async def refresh():
+            contexts.append(m.CURRENT_COMMAND.get())
             started.set()
+            await finish.wait()
+        c.async_request_refresh=refresh
+        await c.async_write_parameter("plant",None,"target",1)
+        await started.wait()
+        self.assertTrue(hub.tasks)
+        finish.set()
+        await asyncio.gather(*hub.tasks)
+        self.assertEqual([None], contexts)
+
+    async def test_timeout_after_handoff_refreshes_after_caller_is_uncancelled(self):
+        c,hub,_=_make_coordinator()
+        m=__import__("sigen.write_lifecycle",fromlist=["x"])
+        admission=m.WriteAdmission()
+        group=SimpleNamespace(_command_epoch=0,_write_allowed=lambda:True,
+            is_supported=lambda key:True,_pending_requests=set(),_on_write=lambda:None,
+            _endpoint_poll=None)
+        finish=asyncio.Event()
+        scopes=[]
+        contexts=[]
+        async def component_write(*args):
+            scopes[0].reschedule(asyncio.get_running_loop().time())
+            await finish.wait()
+        component=SimpleNamespace(write=component_write)
+        async def write(**kwargs):
+            await admission.write(group,component,"target",1)
+        async def refresh():
+            contexts.append(m.CURRENT_COMMAND.get())
+        hub.async_write_parameter=write
+        c.async_request_refresh=refresh
+        async def caller():
             try:
-                await release.wait()
-                raise error
-            finally:
-                finished.set()
+                async with asyncio.timeout(None) as scope:
+                    scopes.append(scope)
+                    await c.async_write_parameter("plant",None,"target",1)
+            except TimeoutError:
+                self.assertEqual(0,asyncio.current_task().cancelling())
+        await caller()
+        self.assertTrue(admission.pending)
+        finish.set()
+        await admission.async_drain()
+        if hub.tasks:
+            await asyncio.gather(*hub.tasks)
+        self.assertEqual([None],contexts)
 
-        if stage == "write":
-            write_parameter.__self__.hub.async_write_parameter = fail_after_cancellation
-        else:
-            write_parameter.__self__.async_request_refresh = fail_after_cancellation
-
-        caller = asyncio.create_task(
-            write_parameter("inverter", "Sigen Inverter", "inverter_start_stop", 1)
-        )
-        try:
-            await asyncio.wait_for(started.wait(), timeout=1)
-            caller.cancel()
-            with self.assertRaises(asyncio.CancelledError):
-                await caller
-        finally:
-            release.set()
-        await asyncio.wait_for(finished.wait(), timeout=1)
-        await asyncio.sleep(0)  # allow the shield's completion callback to run
-
-        logger.error.assert_called_once()
-        message = logger.error.call_args.args[0] % logger.error.call_args.args[1:]
-        self.assertIn("inverter_start_stop", message)
-        self.assertIn("Sigen Inverter", message)
-        self.assertIn(str(error), message)
-        self.assertEqual([], unhandled_errors)
-
-    async def test_late_write_error_is_logged_after_caller_cancellation(self) -> None:
-        await self._assert_late_error_is_logged("write", _FakeSigenergyModbusError("late write"))
-
-    async def test_late_refresh_error_is_logged_after_caller_cancellation(self) -> None:
-        await self._assert_late_error_is_logged("refresh", RuntimeError("late refresh"))
-
-
-if __name__ == "__main__":
-    unittest.main()
+    async def test_confirmation_poll_has_no_command_context(self):
+        c,hub,_=_make_coordinator()
+        m=__import__("sigen.write_lifecycle",fromlist=["x"])
+        original=hub.async_read_plant_data
+        contexts=[]
+        async def read():
+            contexts.append(m.CURRENT_COMMAND.get())
+            return await original()
+        hub.async_read_plant_data=read
+        await c.async_write_parameter("plant",None,"plant_remote_ems_enable",1)
+        self.assertEqual([None],contexts)

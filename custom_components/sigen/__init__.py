@@ -130,7 +130,18 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    hub = hass.data[DOMAIN][entry.entry_id]["hub"]
+    was_stopping = hub._stopping
+    hub._stopping = True
+    unload_ok = False
+    try:
+        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    finally:
+        if not unload_ok:
+            # Platform teardown did not finish; the retained hub still serves
+            # any remaining entities. A completed teardown must stay stopped
+            # even if the subsequent protected-request drain is interrupted.
+            hub._stopping = was_stopping
 
     if unload_ok:
         hub = hass.data[DOMAIN][entry.entry_id]["hub"]
