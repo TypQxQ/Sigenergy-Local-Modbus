@@ -1810,6 +1810,33 @@
     }
   },
   "exceptions": {
+    "command_superseded": {
+      "message": "Skrivningen bekräftades, men ett nyare kommando ersatte den före återläsningsbekräftelsen."
+    },
+    "command_rejected": {
+      "message": "Enheten avvisade skrivningen."
+    },
+    "command_queue_full": {
+      "message": "Kommandokön är full. Skrivningen skickades inte."
+    },
+    "command_expired": {
+      "message": "Kommandot hann bli för gammalt. Skrivningen skickades inte."
+    },
+    "command_invalidated": {
+      "message": "Kommandot gäller inte längre. Skrivningen skickades inte."
+    },
+    "command_unknown": {
+      "message": "Skrivningens resultat är okänt. Den kan ha nått enheten. Inget automatiskt återförsök gjordes."
+    },
+    "command_unconfirmed": {
+      "message": "Skrivningen kvitterades, men kunde inte bekräftas med en ny matchande avläsning."
+    },
+    "command_read_only": {
+      "message": "Skrivningar är avstängda i skrivskyddat läge."
+    },
+    "command_ems_busy": {
+      "message": "För många EMS-kommandon är aktiva. Skrivningen skickades inte."
+    },
     "invalid_ac_charger_current": {
       "message": "Kan inte ställa in laddströmmen på {value} A. Ange ett värde mellan 6 och {maximum} A."
     },

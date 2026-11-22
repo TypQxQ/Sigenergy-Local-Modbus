@@ -1810,6 +1810,33 @@
     }
   },
   "exceptions": {
+    "command_superseded": {
+      "message": "The write was acknowledged, but a newer command replaced it before confirmation."
+    },
+    "command_rejected": {
+      "message": "The device rejected the write."
+    },
+    "command_queue_full": {
+      "message": "Command queue is full. The write was not sent."
+    },
+    "command_expired": {
+      "message": "The command expired before handoff. The write was not sent."
+    },
+    "command_invalidated": {
+      "message": "The command is no longer valid. The write was not sent."
+    },
+    "command_unknown": {
+      "message": "The write outcome is unknown. It may have reached the device. No automatic retry was made."
+    },
+    "command_unconfirmed": {
+      "message": "The write was acknowledged, but a fresh matching reading could not be confirmed."
+    },
+    "command_read_only": {
+      "message": "Writes are disabled in read-only mode."
+    },
+    "command_ems_busy": {
+      "message": "Too many EMS commands are active. The write was not sent."
+    },
     "invalid_ac_charger_current": {
       "message": "Cannot set charger current to {value} A. Use a value between 6 and {maximum} A."
     },

@@ -31,7 +31,7 @@ jobs:
       - name: Test supported Modbus versions
         run: |
           for version in 4.12.3 4.12.4; do
-            python -m pip install "modbus-connection==$version" "probatio==0.13.0" PyYAML Jinja2
+            python -m pip install "modbus-connection[tmodbus,pymodbus]==$version" "probatio==0.13.0" PyYAML Jinja2
             python -m unittest discover -s tests -v
           done
       - name: Validate integration metadata

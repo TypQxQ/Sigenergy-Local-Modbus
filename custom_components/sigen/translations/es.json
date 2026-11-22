@@ -1810,6 +1810,15 @@
     }
   },
   "exceptions": {
+    "command_superseded": {"message": "La escritura fue reconocida, pero un comando más reciente la sustituyó antes de la confirmación por lectura."},
+    "command_rejected": {"message": "El dispositivo rechazó la escritura."},
+    "command_queue_full": {"message": "La cola de órdenes está llena. No se envió la escritura."},
+    "command_expired": {"message": "La orden caducó. No se envió la escritura."},
+    "command_invalidated": {"message": "La orden ya no es válida. No se envió la escritura."},
+    "command_unknown": {"message": "El resultado es desconocido. La escritura puede haber llegado al dispositivo. No se reintentó automáticamente."},
+    "command_unconfirmed": {"message": "La escritura fue reconocida, pero no se confirmó una nueva lectura coincidente."},
+    "command_read_only": {"message": "Las escrituras están desactivadas en modo de solo lectura."},
+    "command_ems_busy": {"message": "Hay demasiadas órdenes EMS activas. No se envió la escritura."},
     "invalid_ac_charger_current": {
       "message": "No se puede ajustar la corriente de carga a {value} A. Usa un valor entre 6 y {maximum} A."
     },

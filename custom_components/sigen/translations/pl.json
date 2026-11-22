@@ -1810,6 +1810,15 @@
     }
   },
   "exceptions": {
+    "command_superseded": {"message": "Zapis został potwierdzony, ale nowsze polecenie zastąpiło go przed potwierdzeniem przez ponowny odczyt."},
+    "command_rejected": {"message": "Urządzenie odrzuciło zapis."},
+    "command_queue_full": {"message": "Kolejka poleceń jest pełna. Zapis nie został wysłany."},
+    "command_expired": {"message": "Polecenie wygasło. Zapis nie został wysłany."},
+    "command_invalidated": {"message": "Polecenie nie jest już ważne. Zapis nie został wysłany."},
+    "command_unknown": {"message": "Wynik jest nieznany. Zapis mógł dotrzeć do urządzenia. Nie ponowiono go automatycznie."},
+    "command_unconfirmed": {"message": "Zapis potwierdzono, ale nie uzyskano nowego zgodnego odczytu."},
+    "command_read_only": {"message": "Zapis jest wyłączony w trybie tylko do odczytu."},
+    "command_ems_busy": {"message": "Aktywnych jest zbyt wiele poleceń EMS. Zapis nie został wysłany."},
     "invalid_ac_charger_current": {
       "message": "Nie można ustawić prądu ładowania na {value} A. Użyj wartości od 6 do {maximum} A."
     },

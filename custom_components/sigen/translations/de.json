@@ -1810,6 +1810,15 @@
     }
   },
   "exceptions": {
+    "command_superseded": {"message": "Der Schreibvorgang wurde quittiert, aber vor der Bestätigung durch Rücklesen durch einen neueren Befehl ersetzt."},
+    "command_rejected": {"message": "Das Gerät hat den Schreibvorgang abgelehnt."},
+    "command_queue_full": {"message": "Die Befehlswarteschlange ist voll. Der Schreibbefehl wurde nicht gesendet."},
+    "command_expired": {"message": "Der Befehl ist abgelaufen. Er wurde nicht gesendet."},
+    "command_invalidated": {"message": "Der Befehl ist nicht mehr gültig. Er wurde nicht gesendet."},
+    "command_unknown": {"message": "Das Ergebnis ist unbekannt. Der Befehl könnte das Gerät erreicht haben. Keine automatische Wiederholung."},
+    "command_unconfirmed": {"message": "Der Schreibbefehl wurde quittiert, aber kein neuer passender Messwert bestätigt."},
+    "command_read_only": {"message": "Schreibzugriffe sind im schreibgeschützten Modus deaktiviert."},
+    "command_ems_busy": {"message": "Zu viele EMS-Befehle sind aktiv. Der Schreibbefehl wurde nicht gesendet."},
     "invalid_ac_charger_current": {
       "message": "Der Ladestrom kann nicht auf {value} A eingestellt werden. Verwende einen Wert zwischen 6 und {maximum} A."
     },

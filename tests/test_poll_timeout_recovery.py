@@ -282,7 +282,8 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
             try:
                 await asyncio.wait_for(write_started.wait(), 1)
                 poll = asyncio.create_task(self.group.async_update())
-                await asyncio.wait_for(first_read.wait(), 1)
+                await asyncio.sleep(0)
+                self.assertFalse(first_read.is_set())
                 self.assertEqual([], events)
             finally:
                 release.set()
@@ -317,18 +318,21 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
         ):
             poll = asyncio.create_task(self.group.async_update())
             await asyncio.wait_for(first_read.wait(), 1)
-            await writer.async_write("set_output", 4)
+            queued = asyncio.create_task(writer.async_write("set_output", 4))
+            await asyncio.sleep(0)
             release.set()
-            return events, await poll
+            result = await poll
+            await queued
+            return events, result
 
     async def test_write_during_timed_out_read_still_recycles_link(self):
         events, result = await self._poll_with_write_during_timed_out_read(restart_times_out=False)
         self.assertEqual({"first": 1, "middle": 2, "last": 3}, result)
         # The stale re-read is skipped; the restarted round reads on the new link.
-        self.assertEqual([("read", 100), "write", "disconnect", ("read", 100), ("read", 200), ("read", 300)],
+        self.assertEqual([("read", 100), "disconnect", ("read", 100), "write", ("read", 100), ("read", 200), ("read", 300)],
                          events)
         stats = self.endpoint.diagnostics()
-        self.assertEqual((1, 1, 0, 0), tuple(stats[k] for k in (
+        self.assertEqual((1, 1, 1, 0), tuple(stats[k] for k in (
             "timeouts", "reconnects", "successful_rereads", "endpoint_stops",
         )))
         self.assertFalse(self.endpoint.stopped)
@@ -337,7 +341,7 @@ class TestPollTimeoutRecovery(unittest.IsolatedAsyncioTestCase):
     async def test_write_during_timed_out_read_then_second_timeout_stops(self):
         events, result = await self._poll_with_write_during_timed_out_read(restart_times_out=True)
         self.assertEqual({"first": None, "middle": None, "last": None}, result)
-        self.assertEqual([("read", 100), "write", "disconnect", ("read", 100)], events)
+        self.assertEqual([("read", 100), "disconnect", ("read", 100), "write"], events)
         self.assertTrue(self.endpoint.stopped)
         self.assertEqual((2, 1, 1), (self.endpoint.timeouts, self.endpoint.reconnects, self.endpoint.stops))
 

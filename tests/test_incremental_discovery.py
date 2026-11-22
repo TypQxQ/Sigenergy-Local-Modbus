@@ -1012,6 +1012,7 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
 
     async def _assert_sibling_round_checks_endpoint(self, role, changed):
         group, key = await self._interrupt_sibling_round(role)
+        epoch = group._command_epoch
         if changed:
             field = self.hub._inverters["Inverter"].running_info.declared_fields["inverter_serial_number"]
             self.inv_unit.load_raw({"input": {field.address+i: word
@@ -1019,6 +1020,7 @@ class TestHubDiscoveryCache(unittest.IsolatedAsyncioTestCase):
         data = await group.async_update()
         self.assertEqual(22 if changed else 11, data[key])
         self.assertEqual(0 if changed else 1, group.poll_resumes)
+        self.assertEqual(epoch + (1 if changed else 0), group._command_epoch)
 
     async def test_plant_round_discards_old_samples_before_inverter_observes_replacement(self):
         await self._assert_sibling_round_checks_endpoint("plant", True)

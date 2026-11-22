@@ -1810,6 +1810,15 @@
     }
   },
   "exceptions": {
+    "command_superseded": {"message": "De schrijfactie is bevestigd, maar vóór bevestiging door teruglezen vervangen door een nieuwere opdracht."},
+    "command_rejected": {"message": "Het apparaat heeft de schrijfactie geweigerd."},
+    "command_queue_full": {"message": "De opdrachtwachtrij is vol. De schrijfactie is niet verzonden."},
+    "command_expired": {"message": "De opdracht is verlopen. De schrijfactie is niet verzonden."},
+    "command_invalidated": {"message": "De opdracht is niet meer geldig. De schrijfactie is niet verzonden."},
+    "command_unknown": {"message": "Het resultaat is onbekend. De schrijfactie kan het apparaat hebben bereikt. Geen automatische nieuwe poging."},
+    "command_unconfirmed": {"message": "De schrijfactie is bevestigd, maar geen nieuwe overeenkomende uitlezing."},
+    "command_read_only": {"message": "Schrijven is uitgeschakeld in de alleen-lezenmodus."},
+    "command_ems_busy": {"message": "Er zijn te veel EMS-opdrachten actief. De schrijfactie is niet verzonden."},
     "invalid_ac_charger_current": {
       "message": "De laadstroom kan niet worden ingesteld op {value} A. Gebruik een waarde tussen 6 en {maximum} A."
     },

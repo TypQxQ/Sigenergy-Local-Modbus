@@ -84,7 +84,11 @@ def _install_stubs() -> None:
     ha_core.HomeAssistant = object
 
     ha_exceptions = types.ModuleType("homeassistant.exceptions")
-    ha_exceptions.HomeAssistantError = Exception
+    class HAError(Exception):
+        def __init__(self, message=None, **kwargs):
+            super().__init__(message)
+            self.__dict__.update(kwargs)
+    ha_exceptions.HomeAssistantError = HAError
 
     ha_components = types.ModuleType("homeassistant.components")
     ha_modbus = types.ModuleType("homeassistant.components.modbus")
@@ -256,9 +260,10 @@ class TestSigenergyModbusHub(unittest.IsolatedAsyncioTestCase):
         hub, plant_unit = self._build_hub(read_only=True)
         addr = self.defs.PLANT_PARAMETER_REGISTERS["plant_active_power_fixed_target"].address
 
-        await hub.async_write_parameter(
-            "plant", None, "plant_active_power_fixed_target", 999
-        )
+        with self.assertRaises(self.modbus_mod.SigenergyModbusError):
+            await hub.async_write_parameter(
+                "plant", None, "plant_active_power_fixed_target", 999
+            )
 
         self.assertNotEqual(999, plant_unit.holding.get(addr))
 

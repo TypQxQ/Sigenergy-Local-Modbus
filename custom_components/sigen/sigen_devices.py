@@ -114,16 +114,7 @@ class EndpointStopped(ModbusError):
     """A supported block was skipped because the endpoint stopped polling."""
 
 
-class _EndpointWrites:
-    """Track protected wire writes, never their callers or refreshes."""
-
-    def __init__(self) -> None:
-        self.pending: set[asyncio.Task[Any]] = set()
-        self.disconnect_lock = asyncio.Lock()
-
-    async def async_drain(self) -> None:
-        while pending := {task for task in self.pending if not task.done()}:
-            await asyncio.wait(pending)
+from .write_lifecycle import WriteAdmission as _EndpointWrites
 
 
 class _ComponentGroup:
@@ -172,7 +163,9 @@ class _ComponentGroup:
         self._poll_lock = asyncio.Lock()
         self._read_round = None
         self._reset_epoch = 0
+        self._command_epoch = 0
         self._endpoint_writes = _EndpointWrites()
+        self._write_allowed = lambda: True
         self._endpoint_poll: _EndpointPoll | None = None
         self.poll_write_restarts = 0
         self.poll_write_recoveries = 0
@@ -396,7 +389,7 @@ class _ComponentGroup:
         self.last_discovery_at = started
         self.discovery_requests += 1
         try:
-            words = await self._async_request(read(start, count))
+            words = await self._async_request(self._async_serial_read(read, start, count))
             if len(words) != count:
                 raise ModbusError("Incomplete discovery response")
         except IllegalDataAddressError:
@@ -501,6 +494,12 @@ class _ComponentGroup:
                                  if self._read_round else None},
                 "in_flight": len(self._pending_requests),
                 "poll_quality": self.poll_diagnostics()}
+
+    async def _async_serial_read(self, read, address, count):
+        async with self._endpoint_writes.lock:
+            if getattr(self, "_stopping", lambda: False)():
+                raise ModbusError("Sigenergy endpoint is stopping")
+            return await read(address, count)
 
     async def _async_request(self, operation: Coroutine[Any, Any, Any], *, write: bool = False) -> Any:
         """Let a broker request finish even if its caller is cancelled."""
@@ -685,17 +684,7 @@ class _ComponentGroup:
             raise AttributeError(f"unsupported register {register_name!r}")
         for component in (*self._readable.values(), *self._commands.values()):
             if register_name in component.declared_fields:
-                self._on_write()
-
-                async def write_and_invalidate():
-                    async with self._endpoint_writes.disconnect_lock:
-                        try:
-                            await component.write(register_name, value)
-                        finally:
-                            # Invalidate even after cancellation of the caller.
-                            self._on_write()
-
-                await self._async_request(write_and_invalidate(), write=True)
+                await self._endpoint_writes.write(self, component, register_name, value)
                 return
         raise AttributeError(f"unknown register {register_name!r}")
 
@@ -776,7 +765,8 @@ class _ComponentGroup:
             return not cancelled
 
         def is_current() -> bool:
-            return is_waiting() and (progress is None or progress is self._read_round)
+            return (is_waiting() and not getattr(self, "_stopping", lambda: False)()
+                    and (progress is None or progress is self._read_round))
 
         for start, count in _group_contiguous_blocks(
             [(field.address, field.count) for field in fields.values()]
@@ -789,7 +779,7 @@ class _ComponentGroup:
             async def read_and_commit(start=start, count=count, affected=affected):
                 try:
                     if poll is None:
-                        block = await read(start, count)
+                        block = await self._async_serial_read(read, start, count)
                     else:
                         block = await poll.async_read(unit, read, start, count, update, is_current, is_waiting)
                 except EndpointStopped:
@@ -909,7 +899,7 @@ class _ComponentGroup:
                 support[field_name] = True  # bit fields aren't probed; keep as-is
                 continue
             try:
-                await self._async_request(read(field.address, field.count))
+                await self._async_request(self._async_serial_read(read, field.address, field.count))
             except IllegalDataAddressError:
                 support[field_name] = False  # confirmed unsupported on this device
             except ModbusConnectionError:

@@ -1810,6 +1810,15 @@
     }
   },
   "exceptions": {
+    "command_superseded": {"message": "L’écriture a été acquittée, mais une commande plus récente l’a remplacée avant la confirmation par relecture."},
+    "command_rejected": {"message": "L’appareil a refusé l’écriture."},
+    "command_queue_full": {"message": "La file de commandes est pleine. L’écriture n’a pas été envoyée."},
+    "command_expired": {"message": "La commande a expiré. L’écriture n’a pas été envoyée."},
+    "command_invalidated": {"message": "La commande n’est plus valide. L’écriture n’a pas été envoyée."},
+    "command_unknown": {"message": "Le résultat est inconnu. L’écriture peut avoir atteint l’appareil. Aucun nouvel essai automatique."},
+    "command_unconfirmed": {"message": "L’écriture a été acquittée, mais aucune nouvelle lecture correspondante n’a été confirmée."},
+    "command_read_only": {"message": "Les écritures sont désactivées en lecture seule."},
+    "command_ems_busy": {"message": "Trop de commandes EMS sont actives. L’écriture n’a pas été envoyée."},
     "invalid_ac_charger_current": {
       "message": "Impossible de régler le courant de charge sur {value} A. Utilisez une valeur comprise entre 6 et {maximum} A."
     },

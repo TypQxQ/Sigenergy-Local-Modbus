@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # pylint: disable=syntax-error
 from modbus_connection import ModbusConnectionError
 
+from .write_lifecycle import Command, CURRENT_COMMAND
 from .modbus import SigenergyModbusHub, SigenergyModbusError # Added SigenergyModbusError
 from .const import CONF_INVERTER_HAS_DCCHARGER, DEFAULT_SCAN_INTERVAL, MIN_SCAN_INTERVAL
 from .modbusregisterdefinitions import AC_CHARGER_RUNNING_INFO_REGISTERS
@@ -52,6 +53,10 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
         self._degraded_devices: set[str] = set()
         self.pv_restore_states: dict[str, dict[str, Any]] = {}
         self.entity_name_translations: dict[str, str] | None = None
+        self._verifiers: dict[asyncio.Future, tuple[int, str, Any]] = {}
+        self._confirmation_task: asyncio.Task | None = None
+        self._ems_commands = 0
+        self._ems_generations: dict[str, int] = {}
 
         if scan_interval < MIN_SCAN_INTERVAL:
             scan_interval = DEFAULT_SCAN_INTERVAL
@@ -401,93 +406,120 @@ class SigenergyDataUpdateCoordinator(DataUpdateCoordinator):
                         _LOGGER.info("Sigenergy read recovered for %s", device)
                 _LOGGER.debug("Sigenergy update timing: %s", self.latest_update_timing)
 
-    async def _async_confirm_remote_ems_write(
-        self, register_name: str, value: Union[int, float, str]
-    ) -> None:
-        """Confirm one EMS write using a fresh, serialized coordinator poll.
+    def _request_command_refresh(self):
+        if not self.hub._stopping:
+            # Detached workers still carry their command context. Preserve HA's
+            # other context variables, but keep background polls command-free.
+            token = CURRENT_COMMAND.set(None)
+            try:
+                self.hub.config_entry.async_create_background_task(
+                    self.hass, self.async_request_refresh(),
+                    name="Sigenergy command refresh", eager_start=True)
+            finally:
+                CURRENT_COMMAND.reset(token)
 
-        async_request_refresh() may only queue a refresh during HA's cooldown.
-        In HA 2026.10 async_refresh() waits for the existing refresh lock and
-        performs a new poll, including entity notifications, before returning.
-        Never accept an older in-flight poll or a matching cached value as
-        confirmation, and never repeat the command if confirmation fails.
-        """
-        after_sequence = self._update_sequence
+    async def _confirmation_pump(self):
         try:
-            async with asyncio_timeout(60):
+            while self._verifiers and not self.hub._stopping:
+                before = self._update_sequence
                 await self.async_refresh()
+                sequence = self._update_sequence
+                if sequence <= before:
+                    raise SigenergyModbusError("No fresh EMS poll available")
+                data = dict((self.data or {}).get("plant", {}))
+                for future, (barrier, register, expected) in list(self._verifiers.items()):
+                    if sequence > barrier:
+                        if not future.done():
+                            future.set_result((self.last_update_success, data.get(register)))
+                        self._verifiers.pop(future, None)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            if not self.hub._stopping:
+                _LOGGER.warning("Shared EMS confirmation refresh failed")
+        finally:
+            for future in list(self._verifiers):
+                if not future.done():
+                    future.set_result((False, None))
+            self._verifiers.clear()
+
+    async def _async_confirm_remote_ems_write(self, register_name, value, acknowledged_at=None):
+        barrier = self._update_sequence
+        future = asyncio.get_running_loop().create_future()
+        self._verifiers[future] = (barrier, register_name, value)
+        if self._confirmation_task is None or self._confirmation_task.done():
+            self._confirmation_task = self.hub.config_entry.async_create_background_task(
+                self.hass, self._confirmation_pump(), name="Sigenergy EMS confirmation",
+                eager_start=True)
+        try:
+            deadline = (acknowledged_at or asyncio.get_running_loop().time()) + 60
+            async with asyncio_timeout(deadline - asyncio.get_running_loop().time()):
+                await asyncio.wait({future})
+                success, actual = future.result()
+            if not success or actual != value:
+                raise SigenergyModbusError(
+                    f"Write acknowledged, but fresh readback of {register_name} was {actual!r}",
+                    translation_domain="sigen", translation_key="command_unconfirmed")
         except TimeoutError as ex:
             raise SigenergyModbusError(
-                f"Write to {register_name} was sent, but fresh readback timed out"
-            ) from ex
-
-        if (
-            not self.last_update_success
-            or self._last_successful_update_sequence <= after_sequence
-        ):
-            raise SigenergyModbusError(
-                f"Write to {register_name} was sent, but no fresh readback is available"
-            )
-        actual = (self.data or {}).get("plant", {}).get(register_name)
-        if actual != value:
-            raise SigenergyModbusError(
-                f"Write to {register_name} was sent, but fresh readback was "
-                f"{actual!r}, expected {value!r}"
-            )
-        _LOGGER.debug(
-            "Confirmed %s=%s by fresh readback in update %s",
-            register_name, actual, self._last_successful_update_sequence,
-        )
+                f"Write acknowledged, but fresh readback of {register_name} timed out",
+                translation_domain="sigen", translation_key="command_unconfirmed") from ex
+        finally:
+            self._verifiers.pop(future, None)
+            future.cancel()
 
     async def async_write_parameter(
-        self,
-        device_type: str,
-        device_identifier: Optional[str],
-        register_name: str,
-        value: Union[int, float, str]
+        self, device_type, device_identifier, register_name, value
     ) -> None:
-        """Write a parameter; confirm Remote EMS commands before returning."""
-
-        async def _write_and_refresh() -> None:
+        caller = asyncio.current_task()
+        ctx = Command(caller, asyncio.get_running_loop().time() + 10,
+                      refresh=self._request_command_refresh)
+        ems = device_type == "plant" and register_name in {
+            "plant_remote_ems_enable", "plant_remote_ems_control_mode"}
+        if ems and self._ems_commands >= 4:
+            raise SigenergyModbusError("Sigenergy EMS command capacity exceeded; not sent",
+                                      translation_domain="sigen", translation_key="command_ems_busy")
+        if ems:
+            self._ems_commands += 1
+        def mark_handoff():
+            generation = self._ems_generations.get(register_name, 0) + 1
+            self._ems_generations[register_name] = generation
+            ctx.generation = generation
+        if ems:
+            ctx.on_handoff = mark_handoff
+        try:
+            token = CURRENT_COMMAND.set(ctx)
             try:
                 await self.hub.async_write_parameter(
-                    device_type=device_type,
-                    device_identifier=device_identifier,
-                    register_name=register_name,
-                    value=value,
-                )
-                if device_type == "plant" and register_name in {
-                    "plant_remote_ems_enable", "plant_remote_ems_control_mode"
-                }:
-                    await self._async_confirm_remote_ems_write(register_name, value)
+                    device_type=device_type, device_identifier=device_identifier,
+                    register_name=register_name, value=value)
+            finally:
+                CURRENT_COMMAND.reset(token)
+            if ems:
+                if ctx.generation is None:
+                    mark_handoff()
+                await self._async_confirm_remote_ems_write(
+                    register_name, value, ctx.acknowledged_at)
+                if self._ems_generations.get(register_name) != ctx.generation:
+                    raise SigenergyModbusError("Write acknowledged but superseded before confirmation",
+                                              translation_domain="sigen",
+                                              translation_key="command_superseded")
+            else:
+                ctx.request_refresh()
+        except SigenergyModbusError:
+            now = asyncio.get_running_loop().time()
+            if now - getattr(self, "_last_command_error_log", float("-inf")) >= 30:
+                self._last_command_error_log = now
+                _LOGGER.error("Sigenergy command %s failed; no automatic retry", register_name)
+            raise
+        finally:
+            if ems:
+                def release(_=None):
+                    self._ems_commands -= 1
+                if ctx.worker is not None and not ctx.worker.done():
+                    ctx.worker.add_done_callback(release)
                 else:
-                    await self.async_request_refresh()
-            except SigenergyModbusError as ex:
-                _LOGGER.error("Failed to complete parameter command %s to %s '%s': %s",
-                              register_name, device_type, device_identifier or 'plant', ex)
-                raise
-            except Exception as ex:
-                _LOGGER.error("Unexpected error writing parameter %s to %s '%s': %s",
-                              register_name, device_type, device_identifier or 'plant', ex)
-                raise
-
-        def _consume_result(task: asyncio.Task[None]) -> None:
-            # Errors are logged with their device/register context inside
-            # the task, even if the caller has already been cancelled.
-            if not task.cancelled():
-                task.exception()
-
-        # Keep the task tracked by the config entry after caller cancellation.
-        task = self.hub.config_entry.async_create_task(
-            self.hass, _write_and_refresh(), name=f"Sigenergy write {register_name}"
-        )
-        task.add_done_callback(_consume_result)
-
-        # Cancelling the service caller must not cancel the write/refresh.
-        # wait() leaves the tracked task running and avoids shield()'s
-        # separate late-exception reports on Python 3.14.
-        await asyncio.wait({task})
-        task.result()
+                    release()
 
     def mark_sensors_initialized(self) -> None:
         """Mark that static sensors have been initialized and calculated sensors can run."""

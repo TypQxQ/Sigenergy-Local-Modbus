@@ -1810,6 +1810,33 @@
     }
   },
   "exceptions": {
+    "command_superseded": {
+      "message": "Skrivningen blev kvitteret, men en nyere kommando erstattede den før bekræftelsen ved genlæsning."
+    },
+    "command_rejected": {
+      "message": "Enheden afviste skrivningen."
+    },
+    "command_queue_full": {
+      "message": "Kommandokøen er fuld. Skrivningen blev ikke sendt."
+    },
+    "command_expired": {
+      "message": "Kommandoen udløb før overdragelse. Skrivningen blev ikke sendt."
+    },
+    "command_invalidated": {
+      "message": "Kommandoen er ikke længere gyldig. Skrivningen blev ikke sendt."
+    },
+    "command_unknown": {
+      "message": "Skrivningens resultat er ukendt. Den kan have nået enheden. Ingen automatisk gentagelse blev foretaget."
+    },
+    "command_unconfirmed": {
+      "message": "Skrivningen blev kvitteret, men kunne ikke bekræftes med en ny tilsvarende aflæsning."
+    },
+    "command_read_only": {
+      "message": "Skrivninger er deaktiveret i skrivebeskyttet tilstand."
+    },
+    "command_ems_busy": {
+      "message": "For mange EMS-kommandoer er aktive. Skrivningen blev ikke sendt."
+    },
     "invalid_ac_charger_current": {
       "message": "Kan ikke indstille ladestrømmen til {value} A. Brug en værdi mellem 6 og {maximum} A."
     },
